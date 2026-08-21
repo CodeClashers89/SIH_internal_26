@@ -11,18 +11,56 @@ class OrderItemSerializer(serializers.ModelSerializer):
         model = OrderItem
         fields = ('id', 'product', 'product_details', 'quantity', 'price')
 
+class ShipmentSummarySerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    partner = serializers.PrimaryKeyRelatedField(read_only=True)
+    partner_details = serializers.SerializerMethodField()
+    pickup_address = serializers.CharField(read_only=True)
+    delivery_address = serializers.CharField(read_only=True)
+    distance_km = serializers.DecimalField(max_digits=6, decimal_places=2, read_only=True)
+    status = serializers.CharField(read_only=True)
+    delivery_otp = serializers.CharField(read_only=True)
+    assigned_at = serializers.DateTimeField(read_only=True)
+    shipped_at = serializers.DateTimeField(read_only=True)
+    delivered_at = serializers.DateTimeField(read_only=True)
+
+    def get_partner_details(self, obj):
+        if obj.partner:
+            return {
+                'id': obj.partner.id,
+                'name': obj.partner.name,
+                'phone': obj.partner.phone,
+                'district': obj.partner.district,
+                'user': obj.partner.user_id,
+            }
+        return None
+
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     buyer_username = serializers.ReadOnlyField(source='buyer.username')
+    shipment = serializers.SerializerMethodField()
+
+    def get_shipment(self, obj):
+        try:
+            if hasattr(obj, 'shipment') and obj.shipment:
+                return ShipmentSummarySerializer(obj.shipment).data
+            return None
+        except Exception:
+            return None
 
     class Meta:
         model = Order
         fields = (
-            'id', 'buyer', 'buyer_username', 'total_amount', 'status', 
-            'shipping_address', 'shipping_pincode', 'payment_status', 
-            'payment_id', 'razorpay_order_id', 'items', 'created_at', 'updated_at'
+            'id', 'buyer', 'buyer_username',
+            'product_subtotal', 'shipping_charge', 'total_amount',
+            'status', 'shipping_address', 'shipping_pincode',
+            'payment_status', 'payment_id', 'razorpay_order_id',
+            'items', 'shipment', 'created_at', 'updated_at'
         )
-        read_only_fields = ('id', 'buyer', 'total_amount', 'payment_status', 'razorpay_order_id', 'created_at', 'updated_at')
+        read_only_fields = (
+            'id', 'buyer', 'product_subtotal', 'shipping_charge', 'total_amount',
+            'payment_status', 'razorpay_order_id', 'created_at', 'updated_at'
+        )
 
 class CreateOrderItemSerializer(serializers.Serializer):
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())

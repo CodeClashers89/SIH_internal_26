@@ -12,7 +12,7 @@ from .serializers import (
     OrderSerializer, CreateOrderSerializer, QuoteRequestSerializer,
     BulkRequirementSerializer, FarmerOfferSerializer, PreHarvestContractSerializer
 )
-from logistics.services import assign_delivery_partner
+from logistics.services import create_open_shipment
 from users.permissions import IsFarmer, IsBulkBuyer, IsAdmin
 import razorpay
 import random
@@ -43,33 +43,81 @@ class OrderViewSet(viewsets.ModelViewSet):
     def update_status(self, request, pk=None):
         order = self.get_object()
         new_status = request.data.get('status')
-        
+        user = request.user
+
         valid_statuses = [choice[0] for choice in Order.STATUS_CHOICES]
         if new_status not in valid_statuses:
             return Response({'error': f'Invalid status. Choose from: {valid_statuses}'}, status=status.HTTP_400_BAD_REQUEST)
-            
+
+        # Role-based transition restrictions
+        # Farmers can only: confirm (placed→confirmed), pack (confirmed→packed), or cancel (placed/confirmed→cancelled)
+        # in_transit is set by logistics partner via shipment pickup
+        # delivered is set by logistics partner via OTP verification
+        if user.role == 'farmer':
+            farmer_allowed = {
+                'placed': ['confirmed', 'cancelled'],
+                'confirmed': ['packed', 'cancelled'],
+            }
+            allowed_next = farmer_allowed.get(order.status, [])
+            if new_status not in allowed_next:
+                return Response(
+                    {'error': f'Farmers cannot move order from "{order.status}" to "{new_status}". '
+                               f'Shipping and delivery are handled by the logistics partner.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
         order.status = new_status
         order.save()
 
         # Simple notification logging
         print(f"\n[STUB NOTIFICATION SERVICE] Order #{order.id} status updated to {new_status}. Sent alert to {order.buyer.phone or order.buyer.email}\n")
-        
-        # If order status becomes Confirmed, trigger logistics assignment
-        if new_status == 'confirmed' and order.payment_status == 'paid' and not hasattr(order, 'shipment'):
-            assign_delivery_partner(order)
 
-        # If order status becomes In Transit or Delivered, update delivery shipment status
-        if hasattr(order, 'shipment'):
-            shipment = order.shipment
-            if new_status == 'in_transit':
-                shipment.status = 'picked_up'
-                shipment.shipped_at = timezone.now()
-            elif new_status == 'delivered':
-                shipment.status = 'delivered'
-                shipment.delivered_at = timezone.now()
-            shipment.save()
+        # Create open broadcast shipment when farmer confirms.
+        # No auto-assignment — all drivers see it and race to accept (Rapido-style).
+        if new_status == 'confirmed' and not hasattr(order, 'shipment'):
+            create_open_shipment(order)
+            print(f"[LOGISTICS] Open shipment broadcast for order #{order.id} on farmer confirmation.")
 
         return Response(OrderSerializer(order).data)
+
+    @action(detail=True, methods=['post'], url_path='retry-payment')
+    def retry_payment(self, request, pk=None):
+        """
+        Returns a fresh Razorpay order_id for an unpaid order so the consumer
+        can re-open the payment modal without creating a duplicate order.
+        """
+        order = self.get_object()
+        user = request.user
+
+        if order.buyer != user:
+            return Response({'error': 'Unauthorized.'}, status=status.HTTP_403_FORBIDDEN)
+        if order.payment_status == 'paid':
+            return Response({'error': 'This order is already paid.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Try to create a new Razorpay order for this amount
+        razorpay_order_id = order.razorpay_order_id or f"rzp_mock_{order.id}_{random.randint(10000, 99999)}"
+        try:
+            client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+            rzp_order = client.order.create(data={
+                "amount": int(float(order.total_amount) * 100),
+                "currency": "INR",
+                "receipt": f"retry_rcpt_{order.id}",
+                "payment_capture": 1
+            })
+            razorpay_order_id = rzp_order['id']
+        except Exception as e:
+            print(f"[RAZORPAY WARNING] Retry using existing/mock order ID. Error: {str(e)}")
+
+        order.razorpay_order_id = razorpay_order_id
+        order.save()
+
+        return Response({
+            'message': 'Payment session ready. Complete payment to confirm your order.',
+            'order': OrderSerializer(order).data,
+            'razorpay_key_id': settings.RAZORPAY_KEY_ID,
+            'amount_in_paise': int(float(order.total_amount) * 100),
+            'currency': 'INR',
+        })
 
 class OrderCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -79,63 +127,92 @@ class OrderCreateView(APIView):
         serializer = CreateOrderSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
+
         validated_data = serializer.validated_data
         buyer = request.user
-        
-        # Calculate total amount & verify stock
-        total_amount = 0
+        shipping_pincode = validated_data['shipping_pincode']
+        buyer_district = (buyer.district or '').strip()
+
+        # ── Calculate product subtotal & verify stock ──────────────────────
+        product_subtotal = 0
         order_items_to_create = []
-        
+        farmer_pincode = None
+        farmer_district = None
+
         for item in validated_data['items']:
             product = item['product']
             qty = item['quantity']
-            
-            # Deduct stock
+
+            # Deduct stock atomically
             product.quantity -= qty
             product.save()
-            
+
             price = product.price_per_unit
-            total_amount += price * qty
-            
+            product_subtotal += price * qty
             order_items_to_create.append((product, qty, price))
-            
-        # Create order
+
+            # Use the FIRST farmer's location for shipping estimation
+            if farmer_pincode is None and product.farmer:
+                farmer_pincode = (product.farmer.pincode or '').strip()
+                farmer_district = (product.farmer.district or '').strip()
+
+        # ── Estimate shipping charge ───────────────────────────────────────
+        # Rate: ₹12/km × estimated distance
+        # Heuristic (same as services.py):
+        #   Same pincode  → avg 3.5 km  → ~₹42
+        #   Same district → avg 17.5 km → ~₹210
+        #   Different     → avg 85 km   → ~₹1020
+        RATE_PER_KM = 12  # ₹ per km — must stay in sync with EARNINGS_PER_KM
+
+        if farmer_pincode and farmer_pincode == shipping_pincode:
+            estimated_km = 3.5    # same pincode: short local delivery
+        elif farmer_district and buyer_district and farmer_district.lower() == buyer_district.lower():
+            estimated_km = 17.5   # same district: intra-district delivery
+        else:
+            estimated_km = 85.0   # cross-district: long-haul delivery
+
+        shipping_charge = round(estimated_km * RATE_PER_KM, 2)
+        total_amount = float(product_subtotal) + shipping_charge
+
+        print(f"[ORDER] Product subtotal=₹{product_subtotal} | Shipping=₹{shipping_charge} ({estimated_km}km est.) | Total=₹{total_amount}")
+
+        # ── Create Order ────────────────────────────────────────────────────
         order = Order.objects.create(
             buyer=buyer,
+            product_subtotal=product_subtotal,
+            shipping_charge=shipping_charge,
             total_amount=total_amount,
             status='placed',
             shipping_address=validated_data['shipping_address'],
-            shipping_pincode=validated_data['shipping_pincode'],
+            shipping_pincode=shipping_pincode,
             payment_status='pending'
         )
-        
+
         # Create order items
         for prod, qty, price in order_items_to_create:
-            OrderItem.objects.create(
-                order=order,
-                product=prod,
-                quantity=qty,
-                price=price
-            )
-            
-        # Initialize Razorpay Sandbox Order
+            OrderItem.objects.create(order=order, product=prod, quantity=qty, price=price)
+
+        # ── Create Razorpay order (amount includes shipping) ────────────────
         razorpay_order_id = f"rzp_mock_{order.id}_{random.randint(10000, 99999)}"
         try:
             client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
             rzp_order = client.order.create(data={
-                "amount": int(total_amount * 100), # in paise
+                "amount": int(total_amount * 100),  # in paise — includes shipping
                 "currency": "INR",
                 "receipt": f"order_rcpt_{order.id}",
-                "payment_capture": 1
+                "payment_capture": 1,
+                "notes": {
+                    "product_subtotal": str(product_subtotal),
+                    "shipping_charge": str(shipping_charge),
+                }
             })
             razorpay_order_id = rzp_order['id']
         except Exception as e:
-            print(f"[RAZORPAY WARNING] Using sandbox mock order ID. Error: {str(e)}")
+            print(f"[RAZORPAY WARNING] Using mock order ID. Error: {str(e)}")
 
         order.razorpay_order_id = razorpay_order_id
         order.save()
-        
+
         # Create Payment Record
         PaymentRecord.objects.create(
             order=order,
@@ -143,13 +220,19 @@ class OrderCreateView(APIView):
             amount=total_amount,
             status='created'
         )
-        
+
         return Response({
-            'message': 'Order placed. Complete the payment to confirm.',
+            'message': 'Order placed. Complete payment to confirm (includes shipping charge).',
             'order': OrderSerializer(order).data,
             'razorpay_key_id': settings.RAZORPAY_KEY_ID,
             'amount_in_paise': int(total_amount * 100),
-            'currency': 'INR'
+            'currency': 'INR',
+            'bill_breakdown': {
+                'product_subtotal': float(product_subtotal),
+                'shipping_charge': float(shipping_charge),
+                'estimated_km': estimated_km,
+                'total_amount': float(total_amount),
+            }
         }, status=status.HTTP_201_CREATED)
 
 class PaymentCallbackView(APIView):
@@ -193,17 +276,22 @@ class PaymentCallbackView(APIView):
             order.status = 'placed'
             order.payment_id = razorpay_payment_id
             order.save()
-            
+
             if payment_record:
                 payment_record.status = 'success'
                 payment_record.razorpay_payment_id = razorpay_payment_id
                 payment_record.razorpay_signature = razorpay_signature
                 payment_record.save()
-                
-            print(f"\n[STUB NOTIFICATION SERVICE] Payment confirmed for Order #{order.id}. Email and SMS dispatched.\n")
-            
+
+            # Broadcast open delivery shipment immediately so drivers can see and accept the job
+            if not hasattr(order, 'shipment'):
+                create_open_shipment(order)
+                print(f"[LOGISTICS] Open delivery shipment created and broadcast for paid order #{order.id}.")
+
+            print(f"\n[PAYMENT] Order #{order.id} payment verified. Status: PAID.\n")
+
             return Response({
-                'message': 'Payment successful and verified. Order placed and awaiting farmer confirmation.',
+                'message': 'Payment successful and verified. Order placed and open delivery shipment broadcast.',
                 'order': OrderSerializer(order).data
             }, status=status.HTTP_200_OK)
         else:

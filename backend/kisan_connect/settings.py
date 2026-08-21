@@ -1,14 +1,18 @@
 from pathlib import Path
 from datetime import timedelta
 import os
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure--j%_dvds9lnk!cu!zx*9ro96twl#98p5nv4-_e!77ds-*5cww$'
+# Load environment variables from .env file
+load_dotenv(BASE_DIR / '.env')
 
-DEBUG = True
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure--j%_dvds9lnk!cu!zx*9ro96twl#98p5nv4-_e!77ds-*5cww$')
 
-ALLOWED_HOSTS = ['*']
+DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
+
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
 # Application definition
 
@@ -147,10 +151,12 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Console Email Backend for notifications
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = 'no-reply@kisanconnect.org'
+# Brevo (Sendinblue) Configuration
+BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '')
+BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', 'yugsayja312@gmail.com')
+BREVO_SENDER_NAME = os.environ.get('BREVO_SENDER_NAME', 'KisanConnect Platform')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', BREVO_SENDER_EMAIL)
 
 # Sandbox Razorpay Config
-RAZORPAY_KEY_ID = 'rzp_test_KisanConnectKey123'
-RAZORPAY_KEY_SECRET = 'KisanConnectSecretKeyValue'
+RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', 'rzp_test_KisanConnectKey123')
+RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', 'KisanConnectSecretKeyValue')

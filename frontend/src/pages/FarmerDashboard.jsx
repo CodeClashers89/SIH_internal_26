@@ -442,11 +442,24 @@ const FarmerDashboard = () => {
                   listings.map((l) => (
                     <tr key={l.id} className="hover:bg-slate-50 transition-colors">
                       <td className="py-3.5 px-2 font-semibold text-slate-800 flex items-center gap-2">
-                        <img 
-                          src={l.image_url || 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?auto=format&fit=crop&q=80&w=60'} 
-                          alt={l.name}
-                          className="h-8 w-8 rounded-lg object-cover bg-slate-50"
-                        />
+                        {l.image_url ? (
+                          <img
+                            src={l.image_url}
+                            alt={l.name}
+                            className="h-8 w-8 rounded-lg object-cover bg-slate-100 shrink-0"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <span
+                          className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 text-base flex items-center justify-center shrink-0 select-none"
+                          style={{ display: l.image_url ? 'none' : 'flex' }}
+                          title="No image"
+                        >
+                          🌿
+                        </span>
                         {l.name}
                       </td>
                       <td className="py-3.5 px-2 capitalize text-slate-500">{l.category}</td>
@@ -521,20 +534,19 @@ const FarmerDashboard = () => {
                         </button>
                       )}
                       {o.status === 'packed' && (
-                        <button
-                          onClick={() => handleUpdateOrderStatus(o.id, 'in_transit')}
-                          className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-[10px] px-3 py-1.5 rounded-xl transition-all"
-                        >
-                          Ship Order
-                        </button>
+                        <span className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 font-bold text-[10px] px-3 py-1.5 rounded-xl">
+                          🚚 Awaiting Logistics Pickup
+                        </span>
                       )}
                       {o.status === 'in_transit' && (
-                        <button
-                          onClick={() => handleUpdateOrderStatus(o.id, 'delivered')}
-                          className="bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-[10px] px-3 py-1.5 rounded-xl transition-all"
-                        >
-                          Deliver Order
-                        </button>
+                        <span className="flex items-center gap-1.5 bg-purple-50 border border-purple-200 text-purple-700 font-bold text-[10px] px-3 py-1.5 rounded-xl">
+                          📦 In Transit — Logistics Handling
+                        </span>
+                      )}
+                      {o.status === 'delivered' && (
+                        <span className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[10px] px-3 py-1.5 rounded-xl">
+                          ✅ Delivered via OTP
+                        </span>
                       )}
                       {(o.status === 'placed' || o.status === 'confirmed') && (
                         <button

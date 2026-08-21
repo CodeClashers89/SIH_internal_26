@@ -23,7 +23,9 @@ class Order(models.Model):
         on_delete=models.CASCADE,
         related_name='orders'
     )
-    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    product_subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    shipping_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)  # product_subtotal + shipping_charge
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='placed')
     shipping_address = models.TextField()
     shipping_pincode = models.CharField(max_length=10)

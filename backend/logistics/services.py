@@ -3,83 +3,74 @@ from django.db.models import Count, Q
 from decimal import Decimal
 import random
 
-def assign_delivery_partner(order):
+
+def create_open_shipment(order):
     """
-    Rule-based logistics partner assignment:
-    1. Retrieve the farmer's (pickup) pincode & district, and the order's (delivery) pincode & district.
-    2. Query active logistics partners.
-    3. Try to find partners in the farmer's district (to facilitate easy pickup).
-    4. If multiple partners found, select the one with the fewest active (non-delivered) shipments.
-    5. Calculate distance using a simple lookup:
-       - Same pincode: 2-5 km
-       - Same district: 10-25 km
-       - Different district: 50-120 km
+    Rapido-style open broadcast shipment creation.
+
+    Instead of auto-assigning a driver, we create the shipment with NO partner.
+    All active logistics partner users in the area can see it and RACE to accept.
+    The first driver to accept (via atomic select_for_update) wins the job.
+
+    Distance is calculated using a rule-based pincode/district heuristic:
+      - Same pincode  → 2–5 km
+      - Same district → 10–25 km
+      - Different     → 50–120 km
     """
     farmer = None
-    # Find the farmer of the first item in the order
     first_item = order.items.first()
     if first_item and first_item.product:
         farmer = first_item.product.farmer
 
     if not farmer:
+        print(f"[LOGISTICS] Cannot create shipment for order #{order.id}: no farmer found.")
         return None
 
-    farmer_district = farmer.district or ""
-    farmer_pincode = farmer.pincode or ""
-    order_district = order.buyer.district or ""
-    order_pincode = order.shipping_pincode or ""
+    farmer_district = (farmer.district or "").strip()
+    farmer_pincode = (farmer.pincode or "").strip()
+    order_district = (order.buyer.district or "").strip()
+    order_pincode = (order.shipping_pincode or "").strip()
 
-    # Try to find partners matching the farmer's district first, then pincode, then any active partner
-    partners = LogisticsPartner.objects.filter(active=True)
-    
-    district_partners = partners.filter(district__iexact=farmer_district)
-    if district_partners.exists():
-        selected_partners = district_partners
-    else:
-        pincode_partners = partners.filter(pincode=farmer_pincode)
-        if pincode_partners.exists():
-            selected_partners = pincode_partners
-        else:
-            selected_partners = partners
-
-    # If no partners exist in system at all, return None
-    if not selected_partners.exists():
-        return None
-
-    # Load balancing: Select the partner with the least active delivery shipments
-    partner_scores = selected_partners.annotate(
-        active_shipments_count=Count(
-            'shipments', 
-            filter=~Q(shipments__status='delivered')
-        )
-    ).order_by('active_shipments_count')
-
-    assigned_partner = partner_scores.first()
-
-    # Rule-based distance calculation
-    if farmer_pincode == order_pincode:
+    # Distance heuristic
+    if farmer_pincode and farmer_pincode == order_pincode:
         distance = Decimal(round(random.uniform(2.0, 5.0), 2))
-    elif farmer_district.lower() == order_district.lower():
+    elif farmer_district and farmer_district.lower() == order_district.lower():
         distance = Decimal(round(random.uniform(10.0, 25.0), 2))
     else:
         distance = Decimal(round(random.uniform(50.0, 120.0), 2))
 
-    # Create shipment record
+    # Build human-readable addresses
+    pickup_addr = (farmer.address or f"{farmer.district or 'Farmer'}, {farmer.pincode or ''}").strip(", ")
+    delivery_addr = (order.shipping_address or f"{order.buyer.district or ''}, {order_pincode}").strip(", ")
+
+    # Create open shipment — partner=None means it's broadcast to all drivers
     shipment, created = DeliveryShipment.objects.get_or_create(
         order=order,
         defaults={
-            'partner': assigned_partner,
-            'pickup_address': farmer.address or "Farmer Location",
-            'delivery_address': order.shipping_address,
+            'partner': None,          # ← Open job, no driver assigned yet
+            'pickup_address': pickup_addr,
+            'delivery_address': delivery_addr,
             'distance_km': distance,
-            'status': 'assigned'
+            'status': 'assigned',     # 'assigned' status means waiting for driver pickup
         }
     )
+
     if not created:
-        shipment.partner = assigned_partner
-        shipment.pickup_address = farmer.address or "Farmer Location"
-        shipment.delivery_address = order.shipping_address
-        shipment.distance_km = distance
-        shipment.save()
+        # Already exists — reset to open if it had a phantom partner
+        if shipment.partner and shipment.partner.user is None:
+            shipment.partner = None
+            shipment.pickup_address = pickup_addr
+            shipment.delivery_address = delivery_addr
+            shipment.distance_km = distance
+            shipment.save()
+            print(f"[LOGISTICS] Reset phantom-assigned shipment #{shipment.id} to open for order #{order.id}")
+        else:
+            print(f"[LOGISTICS] Shipment #{shipment.id} already exists for order #{order.id} (partner={shipment.partner_id})")
+    else:
+        print(f"[LOGISTICS] Open shipment #{shipment.id} broadcast for order #{order.id} | {distance} km | Waiting for driver acceptance.")
 
     return shipment
+
+
+# Keep old name as alias so existing imports don't break
+assign_delivery_partner = create_open_shipment
