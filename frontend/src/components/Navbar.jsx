@@ -43,9 +43,12 @@ const Navbar = ({ onCartToggle }) => {
 
           {/* Desktop Nav Items */}
           <div className="hidden md:flex items-center space-x-6">
-            <Link to="/marketplace" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors">
-              Marketplace
-            </Link>
+            {/* Hide Marketplace link for farmers — they manage listings, not browse */}
+            {(!user || user.role !== 'farmer') && (
+              <Link to="/marketplace" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors">
+                Marketplace
+              </Link>
+            )}
             
             {user && (
               <Link to={getDashboardLink()} className="text-gray-600 hover:text-emerald-600 font-medium transition-colors flex items-center gap-1.5">
@@ -141,13 +144,16 @@ const Navbar = ({ onCartToggle }) => {
       {/* Mobile Menu */}
       {isOpen && (
         <div className="md:hidden glassmorphism border-b border-emerald-100 px-2 pt-2 pb-3 space-y-1 sm:px-3">
-          <Link 
-            to="/marketplace" 
-            className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-emerald-600 hover:bg-emerald-50"
-            onClick={() => setIsOpen(false)}
-          >
-            Marketplace
-          </Link>
+          {/* Hide Marketplace link for farmers in mobile menu too */}
+          {(!user || user.role !== 'farmer') && (
+            <Link 
+              to="/marketplace" 
+              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-emerald-600 hover:bg-emerald-50"
+              onClick={() => setIsOpen(false)}
+            >
+              Marketplace
+            </Link>
+          )}
           
           {user && (
             <Link 

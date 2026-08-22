@@ -30,6 +30,17 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   return children;
 };
 
+// Redirect farmers away from consumer-only pages (e.g. /marketplace)
+const NonFarmerRoute = ({ children }) => {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (user && user.role === 'farmer') {
+    return <Navigate to="/farmer-dashboard" replace />;
+  }
+  return children;
+};
+
+
 function MainLayout() {
   const [cartOpen, setCartOpen] = useState(false);
   const { loading } = useAuth();
@@ -51,7 +62,11 @@ function MainLayout() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<LoginSignup />} />
           <Route path="/register" element={<LoginSignup />} />
-          <Route path="/marketplace" element={<ConsumerMarketplace />} />
+          <Route path="/marketplace" element={
+            <NonFarmerRoute>
+              <ConsumerMarketplace />
+            </NonFarmerRoute>
+          } />
           
           {/* Role Protected Paths */}
           <Route 
