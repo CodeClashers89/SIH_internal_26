@@ -31,6 +31,7 @@ const FarmerDashboard = () => {
   const [orderRoutes, setOrderRoutes] = useState({});
   const [expandedRoutes, setExpandedRoutes] = useState({});
   const [routeLoadingOrder, setRouteLoadingOrder] = useState({});
+  const [selectedCandidatePerOrder, setSelectedCandidatePerOrder] = useState({});
 
   const toggleOrderRoute = async (orderId) => {
     const isExpanded = !!expandedRoutes[orderId];
@@ -675,12 +676,26 @@ const FarmerDashboard = () => {
                               deliveryAddress={orderRoutes[o.id].delivery_address}
                               pickupCoordinates={orderRoutes[o.id].route?.route_geometry?.[0]}
                               destinationCoordinates={orderRoutes[o.id].route?.route_geometry?.[orderRoutes[o.id].route.route_geometry.length - 1]}
-                              routeGeometry={orderRoutes[o.id].route?.route_geometry || []}
-                              weatherCheckpoints={orderRoutes[o.id].route?.weather_snapshot || []}
-                              height="350px"
+                              routeGeometry={
+                                orderRoutes[o.id].route?.candidate_routes?.find(c => c.route_id === selectedCandidatePerOrder[o.id])?.geometry ||
+                                orderRoutes[o.id].route?.route_geometry || []
+                              }
+                              weatherCheckpoints={
+                                orderRoutes[o.id].route?.candidate_routes?.find(c => c.route_id === selectedCandidatePerOrder[o.id])?.weather_checkpoints ||
+                                orderRoutes[o.id].route?.weather_snapshot || []
+                              }
+                              candidateRoutes={orderRoutes[o.id].route?.candidate_routes || []}
+                              selectedRouteId={selectedCandidatePerOrder[o.id] || orderRoutes[o.id].route?.route_id || 'R1'}
+                              onSelectCandidate={(candId) => setSelectedCandidatePerOrder(prev => ({ ...prev, [o.id]: candId }))}
+                              height="380px"
                             />
 
-                            <RouteInfoPanel route={orderRoutes[o.id].route} isDriver={false} />
+                            <RouteInfoPanel
+                              route={orderRoutes[o.id].route}
+                              selectedCandidateId={selectedCandidatePerOrder[o.id] || orderRoutes[o.id].route?.route_id || 'R1'}
+                              onSelectCandidate={(candId) => setSelectedCandidatePerOrder(prev => ({ ...prev, [o.id]: candId }))}
+                              isDriver={false}
+                            />
                           </div>
                         ) : null}
                       </div>

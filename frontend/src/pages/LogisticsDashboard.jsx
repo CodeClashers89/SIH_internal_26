@@ -102,6 +102,7 @@ const LogisticsDashboard = () => {
   const [activeDeliveryData, setActiveDeliveryData] = useState(null);
   const [driverLocation, setDriverLocation] = useState(null);
   const [routeLoading, setRouteLoading] = useState(false);
+  const [selectedCandidateId, setSelectedCandidateId] = useState(null);
 
   // Vehicle edit state
   const [editingVehicle, setEditingVehicle] = useState(false);
@@ -846,8 +847,17 @@ const LogisticsDashboard = () => {
                   deliveryAddress={activeDeliveryData.destination}
                   pickupCoordinates={activeDeliveryData.pickup_coordinates}
                   destinationCoordinates={activeDeliveryData.destination_coordinates}
-                  routeGeometry={activeDeliveryData.route?.route_geometry || []}
-                  weatherCheckpoints={activeDeliveryData.route?.weather_snapshot || []}
+                  routeGeometry={
+                    activeDeliveryData.route?.candidate_routes?.find(c => c.route_id === selectedCandidateId)?.geometry ||
+                    activeDeliveryData.route?.route_geometry || []
+                  }
+                  weatherCheckpoints={
+                    activeDeliveryData.route?.candidate_routes?.find(c => c.route_id === selectedCandidateId)?.weather_checkpoints ||
+                    activeDeliveryData.route?.weather_snapshot || []
+                  }
+                  candidateRoutes={activeDeliveryData.route?.candidate_routes || []}
+                  selectedRouteId={selectedCandidateId || activeDeliveryData.route?.route_id || 'R1'}
+                  onSelectCandidate={(candId) => setSelectedCandidateId(candId)}
                   driverLocation={driverLocation}
                   height="480px"
                 />
@@ -855,6 +865,8 @@ const LogisticsDashboard = () => {
                 {/* Route Information & Weather Checkpoints Panel */}
                 <RouteInfoPanel
                   route={activeDeliveryData.route}
+                  selectedCandidateId={selectedCandidateId || activeDeliveryData.route?.route_id || 'R1'}
+                  onSelectCandidate={(candId) => setSelectedCandidateId(candId)}
                   isDriver={true}
                   onRecalculate={() => {
                     api.post(`/route-planning/shipments/${activeDeliveryData.shipment_id}/recalculate-route/`)

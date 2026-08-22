@@ -1,4 +1,4 @@
-﻿"""
+"""
 OSRM Route Generation Service.
 
 Uses the public OSRM demo server (router.project-osrm.org) to generate
@@ -102,8 +102,10 @@ def generate_routes(
             distance_m = route.get("distance", 0)
             duration_s = route.get("duration", 0)
 
+            name = "Main Highway Route" if i == 0 else f"Alternative Route {i}"
             routes.append({
                 "route_id": f"R{i + 1}",
+                "name": name,
                 "distance_km": round(distance_m / 1000, 2),
                 "duration_minutes": round(duration_s / 60, 1),
                 "geometry": coords,
@@ -111,7 +113,54 @@ def generate_routes(
                 "source": "osrm",
             })
 
-        logger.info(f"[OSRM] Generated {len(routes)} route(s)")
+        # If OSRM returns only 1 route, generate additional candidate routes via intermediate waypoints
+        if len(routes) == 1:
+            mid_lat = (pickup_lat + dest_lat) / 2.0
+            mid_lng = (pickup_lng + dest_lng) / 2.0
+
+            # Alternative 2: Inland Express Route (+0.30 lat, +0.30 lng)
+            wp1_str = f"{pickup_lng},{pickup_lat};{mid_lng + 0.30},{mid_lat + 0.20};{dest_lng},{dest_lat}"
+            try:
+                resp2 = requests.get(f"{OSRM_BASE_URL}/{wp1_str}", params={"steps": "false", "geometries": "polyline", "overview": "full"}, timeout=8)
+                if resp2.status_code == 200:
+                    d2 = resp2.json()
+                    if d2.get("code") == "Ok" and d2.get("routes"):
+                        r2 = d2["routes"][0]
+                        coords2 = _decode_polyline(r2.get("geometry", ""), precision=5)
+                        routes.append({
+                            "route_id": "R2",
+                            "name": "Inland Express Route",
+                            "distance_km": round(r2.get("distance", 0) / 1000, 2),
+                            "duration_minutes": round(r2.get("duration", 0) / 60, 1),
+                            "geometry": coords2,
+                            "legs": r2.get("legs", []),
+                            "source": "osrm_waypoint",
+                        })
+            except Exception as e:
+                logger.warning(f"[OSRM] Waypoint alternative 1 failed: {e}")
+
+            # Alternative 3: Coastal / Bypass Route (-0.25 lat, -0.30 lng)
+            wp2_str = f"{pickup_lng},{pickup_lat};{mid_lng - 0.30},{mid_lat - 0.20};{dest_lng},{dest_lat}"
+            try:
+                resp3 = requests.get(f"{OSRM_BASE_URL}/{wp2_str}", params={"steps": "false", "geometries": "polyline", "overview": "full"}, timeout=8)
+                if resp3.status_code == 200:
+                    d3 = resp3.json()
+                    if d3.get("code") == "Ok" and d3.get("routes"):
+                        r3 = d3["routes"][0]
+                        coords3 = _decode_polyline(r3.get("geometry", ""), precision=5)
+                        routes.append({
+                            "route_id": f"R{len(routes) + 1}",
+                            "name": "Coastal Bypass Route",
+                            "distance_km": round(r3.get("distance", 0) / 1000, 2),
+                            "duration_minutes": round(r3.get("duration", 0) / 60, 1),
+                            "geometry": coords3,
+                            "legs": r3.get("legs", []),
+                            "source": "osrm_waypoint",
+                        })
+            except Exception as e:
+                logger.warning(f"[OSRM] Waypoint alternative 2 failed: {e}")
+
+        logger.info(f"[OSRM] Generated {len(routes)} candidate route(s)")
         return routes
 
     except requests.exceptions.Timeout:

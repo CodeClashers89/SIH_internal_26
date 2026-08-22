@@ -1,7 +1,13 @@
 ﻿import React, { useState } from 'react';
-import { ShieldCheck, CloudRain, Clock, Navigation, AlertTriangle, Cpu, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShieldCheck, CloudRain, Clock, Navigation, AlertTriangle, Cpu, CheckCircle2, ChevronDown, ChevronUp, Layers, Check } from 'lucide-react';
 
-const RouteInfoPanel = ({ route, onRecalculate, isDriver = false }) => {
+const RouteInfoPanel = ({
+  route,
+  selectedCandidateId,
+  onSelectCandidate,
+  onRecalculate,
+  isDriver = false
+}) => {
   const [showReason, setShowReason] = useState(false);
   const [showCheckpoints, setShowCheckpoints] = useState(false);
 
@@ -12,6 +18,20 @@ const RouteInfoPanel = ({ route, onRecalculate, isDriver = false }) => {
       </div>
     );
   }
+
+  const candidateRoutes = route.candidate_routes || [];
+  const activeRouteId = selectedCandidateId || route.route_id || candidateRoutes[0]?.route_id || 'R1';
+
+  // Find selected candidate details (or fallback to active route details)
+  const activeCandidate = candidateRoutes.find(c => c.route_id === activeRouteId) || {
+    route_id: route.route_id || 'R1',
+    name: 'Main Highway Route',
+    distance_km: route.distance_km,
+    duration_minutes: route.duration_minutes,
+    duration_hours: route.duration_minutes / 60,
+    weather_risk: route.weather_risk,
+    quality_risk: route.quality_risk,
+  };
 
   const getRiskBadge = (risk) => {
     switch (risk) {
@@ -28,7 +48,7 @@ const RouteInfoPanel = ({ route, onRecalculate, isDriver = false }) => {
     }
   };
 
-  const weatherCheckpoints = route.weather_snapshot || [];
+  const weatherCheckpoints = activeCandidate.weather_checkpoints || route.weather_snapshot || [];
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4 text-xs">
@@ -40,14 +60,16 @@ const RouteInfoPanel = ({ route, onRecalculate, isDriver = false }) => {
             <Navigation className="h-4 w-4" />
           </div>
           <div>
-            <h4 className="font-extrabold text-slate-800 text-sm">Operational Route</h4>
-            <span className="text-[10px] text-slate-400 font-semibold">Version #{route.route_version || 1}</span>
+            <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+              <span>Operational Route ({activeCandidate.name || `Route ${activeCandidate.route_id}`})</span>
+            </h4>
+            <span className="text-[10px] text-slate-400 font-semibold">Version #{route.route_version || 1} • {candidateRoutes.length} Candidate Route(s) Available</span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] border uppercase ${getRiskBadge(route.weather_risk)}`}>
-            🌦️ Weather Risk: {route.weather_risk || 'UNKNOWN'}
+          <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] border uppercase ${getRiskBadge(activeCandidate.weather_risk || route.weather_risk)}`}>
+            🌦️ Weather Risk: {activeCandidate.weather_risk || route.weather_risk || 'UNKNOWN'}
           </span>
           <span className="bg-blue-50 text-blue-700 border border-blue-200 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">
             {route.status || 'ACTIVE'}
@@ -55,20 +77,78 @@ const RouteInfoPanel = ({ route, onRecalculate, isDriver = false }) => {
         </div>
       </div>
 
-      {/* Primary Metrics Grid */}
+      {/* ── Candidate Routes Selector Section ── */}
+      {candidateRoutes.length > 0 && (
+        <div className="bg-slate-50/80 border border-slate-200/80 rounded-xl p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
+              <Layers className="h-3.5 w-3.5 text-indigo-600" />
+              Generated Candidate Routes ({candidateRoutes.length})
+            </span>
+            <span className="text-[10px] text-slate-400 font-medium">Click any route to view/switch on map</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+            {candidateRoutes.map((cand, idx) => {
+              const isSelected = cand.route_id === activeRouteId;
+              const isRecommended = idx === 0;
+
+              return (
+                <button
+                  key={cand.route_id || idx}
+                  onClick={() => onSelectCandidate && onSelectCandidate(cand.route_id)}
+                  className={`p-2.5 rounded-xl border text-left transition-all relative ${
+                    isSelected
+                      ? 'bg-white border-blue-600 ring-2 ring-blue-100 shadow-xs'
+                      : 'bg-white/60 border-slate-200 hover:border-slate-300 hover:bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-black text-slate-800 text-xs flex items-center gap-1">
+                      {cand.route_id}: {cand.name || `Route ${cand.route_id}`}
+                      {isSelected && <Check className="h-3.5 w-3.5 text-blue-600 stroke-[3]" />}
+                    </span>
+                    {isRecommended && (
+                      <span className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded">
+                        RECOMMENDED
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
+                    <span>📏 {cand.distance_km} km</span>
+                    <span>⏱️ {cand.duration_hours ? `${cand.duration_hours.toFixed(1)}h` : `${cand.duration_minutes}m`}</span>
+                    <span className={`font-bold text-[9px] px-1.5 py-0.5 rounded ${
+                      cand.weather_risk === 'LOW' ? 'bg-emerald-50 text-emerald-700' :
+                      cand.weather_risk === 'MEDIUM' ? 'bg-amber-50 text-amber-700' :
+                      cand.weather_risk === 'HIGH' ? 'bg-orange-50 text-orange-700' : 'bg-rose-50 text-rose-700'
+                    }`}>
+                      {cand.weather_risk || 'LOW'}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Primary Metrics Grid for Selected Candidate */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
           <span className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1">
             <Navigation className="h-3 w-3 text-blue-500" /> Distance
           </span>
-          <p className="text-base font-black text-slate-800 mt-1">{route.distance_km} km</p>
+          <p className="text-base font-black text-slate-800 mt-1">{activeCandidate.distance_km} km</p>
         </div>
 
         <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
           <span className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1">
             <Clock className="h-3 w-3 text-indigo-500" /> Duration
           </span>
-          <p className="text-base font-black text-slate-800 mt-1">{route.duration_hours_formatted || `${route.duration_minutes}m`}</p>
+          <p className="text-base font-black text-slate-800 mt-1">
+            {activeCandidate.duration_hours ? `${activeCandidate.duration_hours.toFixed(1)}h` : `${activeCandidate.duration_minutes}m`}
+          </p>
         </div>
 
         <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
@@ -84,7 +164,7 @@ const RouteInfoPanel = ({ route, onRecalculate, isDriver = false }) => {
           <span className="text-[10px] text-slate-400 font-bold uppercase flex items-center gap-1">
             <ShieldCheck className="h-3 w-3 text-purple-500" /> Cargo Risk
           </span>
-          <p className="text-sm font-bold text-slate-800 mt-1 uppercase">{route.quality_risk || 'LOW'}</p>
+          <p className="text-sm font-bold text-slate-800 mt-1 uppercase">{activeCandidate.quality_risk || route.quality_risk || 'LOW'}</p>
         </div>
       </div>
 
@@ -118,7 +198,7 @@ const RouteInfoPanel = ({ route, onRecalculate, isDriver = false }) => {
           >
             <span className="flex items-center gap-1.5">
               <CloudRain className="h-3.5 w-3.5 text-blue-500" />
-              Weather Forecast Checkpoints ({weatherCheckpoints.length} points sampled along route)
+              Weather Forecast Checkpoints for {activeCandidate.name || `Route ${activeCandidate.route_id}`} ({weatherCheckpoints.length} sampled points)
             </span>
             {showCheckpoints ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
@@ -158,7 +238,7 @@ const RouteInfoPanel = ({ route, onRecalculate, isDriver = false }) => {
             onClick={onRecalculate}
             className="flex items-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-700 hover:underline"
           >
-            🔄 Recalculate Route (Weather / Disruption)
+            🔄 Recalculate Routes (Weather / Disruption)
           </button>
         </div>
       )}

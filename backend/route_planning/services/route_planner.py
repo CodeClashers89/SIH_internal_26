@@ -1,4 +1,4 @@
-﻿"""
+"""
 Main Route Planner Orchestrator.
 
 Executes the complete transportation route-planning pipeline:
@@ -139,6 +139,7 @@ def plan_shipment_route(
 
         candidate_obj = {
             "route_id": raw_route["route_id"],
+            "name": raw_route.get("name", f"Route {raw_route['route_id']}"),
             "distance_km": raw_route["distance_km"],
             "duration_hours": duration_hours,
             "duration_minutes": raw_route["duration_minutes"],
@@ -203,11 +204,15 @@ def plan_shipment_route(
             candidate_routes=[
                 {
                     "route_id": c["route_id"],
+                    "name": c.get("name", f"Route {c['route_id']}"),
                     "distance_km": c["distance_km"],
                     "duration_minutes": c["duration_minutes"],
+                    "duration_hours": c["duration_hours"],
                     "weather_risk": c["weather_risk"],
                     "quality_risk": c["quality_risk"],
                     "is_valid": c["is_valid"],
+                    "geometry": c["geometry"],
+                    "weather_checkpoints": c["weather_checkpoints"],
                 }
                 for c in analyzed_candidates
             ],
