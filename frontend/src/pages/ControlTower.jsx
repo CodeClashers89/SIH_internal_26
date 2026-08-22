@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
-    ExclamationTriangleIcon, 
-    XCircleIcon, 
-    CheckCircleIcon,
-    TruckIcon,
-    CurrencyRupeeIcon,
-    CubeIcon
-} from '@heroicons/react/24/outline';
+    AlertTriangle, 
+    XCircle, 
+    CheckCircle,
+    Truck,
+    IndianRupee,
+    Package
+} from 'lucide-react';
 
 const ControlTower = () => {
     const [summary, setSummary] = useState(null);
@@ -49,7 +49,7 @@ const ControlTower = () => {
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-medium text-gray-500">Active Orders</h3>
-                            <CubeIcon className="w-5 h-5 text-indigo-500" />
+                            <Package className="w-5 h-5 text-indigo-500" />
                         </div>
                         <p className="text-3xl font-bold text-gray-900 mt-2">{summary.active_orders}</p>
                     </div>
@@ -58,7 +58,7 @@ const ControlTower = () => {
                     <div className="bg-white rounded-xl shadow-sm border border-red-100 p-6 bg-red-50/30">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-medium text-red-600">Orders At Risk</h3>
-                            <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
+                            <AlertTriangle className="w-5 h-5 text-red-500" />
                         </div>
                         <p className="text-3xl font-bold text-red-700 mt-2">{summary.orders_at_risk}</p>
                     </div>
@@ -67,7 +67,7 @@ const ControlTower = () => {
                     <div className="bg-white rounded-xl shadow-sm border border-orange-100 p-6 bg-orange-50/30">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-medium text-orange-600">Delayed Orders</h3>
-                            <ExclamationTriangleIcon className="w-5 h-5 text-orange-500" />
+                            <AlertTriangle className="w-5 h-5 text-orange-500" />
                         </div>
                         <p className="text-3xl font-bold text-orange-700 mt-2">{summary.delayed_orders}</p>
                     </div>
@@ -76,7 +76,7 @@ const ControlTower = () => {
                     <div className="bg-white rounded-xl shadow-sm border border-emerald-100 p-6 bg-emerald-50/30">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-medium text-emerald-600">Available Trucks</h3>
-                            <TruckIcon className="w-5 h-5 text-emerald-500" />
+                            <Truck className="w-5 h-5 text-emerald-500" />
                         </div>
                         <p className="text-3xl font-bold text-emerald-700 mt-2">{summary.available_trucks}</p>
                     </div>
@@ -85,7 +85,7 @@ const ControlTower = () => {
                     <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-6 bg-blue-50/30">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-medium text-blue-600">Pending Handovers</h3>
-                            <ExclamationTriangleIcon className="w-5 h-5 text-blue-500" />
+                            <AlertTriangle className="w-5 h-5 text-blue-500" />
                         </div>
                         <p className="text-3xl font-bold text-blue-700 mt-2">{summary.pending_handovers}</p>
                     </div>
@@ -94,7 +94,7 @@ const ControlTower = () => {
                     <div className="bg-white rounded-xl shadow-sm border border-green-100 p-6 bg-green-50/30">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-medium text-green-600">Locked & In Transit</h3>
-                            <CheckCircleIcon className="w-5 h-5 text-green-500" />
+                            <CheckCircle className="w-5 h-5 text-green-500" />
                         </div>
                         <p className="text-3xl font-bold text-green-700 mt-2">{summary.completed_handovers}</p>
                     </div>
@@ -112,7 +112,7 @@ const ControlTower = () => {
                 
                 {exceptions.length === 0 ? (
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center text-gray-500 flex flex-col items-center">
-                        <CheckCircleIcon className="w-12 h-12 text-emerald-400 mb-3" />
+                        <CheckCircle className="w-12 h-12 text-emerald-400 mb-3" />
                         <p className="font-medium text-gray-900 text-lg">No active exceptions</p>
                         <p>The supply chain is operating smoothly.</p>
                     </div>
