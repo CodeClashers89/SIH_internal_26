@@ -2,6 +2,7 @@ from pathlib import Path
 from datetime import timedelta
 import os
 from dotenv import load_dotenv
+import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -72,11 +73,17 @@ WSGI_APPLICATION = 'kisan_connect.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
+
+# Reads DATABASE_URL from .env — falls back to SQLite for local dev without Postgres
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=os.environ.get(
+            'DATABASE_URL',
+            f'sqlite:///{BASE_DIR / "db.sqlite3"}'
+        ),
+        conn_max_age=600,          # Keep connections alive for 10 min (connection pooling)
+        conn_health_checks=True,   # Validate connections before reuse
+    )
 }
 
 # Custom User Model
