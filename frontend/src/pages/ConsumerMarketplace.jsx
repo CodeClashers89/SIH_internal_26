@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
@@ -6,11 +7,13 @@ import ProductCard from '../components/ProductCard';
 import ReviewWidget from '../components/ReviewWidget';
 import Stepper from '../components/Stepper';
 import CartDrawer from '../components/CartDrawer';
+import OrderTypeModal from '../components/OrderTypeModal';
 import SubscriptionWidget from '../components/SubscriptionWidget';
 import {
   Search, MapPin, X, Loader2, ArrowRight, ShoppingBag,
   Truck, CheckCircle, CreditCard, Key, RefreshCw, Package,
-  AlertCircle, IndianRupee
+  AlertCircle, IndianRupee, Plus, Minus, Trash2, Repeat,
+  Pause, Play, Sparkles, Calendar, Clock, CheckCircle2
 } from 'lucide-react';
 
 // Loads Razorpay SDK for retry-pay flow
@@ -35,14 +38,19 @@ const STATUS_LABELS = {
 };
 
 const ConsumerMarketplace = () => {
-  const { addToCart } = useCart();
+  const { addToCart, cartItems, updateQuantity, removeFromCart } = useCart();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
 
   // Marketplace
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [subLoading, setSubLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [orderModalProduct, setOrderModalProduct] = useState(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,7 +60,13 @@ const ConsumerMarketplace = () => {
   const [sortBy, setSortBy] = useState('newest');
 
   // Tabs
-  const [activeTab, setActiveTab] = useState('browse');
+  const [activeTab, setActiveTab] = useState(tabParam && ['browse', 'tracking', 'subscriptions'].includes(tabParam) ? tabParam : 'browse');
+
+  useEffect(() => {
+    if (tabParam && ['browse', 'tracking', 'subscriptions'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   // Cart drawer
   const [cartOpen, setCartOpen] = useState(false);
@@ -90,12 +104,65 @@ const ConsumerMarketplace = () => {
     } catch (err) { console.error(err); }
   }, [user]);
 
+  const fetchSubscriptions = useCallback(async () => {
+    if (!user) return;
+    setSubLoading(true);
+    try {
+      const response = await api.get('/orders/subscriptions/');
+      setSubscriptions(response.data);
+    } catch (err) {
+      console.error('Fetch subscriptions error:', err);
+    } finally {
+      setSubLoading(false);
+    }
+  }, [user]);
+
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
-  useEffect(() => { if (user && activeTab === 'tracking') fetchOrders(); }, [user, activeTab, fetchOrders]);
+  useEffect(() => { 
+    if (user && activeTab === 'tracking') fetchOrders(); 
+    if (user && activeTab === 'subscriptions') fetchSubscriptions();
+  }, [user, activeTab, fetchOrders, fetchSubscriptions]);
+
+  // Load subscriptions initially for count badge
+  useEffect(() => {
+    if (user) fetchSubscriptions();
+  }, [user, fetchSubscriptions]);
 
   const handleOrderPlaced = () => {
     fetchOrders();
+    fetchSubscriptions();
     setActiveTab('tracking');
+  };
+
+  const handlePauseSub = async (subId) => {
+    try {
+      await api.post(`/orders/subscriptions/${subId}/pause/`);
+      fetchSubscriptions();
+      alert('Subscription paused successfully.');
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to pause subscription.');
+    }
+  };
+
+  const handleResumeSub = async (subId) => {
+    try {
+      await api.post(`/orders/subscriptions/${subId}/resume/`);
+      fetchSubscriptions();
+      alert('Subscription resumed! Next delivery has been scheduled.');
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to resume subscription.');
+    }
+  };
+
+  const handleCancelSub = async (subId) => {
+    if (!window.confirm('Are you sure you want to cancel this recurring auto-delivery schedule?')) return;
+    try {
+      await api.post(`/orders/subscriptions/${subId}/cancel/`);
+      fetchSubscriptions();
+      alert('Subscription cancelled.');
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to cancel subscription.');
+    }
   };
 
   // ── Retry payment for unpaid orders ──────────────────────────────────────
@@ -172,10 +239,10 @@ const ConsumerMarketplace = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
       {/* Sub-navigation */}
-      <div className="flex border-b border-slate-100 pb-px gap-1">
+      <div className="flex border-b border-slate-100 pb-px gap-1 overflow-x-auto">
         <button
           onClick={() => setActiveTab('browse')}
-          className={`pb-4 px-6 text-sm font-extrabold border-b-2 transition-all ${
+          className={`pb-4 px-6 text-sm font-extrabold border-b-2 transition-all shrink-0 ${
             activeTab === 'browse' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
         >
@@ -185,7 +252,7 @@ const ConsumerMarketplace = () => {
           <>
             <button
               onClick={() => setActiveTab('tracking')}
-              className={`pb-4 px-6 text-sm font-extrabold border-b-2 transition-all ${
+              className={`pb-4 px-6 text-sm font-extrabold border-b-2 transition-all shrink-0 ${
                 activeTab === 'tracking' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
               }`}
             >
@@ -193,15 +260,21 @@ const ConsumerMarketplace = () => {
             </button>
             <button
               onClick={() => setActiveTab('subscriptions')}
-              className={`pb-4 px-6 text-sm font-extrabold border-b-2 transition-all ${
+              className={`pb-4 px-6 text-sm font-extrabold border-b-2 transition-all flex items-center gap-2 shrink-0 ${
                 activeTab === 'subscriptions' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
               }`}
             >
-              🔄 Subscriptions
+              <Repeat className="h-4 w-4" />
+              My Subscriptions
+              {subscriptions.filter(s => s.status === 'active').length > 0 && (
+                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full">
+                  {subscriptions.filter(s => s.status === 'active').length}
+                </span>
+              )}
             </button>
             <button
               onClick={() => setCartOpen(true)}
-              className="ml-auto mb-3 flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm shadow-emerald-200"
+              className="ml-auto mb-3 flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm shadow-emerald-200 shrink-0"
             >
               <ShoppingBag className="h-3.5 w-3.5" />
               Open Cart
@@ -277,13 +350,7 @@ const ConsumerMarketplace = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                 {products.map((p) => (
                   <div key={p.id} onClick={() => setSelectedProduct(p)} className="cursor-pointer">
-                    <ProductCard
-                      product={p}
-                      onAddToCart={(prod, qty) => {
-                        addToCart(prod, qty);
-                        setCartOpen(true);
-                      }}
-                    />
+                    <ProductCard product={p} />
                   </div>
                 ))}
               </div>
@@ -494,6 +561,214 @@ const ConsumerMarketplace = () => {
         </div>
       )}
 
+      {/* ── Subscriptions Tab ── */}
+      {activeTab === 'subscriptions' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-emerald-600 to-teal-700 rounded-3xl p-6 text-white shadow-sm">
+            <div className="space-y-1">
+              <span className="text-[10px] font-black uppercase tracking-wider bg-white/20 text-white px-2.5 py-0.5 rounded-full inline-block">
+                🌾 Farm-to-Home Auto-Delivery
+              </span>
+              <h2 className="text-xl font-black">My Recurring Subscriptions</h2>
+              <p className="text-xs text-emerald-50 max-w-xl leading-relaxed">
+                Guaranteed fresh batches harvested directly from local farmers and delivered on your custom schedule with automatic 5% subscriber savings.
+              </p>
+            </div>
+            <button 
+              onClick={fetchSubscriptions}
+              className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all border border-white/20"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Refresh
+            </button>
+          </div>
+
+          {subLoading ? (
+            <div className="flex justify-center items-center py-20 text-slate-400">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : subscriptions.length === 0 ? (
+            <div className="text-center py-16 bg-white border border-slate-100 rounded-3xl p-8 space-y-4">
+              <div className="h-16 w-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                <Repeat className="h-8 w-8" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-800">No active subscriptions yet</h3>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  Choose your produce essentials from the marketplace, open your basket, and toggle <strong>Auto-Delivery</strong> to set your custom schedule!
+                </p>
+              </div>
+              <button
+                onClick={() => setActiveTab('browse')}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm transition-all inline-flex items-center gap-1.5"
+              >
+                🌾 Explore Marketplace
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {subscriptions.map((sub) => (
+                <div key={sub.id} className="bg-white border border-slate-100 rounded-3xl shadow-xs overflow-hidden transition-all hover:shadow-md">
+                  {/* Status Accent Stripe */}
+                  <div className={`h-1.5 w-full ${
+                    sub.status === 'active' ? 'bg-emerald-500' :
+                    sub.status === 'paused' ? 'bg-amber-400' : 'bg-slate-300'
+                  }`} />
+
+                  <div className="p-6 space-y-5">
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-emerald-50 text-emerald-700 rounded-2xl">
+                          <Repeat className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-black text-base text-slate-800">
+                              Every {sub.delivery_day} · <span className="capitalize">{sub.delivery_time_slot}</span>
+                            </h3>
+                            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                              sub.status === 'active' ? 'bg-emerald-100 text-emerald-800' :
+                              sub.status === 'paused' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {sub.status === 'active' ? '● Active Schedule' : sub.status === 'paused' ? '⏸️ Paused' : 'Cancelled'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Sub #{sub.id} · {sub.duration_months} Months Plan ({sub.total_deliveries} Weekly Drops)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-xs text-slate-400 block font-medium">Per Delivery Total</span>
+                        <span className="text-xl font-black text-emerald-700">
+                          ₹{parseFloat(sub.per_delivery_total).toFixed(2)}
+                        </span>
+                        <span className="text-[10px] text-emerald-600 font-bold block">
+                          ✨ 5% Subscriber Savings Included
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Items & Schedule Details */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-xs">
+                      {/* Produce Items */}
+                      <div className="space-y-3">
+                        <span className="font-bold text-slate-400 uppercase text-[9px] tracking-wider block">
+                          Basket Contents
+                        </span>
+                        <div className="space-y-2">
+                          {sub.items?.map((item) => (
+                            <div key={item.id} className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl">
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">🌿</span>
+                                <div>
+                                  <p className="font-bold text-slate-800 text-xs">{item.product_details?.name}</p>
+                                  <p className="text-[10px] text-slate-400">
+                                    {item.quantity} {item.product_details?.unit} @ ₹{parseFloat(item.price).toFixed(2)}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="font-bold text-slate-700 text-xs">
+                                ₹{(item.quantity * item.price).toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {sub.farmer_names?.length > 0 && (
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            🌾 <strong>Direct From:</strong> {sub.farmer_names.join(', ')}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Next Delivery Schedule & Address */}
+                      <div className="bg-emerald-50/60 border border-emerald-100 p-4 rounded-2xl space-y-3">
+                        <span className="font-bold text-emerald-800 uppercase text-[9px] tracking-wider flex items-center gap-1">
+                          <Calendar className="h-3.5 w-3.5 text-emerald-600" />
+                          Next Scheduled Delivery
+                        </span>
+                        
+                        <div className="bg-white p-3 rounded-xl border border-emerald-200 space-y-1">
+                          <div className="flex justify-between items-center font-bold text-slate-800">
+                            <span>📅 Date:</span>
+                            <span className="text-emerald-700 font-black text-sm">
+                              {sub.status === 'active' ? sub.next_delivery_date : 'Paused'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-slate-600 text-[11px]">
+                            <span>⏰ Slot:</span>
+                            <span className="capitalize font-semibold">{sub.delivery_time_slot} Slot</span>
+                          </div>
+                        </div>
+
+                        <div className="text-[11px] text-slate-600 space-y-1 leading-relaxed">
+                          <p><strong>📍 Delivery Address:</strong> {sub.shipping_address}</p>
+                          <p><strong>📮 Pincode:</strong> {sub.shipping_pincode}</p>
+                        </div>
+                      </div>
+
+                      {/* Progress Tracker */}
+                      <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex flex-col justify-between space-y-3">
+                        <div>
+                          <span className="font-bold text-slate-400 uppercase text-[9px] tracking-wider block mb-2">
+                            Plan Progress
+                          </span>
+                          <div className="flex justify-between text-xs font-bold text-slate-800 mb-1">
+                            <span>Completed Deliveries</span>
+                            <span className="text-emerald-700">
+                              {sub.completed_deliveries} / {sub.total_deliveries} Drops
+                            </span>
+                          </div>
+                          <div className="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min(100, Math.max(5, (sub.completed_deliveries / sub.total_deliveries) * 100))}%` }}
+                            />
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-1">
+                            Total plan value: ₹{parseFloat(sub.total_plan_amount).toFixed(2)} ({sub.duration_months} Months)
+                          </p>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="pt-3 border-t border-slate-200 flex flex-wrap items-center justify-end gap-2">
+                          {sub.status === 'active' && (
+                            <button
+                              onClick={() => handlePauseSub(sub.id)}
+                              className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 font-bold text-[11px] rounded-xl transition-colors flex items-center gap-1"
+                            >
+                              <Pause className="h-3 w-3" /> Pause Deliveries
+                            </button>
+                          )}
+                          {sub.status === 'paused' && (
+                            <button
+                              onClick={() => handleResumeSub(sub.id)}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-xl transition-colors flex items-center gap-1 shadow-xs"
+                            >
+                              <Play className="h-3 w-3" /> Resume Schedule
+                            </button>
+                          )}
+                          {sub.status !== 'cancelled' && (
+                            <button
+                              onClick={() => handleCancelSub(sub.id)}
+                              className="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 font-bold text-[11px] rounded-xl transition-colors"
+                            >
+                              Cancel Plan
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Cart Drawer ── */}
       <CartDrawer
         isOpen={cartOpen}
@@ -582,12 +857,84 @@ const ConsumerMarketplace = () => {
                     <p><strong>Region:</strong> {selectedProduct.farmer_details?.district} ({selectedProduct.farmer_details?.pincode})</p>
                     <p><strong>Harvest:</strong> {new Date(selectedProduct.harvest_date).toLocaleDateString('en-IN')}</p>
                   </div>
-                  <button
-                    onClick={() => { addToCart(selectedProduct, 1); setSelectedProduct(null); setCartOpen(true); }}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-2xl text-sm flex items-center justify-center gap-2 transition-all"
-                  >
-                    <ShoppingBag className="h-4 w-4" /> Add to Basket
-                  </button>
+                  {(() => {
+                    const selectedCartItem = cartItems.find(item => item.product.id === selectedProduct.id);
+                    const selectedCartQty = selectedCartItem ? selectedCartItem.quantity : 0;
+
+                    if (selectedCartQty === 0) {
+                      return (
+                        <button
+                          onClick={() => { setOrderModalProduct(selectedProduct); }}
+                          disabled={parseFloat(selectedProduct.quantity) <= 0}
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-2xl text-sm flex items-center justify-center gap-2 transition-all shadow-sm shadow-emerald-200 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
+                        >
+                          <ShoppingBag className="h-4 w-4" /> Add to Basket
+                        </button>
+                      );
+                    }
+
+                    if (selectedCartItem?.isSubscription) {
+                      return (
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 flex items-center justify-between bg-emerald-50 border-2 border-emerald-600 rounded-2xl p-2 shadow-xs">
+                            <div className="flex items-center gap-2 font-bold text-emerald-900 text-xs px-2">
+                              <Repeat className="h-4 w-4 text-emerald-600" />
+                              <span>Recurring Auto-Delivery Scheduled</span>
+                            </div>
+                            <button
+                              onClick={() => removeFromCart(selectedProduct.id)}
+                              className="px-3 py-1.5 rounded-xl bg-white text-rose-600 hover:bg-rose-50 hover:border-rose-200 border border-slate-200 flex items-center gap-1 font-bold text-xs transition-all shadow-xs active:scale-95"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" /> Delete
+                            </button>
+                          </div>
+                          <button
+                            onClick={() => { setSelectedProduct(null); setCartOpen(true); }}
+                            className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-3 rounded-2xl text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-[0.98]"
+                          >
+                            <ShoppingBag className="h-4 w-4" /> View Cart
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 flex items-center justify-between bg-emerald-50 border-2 border-emerald-600 rounded-2xl p-1.5 shadow-xs">
+                          <button
+                            onClick={() => {
+                              if (selectedCartQty <= 1) removeFromCart(selectedProduct.id);
+                              else updateQuantity(selectedProduct.id, selectedCartQty - 1);
+                            }}
+                            className="h-9 w-9 rounded-xl bg-white text-slate-700 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 border border-slate-200 flex items-center justify-center font-bold transition-all shadow-xs active:scale-95"
+                          >
+                            {selectedCartQty <= 1 ? <Trash2 className="h-4 w-4 text-rose-500" /> : <Minus className="h-4 w-4 text-emerald-800" />}
+                          </button>
+                          <div className="flex items-center gap-1.5 font-black text-emerald-900 text-sm px-2 select-none">
+                            <span className="text-base font-black">{selectedCartQty}</span>
+                            <span className="text-xs text-emerald-700 font-semibold">in cart</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              if (selectedCartQty < parseFloat(selectedProduct.quantity)) {
+                                updateQuantity(selectedProduct.id, selectedCartQty + 1);
+                              }
+                            }}
+                            disabled={selectedCartQty >= parseFloat(selectedProduct.quantity)}
+                            className="h-9 w-9 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 flex items-center justify-center font-bold transition-all shadow-xs active:scale-95"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => { setSelectedProduct(null); setCartOpen(true); }}
+                          className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-3 rounded-2xl text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-[0.98]"
+                        >
+                          <ShoppingBag className="h-4 w-4" /> View Cart
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
               <ReviewWidget farmerId={selectedProduct.farmer} />
@@ -595,6 +942,16 @@ const ConsumerMarketplace = () => {
           </div>
         </div>
       )}
+
+      {/* Order Type Selector Modal for Detail Modal */}
+      <OrderTypeModal
+        isOpen={!!orderModalProduct}
+        onClose={() => setOrderModalProduct(null)}
+        product={orderModalProduct}
+        onConfirm={(type, config) => {
+          addToCart(orderModalProduct, 1, config);
+        }}
+      />
     </div>
   );
 };

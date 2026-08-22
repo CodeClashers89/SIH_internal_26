@@ -1,11 +1,12 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    OrderViewSet, OrderCreateView, PaymentCallbackView, QuoteRequestViewSet,
-    BulkRequirementViewSet, FarmerOfferViewSet, PreHarvestContractViewSet
+    OrderViewSet, OrderCreateView, PaymentCallbackView, SubscriptionViewSet,
+    QuoteRequestViewSet, BulkRequirementViewSet, FarmerOfferViewSet, PreHarvestContractViewSet
 )
 
 router = DefaultRouter()
+router.register(r'subscriptions', SubscriptionViewSet, basename='subscription')
 router.register(r'quotes', QuoteRequestViewSet, basename='quoterequest')
 router.register(r'bulk-requirements', BulkRequirementViewSet, basename='bulk-requirement')
 router.register(r'farmer-offers', FarmerOfferViewSet, basename='farmer-offer')

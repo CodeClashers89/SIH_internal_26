@@ -4,12 +4,22 @@ const CartContext = createContext(null);
 
 export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
+  const [subscriptionConfig, setSubscriptionConfig] = useState({
+    orderType: 'onetime',
+    deliveryDay: 'Monday',
+    deliveryTimeSlot: 'morning',
+    durationMonths: 2,
+  });
 
   // Load cart from session storage on mount
   useEffect(() => {
     const savedCart = sessionStorage.getItem('cart');
     if (savedCart) {
       setCartItems(JSON.parse(savedCart));
+    }
+    const savedSubConfig = sessionStorage.getItem('subscriptionConfig');
+    if (savedSubConfig) {
+      setSubscriptionConfig(JSON.parse(savedSubConfig));
     }
   }, []);
 
@@ -19,20 +29,38 @@ export const CartProvider = ({ children }) => {
     sessionStorage.setItem('cart', JSON.stringify(items));
   };
 
-  const addToCart = (product, qty = 1) => {
+  const saveSubscriptionConfig = (config) => {
+    setSubscriptionConfig(config);
+    sessionStorage.setItem('subscriptionConfig', JSON.stringify(config));
+  };
+
+  const addToCart = (product, qty = 1, subConfig = null) => {
     const existingIndex = cartItems.findIndex(item => item.product.id === product.id);
     const quantity = parseFloat(qty);
+
+    if (subConfig) {
+      saveSubscriptionConfig(subConfig);
+    }
 
     if (existingIndex > -1) {
       const updated = [...cartItems];
       updated[existingIndex].quantity += quantity;
+      if (subConfig) {
+        updated[existingIndex].isSubscription = subConfig.orderType === 'subscription';
+        updated[existingIndex].subConfig = subConfig;
+      }
       // Cap at available stock
       if (updated[existingIndex].quantity > parseFloat(product.quantity)) {
         updated[existingIndex].quantity = parseFloat(product.quantity);
       }
       saveCart(updated);
     } else {
-      saveCart([...cartItems, { product, quantity }]);
+      saveCart([...cartItems, { 
+        product, 
+        quantity, 
+        isSubscription: subConfig?.orderType === 'subscription',
+        subConfig: subConfig || null 
+      }]);
     }
   };
 
@@ -72,7 +100,8 @@ export const CartProvider = ({ children }) => {
 
   return (
     <CartContext.Provider value={{ 
-      cartItems, addToCart, removeFromCart, updateQuantity, clearCart, getCartTotal, getCartCount 
+      cartItems, addToCart, removeFromCart, updateQuantity, clearCart, 
+      getCartTotal, getCartCount, subscriptionConfig, setSubscriptionConfig: saveSubscriptionConfig 
     }}>
       {children}
     </CartContext.Provider>
@@ -80,3 +109,4 @@ export const CartProvider = ({ children }) => {
 };
 
 export const useCart = () => useContext(CartContext);
+

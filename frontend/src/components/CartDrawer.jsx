@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Trash2, Plus, Minus, CreditCard, Loader2, CheckCircle, AlertCircle, ShoppingBag } from 'lucide-react';
+import { 
+  X, Trash2, Plus, Minus, CreditCard, Loader2, CheckCircle, 
+  AlertCircle, ShoppingBag, Repeat, Calendar, Clock, Sparkles, 
+  Check, ChevronRight, ShieldCheck, Sun, Sunrise, Sunset, Flame
+} from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
@@ -19,14 +23,54 @@ const loadRazorpayScript = () =>
     document.body.appendChild(script);
   });
 
+const DAYS_OF_WEEK = [
+  { id: 'Monday', label: 'Mon' },
+  { id: 'Tuesday', label: 'Tue' },
+  { id: 'Wednesday', label: 'Wed' },
+  { id: 'Thursday', label: 'Thu' },
+  { id: 'Friday', label: 'Fri' },
+  { id: 'Saturday', label: 'Sat' },
+  { id: 'Sunday', label: 'Sun' },
+];
+
+const TIME_SLOTS = [
+  { id: 'morning', label: 'Morning', time: '6:00 AM – 9:00 AM', icon: Sunrise },
+  { id: 'afternoon', label: 'Afternoon', time: '12:00 PM – 3:00 PM', icon: Sun },
+  { id: 'evening', label: 'Evening', time: '5:00 PM – 8:00 PM', icon: Sunset },
+];
+
+const DURATIONS = [
+  { months: 1, deliveries: 4, label: '1 Month', desc: '4 Deliveries' },
+  { months: 2, deliveries: 8, label: '2 Months', desc: '8 Deliveries', popular: true },
+  { months: 3, deliveries: 12, label: '3 Months', desc: '12 Deliveries' },
+];
+
 const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
-  const { cartItems, updateQuantity, removeFromCart, getCartTotal, clearCart } = useCart();
+  const { cartItems, updateQuantity, removeFromCart, getCartTotal, clearCart, subscriptionConfig } = useCart();
   const { user } = useAuth();
+  
+  // Checkout & Subscription Configuration State
+  const [orderType, setOrderType] = useState('onetime'); // 'onetime' | 'subscription'
+  const [deliveryDay, setDeliveryDay] = useState('Monday');
+  const [deliveryTimeSlot, setDeliveryTimeSlot] = useState('morning');
+  const [durationMonths, setDurationMonths] = useState(2);
+
+  // Sync settings when drawer opens
+  useEffect(() => {
+    if (isOpen && subscriptionConfig) {
+      if (subscriptionConfig.orderType) setOrderType(subscriptionConfig.orderType);
+      if (subscriptionConfig.deliveryDay) setDeliveryDay(subscriptionConfig.deliveryDay);
+      if (subscriptionConfig.deliveryTimeSlot) setDeliveryTimeSlot(subscriptionConfig.deliveryTimeSlot);
+      if (subscriptionConfig.durationMonths) setDurationMonths(subscriptionConfig.durationMonths);
+    }
+  }, [isOpen, subscriptionConfig]);
+
   const [shippingAddress, setShippingAddress] = useState('');
   const [shippingPincode, setShippingPincode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [step, setStep] = useState('cart'); // 'cart' | 'paying' | 'success'
+  const [confirmedSubData, setConfirmedSubData] = useState(null);
 
   // Sandbox simulation fallback state
   const [sandboxOrder, setSandboxOrder] = useState(null);
@@ -37,6 +81,23 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
   // Pre-fill address from user profile if available
   const defaultAddress = shippingAddress || user?.address || '';
   const defaultPincode = shippingPincode || user?.pincode || '';
+
+  // Subscription calculation helpers
+  const cartSubtotal = getCartTotal();
+  const discountAmount = orderType === 'subscription' ? cartSubtotal * 0.05 : 0;
+  const discountedSubtotal = cartSubtotal - discountAmount;
+  const totalDeliveriesCount = durationMonths * 4;
+
+  const getNextDeliveryDate = (targetDay) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const targetIndex = days.findIndex(d => d.toLowerCase() === targetDay.toLowerCase());
+    const now = new Date();
+    const currentDayIndex = now.getDay();
+    let daysUntil = (targetIndex - currentDayIndex + 7) % 7;
+    if (daysUntil === 0) daysUntil = 7;
+    const nextDate = new Date(now.getTime() + daysUntil * 24 * 60 * 60 * 1000);
+    return nextDate.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+  };
 
   const handlePaymentSuccess = async (orderData, paymentResult) => {
     try {
@@ -54,7 +115,7 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
         setSandboxOrder(null);
         onClose();
         if (onOrderPlaced) onOrderPlaced();
-      }, 2500);
+      }, 3000);
     } catch (err) {
       setError('Payment verified but order confirmation failed. Contact support.');
     }
@@ -82,26 +143,42 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
         quantity: item.quantity
       }));
 
-      // 1. Create order on backend → get Razorpay order_id
-      const response = await api.post('/orders/create/', {
-        items: itemsPayload,
-        shipping_address: addr,
-        shipping_pincode: pin,
-      });
+      let response;
+      if (orderType === 'subscription') {
+        // Create recurring subscription + first delivery order
+        response = await api.post('/orders/subscriptions/', {
+          items: itemsPayload,
+          shipping_address: addr,
+          shipping_pincode: pin,
+          delivery_day: deliveryDay,
+          delivery_time_slot: deliveryTimeSlot,
+          duration_months: durationMonths,
+        });
+        setConfirmedSubData(response.data.subscription);
+      } else {
+        // Standard one-time order
+        response = await api.post('/orders/create/', {
+          items: itemsPayload,
+          shipping_address: addr,
+          shipping_pincode: pin,
+        });
+        setConfirmedSubData(null);
+      }
 
       const orderData = response.data;
 
-      // 2. Try to load real Razorpay checkout
+      // Try to load real Razorpay checkout
       const scriptLoaded = await loadRazorpayScript();
 
       if (scriptLoaded && window.Razorpay && !orderData.order.razorpay_order_id?.startsWith('rzp_mock_')) {
-        // ── Real Razorpay Checkout ──────────────────────────────────────────
         const options = {
           key: orderData.razorpay_key_id,
           amount: orderData.amount_in_paise,
           currency: orderData.currency,
           name: 'KisanConnect',
-          description: `Order #${orderData.order.id} — Fresh Farm Produce`,
+          description: orderType === 'subscription' 
+            ? `Farm Auto-Delivery Schedule (${deliveryDay}s) — Order #${orderData.order.id}`
+            : `Order #${orderData.order.id} — Fresh Farm Produce`,
           order_id: orderData.order.razorpay_order_id,
           image: 'https://i.imgur.com/n5tjHFD.png',
           prefill: {
@@ -116,7 +193,6 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
           },
           modal: {
             ondismiss: () => {
-              // User closed modal without paying — show sandbox fallback
               setSandboxOrder(orderData);
               setShowSandbox(true);
             }
@@ -125,13 +201,13 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
         const rzp = new window.Razorpay(options);
         rzp.open();
       } else {
-        // ── Sandbox Simulator Fallback ──────────────────────────────────────
+        // Sandbox Simulator Fallback
         setSandboxOrder(orderData);
         setShowSandbox(true);
       }
     } catch (err) {
-      console.error('Order creation error:', err);
-      let errMsg = 'Failed to place order.';
+      console.error('Checkout error:', err);
+      let errMsg = 'Failed to process request.';
       if (err.response?.data) {
         const d = err.response.data;
         if (typeof d === 'string') errMsg = d;
@@ -162,8 +238,8 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
       } else {
         setShowSandbox(false);
         setSandboxOrder(null);
-        setError('Payment failed. Your order was created but unpaid. You can retry payment from your orders page.');
-        if (onOrderPlaced) onOrderPlaced(); // still navigate to tracking
+        setError('Payment simulation cancelled. Your order was created as unpaid.');
+        if (onOrderPlaced) onOrderPlaced();
       }
     } catch (err) {
       setError('Error processing payment simulation.');
@@ -177,15 +253,45 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
     return (
       <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex justify-end">
         <div className="w-full max-w-md bg-white h-full flex flex-col items-center justify-center gap-4 p-8 text-center">
-          <div className="p-5 bg-emerald-50 rounded-full border-4 border-emerald-100">
+          <div className="p-5 bg-emerald-50 rounded-full border-4 border-emerald-100 animate-bounce">
             <CheckCircle className="h-14 w-14 text-emerald-600" />
           </div>
-          <h2 className="text-2xl font-black text-slate-800">Order Confirmed!</h2>
-          <p className="text-sm text-slate-500 max-w-xs">
-            Payment successful. Your order is placed and awaiting farmer confirmation. You can track it in <strong>My Orders</strong>.
-          </p>
+          
+          {confirmedSubData ? (
+            <>
+              <span className="bg-emerald-100 text-emerald-800 text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full">
+                🌾 Auto-Delivery Activated!
+              </span>
+              <h2 className="text-2xl font-black text-slate-800">Recurring Schedule Active</h2>
+              <p className="text-sm text-slate-600 max-w-xs leading-relaxed">
+                Your basket will be freshly harvested and delivered directly from the farmer <strong>every {confirmedSubData.delivery_day} ({confirmedSubData.delivery_time_slot})</strong> for the next <strong>{confirmedSubData.duration_months} months</strong> ({confirmedSubData.total_deliveries} deliveries total).
+              </p>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 w-full text-xs text-slate-700 space-y-1.5 text-left">
+                <div className="flex justify-between font-semibold">
+                  <span>📅 First Delivery:</span>
+                  <span className="text-emerald-800 font-bold">{confirmedSubData.next_delivery_date}</span>
+                </div>
+                <div className="flex justify-between font-semibold">
+                  <span>⏰ Preferred Slot:</span>
+                  <span className="capitalize">{confirmedSubData.delivery_time_slot}</span>
+                </div>
+                <div className="flex justify-between font-semibold">
+                  <span>🎁 Loyalty Discount:</span>
+                  <span className="text-emerald-600 font-bold">5% Applied</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="text-2xl font-black text-slate-800">Order Confirmed!</h2>
+              <p className="text-sm text-slate-500 max-w-xs">
+                Payment successful. Your order is placed and awaiting farmer confirmation. You can track it in <strong>My Orders</strong>.
+              </p>
+            </>
+          )}
+
           <div className="h-1 w-24 bg-emerald-200 rounded-full overflow-hidden mt-2">
-            <div className="h-full bg-emerald-500 rounded-full animate-[progress_2.5s_linear_forwards]" />
+            <div className="h-full bg-emerald-500 rounded-full animate-[progress_3s_linear_forwards]" />
           </div>
           <p className="text-xs text-slate-400">Closing automatically...</p>
         </div>
@@ -215,7 +321,7 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
             </button>
           </div>
 
-          {/* Cart Items */}
+          {/* Cart Items List */}
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
             {cartItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-slate-400 gap-3">
@@ -276,18 +382,188 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
             )}
           </div>
 
-          {/* Checkout Form */}
+          {/* Checkout & Subscription Configuration */}
           {cartItems.length > 0 && (
-            <div className="p-5 border-t border-slate-100 bg-slate-50 space-y-4">
-              {/* Total */}
-              <div className="flex justify-between items-baseline">
-                <span className="text-sm font-semibold text-slate-500">Cart Total</span>
-                <span className="text-2xl font-black text-slate-900">₹{getCartTotal().toFixed(2)}</span>
+            <div className="p-5 border-t border-slate-100 bg-slate-50 space-y-4 max-h-[58vh] overflow-y-auto">
+              
+              {/* Order Mode Switcher */}
+              <div className="bg-slate-200/80 p-1 rounded-2xl grid grid-cols-2 gap-1 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setOrderType('onetime')}
+                  className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                    orderType === 'onetime'
+                      ? 'bg-white text-slate-800 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <ShoppingBag className="h-3.5 w-3.5 text-emerald-600" />
+                  One-Time Order
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOrderType('subscription')}
+                  className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 relative ${
+                    orderType === 'subscription'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-emerald-700'
+                  }`}
+                >
+                  <Repeat className="h-3.5 w-3.5" />
+                  Auto-Delivery
+                  <span className="bg-amber-400 text-amber-900 text-[9px] font-black px-1.5 py-0.2 rounded-full uppercase tracking-tighter">
+                    -5%
+                  </span>
+                </button>
               </div>
 
-              <form onSubmit={handleCheckout} className="space-y-3">
+              {/* ── Recurring Subscription Options Box ── */}
+              {orderType === 'subscription' && (
+                <div className="bg-emerald-50/80 border border-emerald-200 rounded-2xl p-4 space-y-3.5 animate-fadeIn">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1">
+                      <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                      Recurring Schedule Settings
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-white border border-emerald-200 px-2 py-0.5 rounded-full">
+                      🌱 Direct Farm Batch
+                    </span>
+                  </div>
+
+                  {/* Repeat Day Selector */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1.5 uppercase">
+                      Deliver Every Week On:
+                    </label>
+                    <div className="grid grid-cols-7 gap-1">
+                      {DAYS_OF_WEEK.map((day) => (
+                        <button
+                          key={day.id}
+                          type="button"
+                          onClick={() => setDeliveryDay(day.id)}
+                          className={`py-1.5 text-center text-xs font-bold rounded-lg border transition-all ${
+                            deliveryDay === day.id
+                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs scale-105'
+                              : 'bg-white text-slate-700 border-slate-200 hover:border-emerald-300'
+                          }`}
+                        >
+                          {day.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Delivery Time Slot Selector */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1.5 uppercase">
+                      Preferred Time Slot:
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {TIME_SLOTS.map((slot) => {
+                        const Icon = slot.icon;
+                        const isSelected = deliveryTimeSlot === slot.id;
+                        return (
+                          <button
+                            key={slot.id}
+                            type="button"
+                            onClick={() => setDeliveryTimeSlot(slot.id)}
+                            className={`p-2 rounded-xl text-left border transition-all ${
+                              isSelected
+                                ? 'bg-white border-emerald-600 ring-2 ring-emerald-500/20 text-emerald-900 shadow-xs'
+                                : 'bg-white/60 border-slate-200 hover:bg-white text-slate-600'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1 text-[11px] font-bold">
+                              <Icon className={`h-3 w-3 ${isSelected ? 'text-emerald-600' : 'text-slate-400'}`} />
+                              {slot.label}
+                            </div>
+                            <div className="text-[9px] text-slate-500 mt-0.5">{slot.time}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Subscription Duration */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1.5 uppercase">
+                      Schedule Duration:
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {DURATIONS.map((dur) => (
+                        <button
+                          key={dur.months}
+                          type="button"
+                          onClick={() => setDurationMonths(dur.months)}
+                          className={`p-2 rounded-xl border text-center transition-all relative ${
+                            durationMonths === dur.months
+                              ? 'bg-white border-emerald-600 ring-2 ring-emerald-500/20 text-emerald-900 shadow-xs font-bold'
+                              : 'bg-white/60 border-slate-200 hover:bg-white text-slate-600 text-xs'
+                          }`}
+                        >
+                          <div className="text-xs font-bold">{dur.label}</div>
+                          <div className="text-[9px] text-slate-500">{dur.desc}</div>
+                          {dur.popular && (
+                            <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-[8px] font-black px-1.5 rounded-full uppercase tracking-tighter">
+                              Popular
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Schedule Summary Banner */}
+                  <div className="bg-white rounded-xl p-3 border border-emerald-200 text-xs space-y-1 text-slate-700">
+                    <div className="flex justify-between items-center text-slate-800 font-bold">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3.5 w-3.5 text-emerald-600" />
+                        First Delivery:
+                      </span>
+                      <span className="text-emerald-700 font-black">
+                        {getNextDeliveryDate(deliveryDay)} ({deliveryTimeSlot})
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      🔁 <strong>{totalDeliveriesCount} recurring deliveries</strong> every {deliveryDay} morning directly to your doorstep.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Price Calculation Breakdown */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-200 text-xs">
+                <div className="flex justify-between text-slate-500">
+                  <span>Produce Subtotal</span>
+                  <span>₹{cartSubtotal.toFixed(2)}</span>
+                </div>
+                {orderType === 'subscription' && (
+                  <div className="flex justify-between text-emerald-600 font-semibold">
+                    <span>🌾 5% Farm Subscriber Savings</span>
+                    <span>- ₹{discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-baseline pt-1 border-t border-slate-200">
+                  <span className="text-sm font-bold text-slate-700">
+                    {orderType === 'subscription' ? 'Per Delivery Amount' : 'Cart Total'}
+                  </span>
+                  <div className="text-right">
+                    <span className="text-2xl font-black text-slate-900">
+                      ₹{discountedSubtotal.toFixed(2)}
+                    </span>
+                    {orderType === 'subscription' && (
+                      <span className="text-[10px] text-slate-400 block font-normal">
+                        (₹{(discountedSubtotal * totalDeliveriesCount).toFixed(0)} total over {durationMonths} months)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Delivery Address Form */}
+              <form onSubmit={handleCheckout} className="space-y-3 pt-2">
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1 uppercase tracking-wider">
+                  <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
                     Delivery Address
                   </label>
                   <textarea
@@ -296,11 +572,11 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
                     value={shippingAddress || defaultAddress}
                     onChange={(e) => setShippingAddress(e.target.value)}
                     placeholder="Full delivery address..."
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all resize-none"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all resize-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1 uppercase tracking-wider">
+                  <label className="block text-[10px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
                     Delivery Pincode
                   </label>
                   <input
@@ -311,7 +587,7 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
                     value={shippingPincode || defaultPincode}
                     onChange={(e) => setShippingPincode(e.target.value.replace(/\D/g, ''))}
                     placeholder="6-digit PIN code"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all"
                   />
                 </div>
 
@@ -329,6 +605,11 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
                 >
                   {loading ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : orderType === 'subscription' ? (
+                    <>
+                      <Repeat className="h-4 w-4" />
+                      Subscribe &amp; Schedule ({deliveryDay}s)
+                    </>
                   ) : (
                     <>
                       <CreditCard className="h-4 w-4" />
@@ -338,7 +619,7 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
                 </button>
 
                 <p className="text-[10px] text-center text-slate-400 leading-relaxed">
-                  🔒 Secured by Razorpay · UPI / Cards / Net Banking supported
+                  🔒 Secured by Razorpay · {orderType === 'subscription' ? 'Cancel or pause schedule anytime' : 'UPI / Cards / Net Banking supported'}
                 </p>
               </form>
             </div>
@@ -368,23 +649,29 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
                 <CreditCard className="h-6 w-6 text-emerald-400" />
               </div>
               <div>
-                <h3 className="text-base font-bold">Complete Your Payment</h3>
-                <p className="text-xs text-slate-400">KisanConnect Fresh Produce</p>
+                <h3 className="text-base font-bold">
+                  {orderType === 'subscription' ? 'Confirm Recurring Subscription' : 'Complete Your Payment'}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {orderType === 'subscription' 
+                    ? `Every ${deliveryDay} · ${durationMonths} Months Schedule` 
+                    : 'KisanConnect Fresh Produce'}
+                </p>
               </div>
             </div>
 
             {/* Order Summary */}
             <div className="bg-slate-950/60 rounded-2xl p-4 border border-slate-800 mb-5 space-y-2.5">
               <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Order ID</span>
+                <span className="text-slate-400">Order Ref</span>
                 <span className="font-bold text-white">#{sandboxOrder.order.id}</span>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Razorpay Ref</span>
-                <span className="font-mono text-xs text-slate-300 truncate ml-2 max-w-[180px]">
-                  {sandboxOrder.order.razorpay_order_id}
-                </span>
-              </div>
+              {orderType === 'subscription' && (
+                <div className="flex justify-between text-xs text-emerald-400 font-semibold">
+                  <span>Frequency</span>
+                  <span>Every {deliveryDay} ({deliveryTimeSlot})</span>
+                </div>
+              )}
               <div className="flex justify-between text-xs">
                 <span className="text-slate-400">Produce Subtotal</span>
                 <span className="font-semibold text-slate-200">
@@ -398,7 +685,7 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
                 </span>
               </div>
               <div className="border-t border-slate-800 pt-2.5 flex justify-between items-baseline">
-                <span className="text-sm font-bold text-slate-200">Total Payable</span>
+                <span className="text-sm font-bold text-slate-200">First Delivery Due</span>
                 <span className="text-2xl font-black text-amber-400">
                   ₹{parseFloat(sandboxOrder.order.total_amount).toFixed(2)}
                 </span>
@@ -407,7 +694,7 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
 
             {/* Payment Methods (visual only for demo) */}
             <div className="grid grid-cols-3 gap-2 mb-5">
-              {['🏦 Net Banking', '💳 Card', '📱 UPI'].map(m => (
+              {['🏦 Net Banking', '💳 Card', '📱 UPI AutoPay'].map(m => (
                 <div key={m} className="bg-slate-800/60 border border-slate-700 rounded-xl px-2 py-2 text-center text-[10px] text-slate-400 font-semibold cursor-not-allowed">
                   {m}
                 </div>
@@ -425,7 +712,7 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
                 ) : (
                   <>
                     <CheckCircle className="h-4 w-4" />
-                    Pay ₹{parseFloat(sandboxOrder.order.total_amount).toFixed(2)} — Simulate Success
+                    Authorize ₹{parseFloat(sandboxOrder.order.total_amount).toFixed(2)} — Simulate Success
                   </>
                 )}
               </button>
@@ -439,7 +726,7 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
             </div>
 
             <p className="text-[10px] text-center text-slate-600 mt-4">
-              Sandbox mode · No real money is charged · For demo purposes only
+              Sandbox mode · No real money is charged · Auto-renewal demo
             </p>
           </div>
         </div>
