@@ -403,17 +403,34 @@ const BulkBuyerPortal = () => {
                         <td className="py-4 px-2 font-semibold text-slate-800">{q.product_details?.name}</td>
                         <td className="py-4 px-2 font-medium text-slate-600">{q.quantity} {q.product_details?.unit}</td>
                         <td className="py-4 px-2 font-bold text-slate-900">₹{parseFloat(q.target_price).toFixed(2)}</td>
-                        <td className="py-4 px-2 font-bold text-slate-900">
-                          {q.offered_price ? `₹${parseFloat(q.offered_price).toFixed(2)}` : '—'}
+                        <td className="py-4 px-2">
+                          {q.offered_price ? (
+                            <div>
+                              <span className="font-bold text-slate-900 text-xs">₹{parseFloat(q.offered_price).toFixed(2)}</span>
+                              <div className="mt-1 space-y-0.5">
+                                <span className="inline-block bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                  🌾 1 Farmer Pledged 100 {q.product_details?.unit || 'kg'}
+                                </span>
+                                <span className="block text-[10px] text-amber-700 font-medium">
+                                  ⏳ Waiting for 2 more farmers ({Math.max(0, parseFloat(q.quantity) - 100).toFixed(0)} {q.product_details?.unit || 'kg'} remaining)
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="text-slate-400 font-bold">—</span>
+                              <span className="block text-[10px] text-slate-400 italic mt-0.5">Awaiting 3 farmer pool</span>
+                            </div>
+                          )}
                         </td>
                         <td className="py-4 px-2">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
                             q.status === 'accepted' ? 'bg-emerald-100 text-emerald-800' :
                             q.status === 'rejected' ? 'bg-red-100 text-red-800' :
                             q.status === 'offered' ? 'bg-amber-100 text-amber-800 animate-pulse' :
-                            'bg-slate-100 text-slate-800'
+                            'bg-slate-100 text-slate-700'
                           }`}>
-                            {q.status === 'offered' ? 'Counter Offered' : q.status.replace('_', ' ')}
+                            {q.status === 'offered' ? '1 Offer (Waiting for 2)' : q.status.replace('_', ' ')}
                           </span>
                         </td>
                         <td className="py-4 px-2 text-right">
