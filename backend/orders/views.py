@@ -330,7 +330,7 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(buyer=self.request.user, status='pending')
 
-    @action(detail=True, methods=['post'], url_path='make-offer', permission_classes=[permissions.IsAuthenticated, IsFarmer])
+    @action(detail=True, methods=['post'], url_path='counter-offer', permission_classes=[permissions.IsAuthenticated, IsFarmer])
     def make_offer(self, request, pk=None):
         quote = self.get_object()
         offered_price = request.data.get('offered_price')
@@ -342,12 +342,34 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
         quote.save()
         return Response(QuoteRequestSerializer(quote).data)
 
-    @action(detail=True, methods=['post'], url_path='accept-offer', permission_classes=[permissions.IsAuthenticated, IsBulkBuyer])
+    @action(detail=True, methods=['post'], url_path='accept-offer', permission_classes=[permissions.IsAuthenticated])
     @transaction.atomic
     def accept_offer(self, request, pk=None):
         quote = self.get_object()
-        if quote.status != 'offered':
-            return Response({'error': 'No offer exists to accept'}, status=status.HTTP_400_BAD_REQUEST)
+        user = request.user
+
+        # 1. Farmer accepts buyer's original target price
+        if user.role == 'farmer':
+            if quote.product.farmer != user:
+                return Response({'error': 'You do not own this product.'}, status=status.HTTP_403_FORBIDDEN)
+            if quote.status != 'pending':
+                return Response({'error': 'Only pending quote requests can be accepted by the farmer.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            final_price = quote.target_price
+            buyer_user = quote.buyer
+
+        # 2. Bulk Buyer accepts farmer's counter offer
+        elif user.role == 'bulk_buyer':
+            if quote.buyer != user:
+                return Response({'error': 'You did not initiate this quote request.'}, status=status.HTTP_403_FORBIDDEN)
+            if quote.status != 'offered':
+                return Response({'error': 'No active counter-offer exists to accept.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            final_price = quote.offered_price
+            buyer_user = user
+        
+        else:
+            return Response({'error': 'Role unauthorized to accept offers.'}, status=status.HTTP_403_FORBIDDEN)
 
         # Verify stock
         if quote.product.quantity < quote.quantity:
@@ -357,16 +379,16 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
         quote.product.quantity -= quote.quantity
         quote.product.save()
 
-        # Calculate bulk total amount based on the offered price
-        total_amount = quote.quantity * quote.offered_price
+        # Calculate total amount
+        total_amount = quote.quantity * final_price
 
-        # Automatically create Order
+        # Create Order
         order = Order.objects.create(
-            buyer=request.user,
+            buyer=buyer_user,
             total_amount=total_amount,
             status='placed',
-            shipping_address=request.user.address or "Bulk Buyer address",
-            shipping_pincode=request.user.pincode or "000000",
+            shipping_address=buyer_user.address or "Bulk Buyer address",
+            shipping_pincode=buyer_user.pincode or "000000",
             payment_status='pending'
         )
 
@@ -374,10 +396,12 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
             order=order,
             product=quote.product,
             quantity=quote.quantity,
-            price=quote.offered_price
+            price=final_price
         )
 
         quote.status = 'accepted'
+        if not quote.offered_price:
+            quote.offered_price = final_price
         quote.save()
 
         # Setup mock razorpay checkout parameters
@@ -401,6 +425,10 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='reject-offer', permission_classes=[permissions.IsAuthenticated])
     def reject_offer(self, request, pk=None):
         quote = self.get_object()
+        user = request.user
+        if user != quote.buyer and user != quote.product.farmer:
+            return Response({'error': 'Unauthorized to reject this offer.'}, status=status.HTTP_403_FORBIDDEN)
+            
         quote.status = 'rejected'
         quote.save()
         return Response(QuoteRequestSerializer(quote).data)
