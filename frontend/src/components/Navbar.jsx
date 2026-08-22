@@ -1,14 +1,138 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { Sprout, ShoppingCart, LogOut, User, Menu, X, BarChart3, ShieldAlert, Award } from 'lucide-react';
+import { Sprout, ShoppingCart, LogOut, User, Menu, X, BarChart3, ShieldAlert, Award, Globe, ChevronDown } from 'lucide-react';
+
+const LANGUAGES = [
+  { code: 'en', name: 'English', flag: '🇺🇸' },
+  { code: 'hi', name: 'हिन्दी', flag: '🇮🇳' },
+  { code: 'gu', name: 'ગુજરાતી', flag: '🇮🇳' },
+  { code: 'mr', name: 'मराठी', flag: '🇮🇳' },
+  { code: 'bn', name: 'বাংলা', flag: '🇮🇳' },
+  { code: 'ta', name: 'தமிழ்', flag: '🇮🇳' },
+  { code: 'te', name: 'తెలుగు', flag: '🇮🇳' },
+  { code: 'kn', name: 'ಕನ್ನಡ', flag: '🇮🇳' },
+  { code: 'pa', name: 'ਪੰਜਾਬੀ', flag: '🇮🇳' },
+  { code: 'ml', name: 'മലയാളം', flag: '🇮🇳' }
+];
+
+const getActiveLanguage = () => {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; googtrans=`);
+  if (parts.length === 2) {
+    const cookieVal = parts.pop().split(';').shift();
+    const match = cookieVal.split('/');
+    if (match.length >= 3) {
+      return match[2];
+    }
+  }
+  return 'en';
+};
+
+const clearAllGoogtransCookies = () => {
+  const hostname = window.location.hostname;
+  
+  // Try clearing cookies on common paths and domains
+  const paths = ['/', '/app', ''];
+  const domains = [
+    hostname,
+    `.${hostname}`,
+    `www.${hostname}`,
+    'localhost',
+    '.localhost',
+    ''
+  ];
+  
+  for (const path of paths) {
+    for (const domain of domains) {
+      let baseString = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${path}`;
+      if (domain) {
+        document.cookie = `${baseString}; domain=${domain}`;
+      } else {
+        document.cookie = baseString;
+      }
+    }
+  }
+};
+
+const changeLanguage = (langCode) => {
+  // Clear any existing cookies to avoid conflicts or duplicate domains
+  clearAllGoogtransCookies();
+  
+  if (langCode !== 'en') {
+    // Set the cookie only for the path `/` on the current domain natively (omit domain entirely)
+    document.cookie = `googtrans=/en/${langCode}; path=/; SameSite=Lax`;
+  }
+  
+  window.location.reload();
+};
+
+
+const LanguageSelector = ({ activeLang }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const activeLangObj = LANGUAGES.find(l => l.code === activeLang) || LANGUAGES[0];
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-emerald-100 bg-white/50 hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 font-medium transition-all focus:outline-none text-sm cursor-pointer shadow-sm animate-fade-in"
+      >
+        <Globe className="h-4 w-4 text-emerald-600 animate-pulse-soft" />
+        <span className="mr-0.5">{activeLangObj.flag}</span>
+        <span>{activeLangObj.name}</span>
+        <ChevronDown className={`h-3 w-3 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-48 rounded-xl shadow-xl bg-white/95 backdrop-blur-md border border-emerald-100 py-1.5 z-[100] max-h-80 overflow-y-auto transform origin-top-right transition-all">
+          <div className="px-3 py-1.5 text-[10px] font-bold text-emerald-800/60 uppercase tracking-wider border-b border-emerald-50 mb-1">
+            Language / भाषा
+          </div>
+          {LANGUAGES.map((lang) => (
+            <button
+              key={lang.code}
+              onClick={() => {
+                changeLanguage(lang.code);
+                setIsOpen(false);
+              }}
+              className={`w-full text-left flex items-center space-x-2.5 px-3 py-2 text-sm font-semibold transition-colors hover:bg-emerald-50 hover:text-emerald-700 cursor-pointer ${
+                activeLang === lang.code ? 'text-emerald-700 bg-emerald-100/50' : 'text-gray-600'
+              }`}
+            >
+              <span className="text-base">{lang.flag}</span>
+              <span>{lang.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Navbar = ({ onCartToggle }) => {
   const { user, logout } = useAuth();
   const { getCartCount } = useCart();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
+  const [activeLang, setActiveLang] = useState('en');
+
+  useEffect(() => {
+    setActiveLang(getActiveLanguage());
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -63,6 +187,9 @@ const Navbar = ({ onCartToggle }) => {
                 Control Tower
               </Link>
             )}
+
+            {/* Language Selector Dropdown */}
+            <LanguageSelector activeLang={activeLang} />
 
             {!user ? (
               <div className="flex items-center space-x-3">
@@ -181,6 +308,30 @@ const Navbar = ({ onCartToggle }) => {
               Control Tower
             </Link>
           )}
+
+          {/* Mobile Language Selector */}
+          <div className="border-t border-emerald-100/50 pt-3 pb-2 px-3">
+            <span className="block text-xs font-bold text-emerald-800/60 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Globe className="h-4 w-4 text-emerald-600" />
+              Language / भाषा
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              {LANGUAGES.map((lang) => (
+                <button
+                  key={lang.code}
+                  onClick={() => changeLanguage(lang.code)}
+                  className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-sm font-semibold transition-all cursor-pointer ${
+                    activeLang === lang.code
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-emerald-300'
+                  }`}
+                >
+                  <span className="text-base">{lang.flag}</span>
+                  <span>{lang.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
 
           {!user ? (
             <div className="pt-4 pb-2 border-t border-gray-200 space-y-2">

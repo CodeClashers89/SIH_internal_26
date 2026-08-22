@@ -47,3 +47,44 @@ body {
 .animate-pulse-soft {
   animation: pulse-soft 3s infinite ease-in-out;
 }
+
+/* Hide default Google Translate UI, toolbar, and banner completely */
+#google_translate_element,
+.goog-te-banner-frame,
+.goog-te-banner-frame.skiptranslate,
+iframe.goog-te-banner-frame,
+iframe[class*="goog-te-banner-frame"],
+.goog-te-banner,
+.goog-te-gadget,
+.VIpgJd-ZVi9od-ORHb-OEVmcd,
+iframe[class*="VIpgJd-ZVi9od"],
+[class*="VIpgJd-ZVi9od"] {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  width: 0 !important;
+  opacity: 0 !important;
+}
+
+html {
+  margin-top: 0px !important;
+}
+
+body {
+  top: 0px !important;
+  position: static !important;
+}
+
+/* Ensure tooltips or other google components don't show */
+.goog-tooltip,
+.goog-tooltip:hover,
+#goog-gt-tt,
+.goog-te-balloon-frame {
+  display: none !important;
+  visibility: hidden !important;
+}
+.goog-text-highlight {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
