@@ -82,7 +82,7 @@ DATABASES = {
             'DATABASE_URL',
             f'sqlite:///{BASE_DIR / "db.sqlite3"}'
         ),
-        conn_max_age=600,          # Keep connections alive for 10 min (connection pooling)
+        conn_max_age=0,            # Close connection after each request for Supabase session pooler
         conn_health_checks=True,   # Validate connections before reuse
     )
 }
