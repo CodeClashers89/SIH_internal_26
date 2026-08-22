@@ -100,10 +100,12 @@ def plan_shipment_route(
     if not candidate_raw_routes:
         # Fallback straight line mock candidate if OSRM unavailable
         logger.warning("[ROUTE_PLANNER] OSRM returned no routes — generating direct line fallback")
+        dist_val = float(shipment.distance_km) if shipment.distance_km else 50.0
         candidate_raw_routes = [{
             "route_id": "R1",
-            "distance_km": float(shipment.distance_km or 50.0),
-            "duration_minutes": float((shipment.distance_km or 50.0) * 1.5),
+            "name": "Direct Highway Route",
+            "distance_km": dist_val,
+            "duration_minutes": dist_val * 1.5,
             "geometry": [[pickup_lat, pickup_lng], [dest_lat, dest_lng]],
             "source": "fallback",
         }]
