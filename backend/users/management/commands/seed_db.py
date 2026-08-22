@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from products.models import Product
-from orders.models import Order, OrderItem, QuoteRequest, BulkRequirement, PreHarvestContract
+from orders.models import Order, OrderItem, QuoteRequest, BulkRequirement, PreHarvestContract, Subscription, SubscriptionItem
 from logistics.models import LogisticsPartner, DeliveryShipment
 from pricing.models import Market, MarketPrice
 from reviews.models import Review
@@ -22,6 +22,8 @@ class Command(BaseCommand):
         PreHarvestContract.objects.all().delete()
         QuoteRequest.objects.all().delete()
         BulkRequirement.objects.all().delete()
+        SubscriptionItem.objects.all().delete()
+        Subscription.objects.all().delete()
         OrderItem.objects.all().delete()
         Order.objects.all().delete()
         Product.objects.all().delete()
@@ -513,5 +515,111 @@ class Command(BaseCommand):
                 expected_harvest_date=exp_date,
                 status=c_status
             )
+
+        self.stdout.write("Creating auto-delivery subscriptions...")
+        
+        # 1. Active Subscription
+        sub1 = Subscription.objects.create(
+            buyer=consumer1,
+            delivery_day="Tuesday",
+            delivery_time_slot="morning",
+            duration_months=2,
+            total_deliveries=8,
+            completed_deliveries=3,
+            shipping_address=consumer1.address,
+            shipping_pincode=consumer1.pincode,
+            per_delivery_subtotal=Decimal("75.00"),
+            discount_percentage=Decimal("5.00"),
+            shipping_charge=Decimal("42.00"),
+            per_delivery_total=Decimal("113.25"),
+            total_plan_amount=Decimal("906.00"),
+            status="active",
+            start_date=timezone.now().date(),
+            next_delivery_date=timezone.now().date() + timedelta(days=3)
+        )
+        SubscriptionItem.objects.create(
+            subscription=sub1,
+            product=p1,
+            quantity=Decimal("3.0"),
+            price=Decimal("25.00")
+        )
+
+        # 2. Paused Subscription
+        sub2 = Subscription.objects.create(
+            buyer=consumer1,
+            delivery_day="Friday",
+            delivery_time_slot="evening",
+            duration_months=1,
+            total_deliveries=4,
+            completed_deliveries=1,
+            shipping_address=consumer1.address,
+            shipping_pincode=consumer1.pincode,
+            per_delivery_subtotal=Decimal("100.00"),
+            discount_percentage=Decimal("5.00"),
+            shipping_charge=Decimal("42.00"),
+            per_delivery_total=Decimal("137.00"),
+            total_plan_amount=Decimal("548.00"),
+            status="paused",
+            start_date=timezone.now().date(),
+            next_delivery_date=timezone.now().date() + timedelta(days=6)
+        )
+        SubscriptionItem.objects.create(
+            subscription=sub2,
+            product=p6,
+            quantity=Decimal("5.0"),
+            price=Decimal("20.00")
+        )
+
+        # 3. Cancelled Subscription
+        sub3 = Subscription.objects.create(
+            buyer=consumer1,
+            delivery_day="Monday",
+            delivery_time_slot="afternoon",
+            duration_months=3,
+            total_deliveries=12,
+            completed_deliveries=0,
+            shipping_address=consumer1.address,
+            shipping_pincode=consumer1.pincode,
+            per_delivery_subtotal=Decimal("220.00"),
+            discount_percentage=Decimal("5.00"),
+            shipping_charge=Decimal("210.00"),
+            per_delivery_total=Decimal("419.00"),
+            total_plan_amount=Decimal("5028.00"),
+            status="cancelled",
+            start_date=timezone.now().date() - timedelta(days=10),
+            next_delivery_date=timezone.now().date() - timedelta(days=10)
+        )
+        SubscriptionItem.objects.create(
+            subscription=sub3,
+            product=p8,
+            quantity=Decimal("10.0"),
+            price=Decimal("22.00")
+        )
+
+        # 4. Completed Subscription
+        sub4 = Subscription.objects.create(
+            buyer=consumer1,
+            delivery_day="Thursday",
+            delivery_time_slot="morning",
+            duration_months=1,
+            total_deliveries=4,
+            completed_deliveries=4,
+            shipping_address=consumer1.address,
+            shipping_pincode=consumer1.pincode,
+            per_delivery_subtotal=Decimal("150.00"),
+            discount_percentage=Decimal("5.00"),
+            shipping_charge=Decimal("210.00"),
+            per_delivery_total=Decimal("352.50"),
+            total_plan_amount=Decimal("1410.00"),
+            status="completed",
+            start_date=timezone.now().date() - timedelta(days=30),
+            next_delivery_date=timezone.now().date() - timedelta(days=2)
+        )
+        SubscriptionItem.objects.create(
+            subscription=sub4,
+            product=p10,
+            quantity=Decimal("2.0"),
+            price=Decimal("75.00")
+        )
 
         self.stdout.write(self.style.SUCCESS("Database seeded successfully!"))

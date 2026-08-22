@@ -128,7 +128,7 @@ class AppNavigationShell extends StatelessWidget {
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 28,
-                    fontWeight: FontWeight.extrabold,
+                    fontWeight: FontWeight.w800,
                     letterSpacing: 1.2,
                     fontFamily: 'SpaceGrotesk',
                   ),

@@ -5,17 +5,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 class CartItem {
   final Map<String, dynamic> product;
   double quantity;
+  final bool isSubscription;
+  final Map<String, dynamic>? subConfig;
 
-  CartItem({required this.product, required this.quantity});
+  CartItem({
+    required this.product,
+    required this.quantity,
+    this.isSubscription = false,
+    this.subConfig,
+  });
 
   Map<String, dynamic> toJson() => {
     'product': product,
     'quantity': quantity,
+    'isSubscription': isSubscription,
+    'subConfig': subConfig,
   };
 
   factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
     product: json['product'],
     quantity: (json['quantity'] as num).toDouble(),
+    isSubscription: json['isSubscription'] ?? false,
+    subConfig: json['subConfig'] != null ? Map<String, dynamic>.from(json['subConfig']) : null,
   );
 }
 
@@ -50,7 +61,7 @@ class CartProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void addToCart(Map<String, dynamic> product, {double qty = 1.0}) {
+  void addToCart(Map<String, dynamic> product, {double qty = 1.0, bool isSubscription = false, Map<String, dynamic>? subConfig}) {
     final productId = product['id'];
     final existingIndex = _items.indexWhere((item) => item.product['id'] == productId);
     final availableStock = double.tryParse(product['quantity']?.toString() ?? '0') ?? 0.0;
@@ -60,8 +71,20 @@ class CartProvider with ChangeNotifier {
       if (_items[existingIndex].quantity > availableStock) {
         _items[existingIndex].quantity = availableStock;
       }
+      // Re-create the item if subscription settings changed
+      _items[existingIndex] = CartItem(
+        product: _items[existingIndex].product,
+        quantity: _items[existingIndex].quantity,
+        isSubscription: isSubscription,
+        subConfig: subConfig ?? _items[existingIndex].subConfig,
+      );
     } else {
-      _items.add(CartItem(product: product, quantity: qty > availableStock ? availableStock : qty));
+      _items.add(CartItem(
+        product: product,
+        quantity: qty > availableStock ? availableStock : qty,
+        isSubscription: isSubscription,
+        subConfig: subConfig,
+      ));
     }
     _saveCart();
   }

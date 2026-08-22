@@ -39,6 +39,11 @@ class _ConsumerMarketplaceScreenState extends State<ConsumerMarketplaceScreen> w
   final TextEditingController _addressCtrl = TextEditingController();
   final TextEditingController _checkoutPinCtrl = TextEditingController();
 
+  String _cartOrderType = 'onetime';
+  String _cartDeliveryDay = 'Monday';
+  String _cartDeliveryTimeSlot = 'morning';
+  int _cartDurationMonths = 2;
+
   @override
   void initState() {
     super.initState();
@@ -306,6 +311,29 @@ class _ConsumerMarketplaceScreenState extends State<ConsumerMarketplaceScreen> w
     }
   }
 
+  double _estimateShipping() {
+    final user = Provider.of<AuthProvider>(context, listen: false).user;
+    final buyerPincode = _checkoutPinCtrl.text.trim();
+    final buyerDistrict = (user?['district'] ?? '').toString().trim().toLowerCase();
+    
+    final cart = Provider.of<CartProvider>(context, listen: false);
+    if (cart.items.isEmpty) return 0.0;
+    
+    final firstProduct = cart.items.first.product;
+    final farmerDetails = firstProduct['farmer_details'] ?? {};
+    final farmerPincode = (farmerDetails['pincode'] ?? '').toString().trim();
+    final farmerDistrict = (farmerDetails['district'] ?? '').toString().trim().toLowerCase();
+    
+    double estimatedKm = 85.0;
+    if (farmerPincode.isNotEmpty && farmerPincode == buyerPincode) {
+      estimatedKm = 3.5;
+    } else if (farmerDistrict.isNotEmpty && farmerDistrict == buyerDistrict) {
+      estimatedKm = 17.5;
+    }
+    
+    return double.parse((estimatedKm * 12).toStringAsFixed(2));
+  }
+
   void _showCartDrawer() {
     showModalBottomSheet(
       context: context,
@@ -317,6 +345,49 @@ class _ConsumerMarketplaceScreenState extends State<ConsumerMarketplaceScreen> w
         return StatefulBuilder(
           builder: (context, setModalState) {
             final cart = Provider.of<CartProvider>(context);
+            
+            final hasSubscriptionItem = cart.items.any((item) => item.isSubscription);
+            if (hasSubscriptionItem && _cartOrderType == 'onetime') {
+              _cartOrderType = 'subscription';
+              final subItem = cart.items.firstWhere((item) => item.isSubscription);
+              if (subItem.subConfig != null) {
+                _cartDeliveryDay = subItem.subConfig!['deliveryDay'] ?? 'Monday';
+                _cartDeliveryTimeSlot = subItem.subConfig!['deliveryTimeSlot'] ?? 'morning';
+                _cartDurationMonths = subItem.subConfig!['durationMonths'] ?? 2;
+              }
+            }
+
+            final baseSubtotal = cart.getCartTotal();
+            final discountRate = _cartOrderType == 'subscription' ? 0.05 : 0.0;
+            final subscriberSavings = baseSubtotal * discountRate;
+            final discountedSubtotal = baseSubtotal - subscriberSavings;
+            final shippingCharge = cart.items.isEmpty ? 0.0 : _estimateShipping();
+            final perDeliveryTotal = discountedSubtotal + shippingCharge;
+            final totalDeliveries = _cartDurationMonths * 4;
+            final totalPlanAmount = perDeliveryTotal * totalDeliveries;
+
+            final daysOfWeek = [
+              {'id': 'Monday', 'label': 'Mon'},
+              {'id': 'Tuesday', 'label': 'Tue'},
+              {'id': 'Wednesday', 'label': 'Wed'},
+              {'id': 'Thursday', 'label': 'Thu'},
+              {'id': 'Friday', 'label': 'Fri'},
+              {'id': 'Saturday', 'label': 'Sat'},
+              {'id': 'Sunday', 'label': 'Sun'},
+            ];
+
+            final timeSlots = [
+              {'id': 'morning', 'label': 'Morning', 'time': '6:00 AM – 9:00 AM', 'icon': Icons.light_mode},
+              {'id': 'afternoon', 'label': 'Afternoon', 'time': '12:00 PM – 3:00 PM', 'icon': Icons.wb_sunny},
+              {'id': 'evening', 'label': 'Evening', 'time': '5:00 PM – 8:00 PM', 'icon': Icons.nights_stay},
+            ];
+
+            final durations = [
+              {'months': 1, 'deliveries': 4, 'label': '1 Month', 'desc': '4 Drops'},
+              {'months': 2, 'deliveries': 8, 'label': '2 Months', 'desc': '8 Drops', 'popular': true},
+              {'months': 3, 'deliveries': 12, 'label': '3 Months', 'desc': '12 Drops'},
+            ];
+
             return Container(
               padding: EdgeInsets.only(
                 top: 24,
@@ -324,159 +395,453 @@ class _ConsumerMarketplaceScreenState extends State<ConsumerMarketplaceScreen> w
                 right: 20,
                 bottom: MediaQuery.of(context).viewInsets.bottom + 20,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Shopping Basket 🛒',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
-                  const Divider(),
-                  if (cart.items.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 36.0),
-                      child: Center(
-                        child: Text(
-                          'Your cart is empty. Browse fresh yields to add items.',
-                          style: TextStyle(color: Colors.grey, fontSize: 13),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Shopping Basket 🛒',
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                         ),
-                      ),
-                    )
-                  else ...[
-                    // Cart Items List
-                    Container(
-                      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.3),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: cart.items.length,
-                        itemBuilder: (c, idx) {
-                          final item = cart.items[idx];
-                          final price = double.tryParse(item.product['price_per_unit'].toString()) ?? 0.0;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8.0),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const Divider(),
+                    if (cart.items.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 36.0),
+                        child: Center(
+                          child: Text(
+                            'Your cart is empty. Browse fresh yields to add items.',
+                            style: TextStyle(color: Colors.grey, fontSize: 13),
+                          ),
+                        ),
+                      )
+                    else ...[
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: () => setModalState(() => _cartOrderType = 'onetime'),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: _cartOrderType == 'onetime' ? Colors.white : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: _cartOrderType == 'onetime'
+                                        ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)]
+                                        : null,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
+                                      Icon(Icons.shopping_bag_outlined, size: 16),
+                                      SizedBox(width: 6),
+                                      Text('One-Time', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: InkWell(
+                                onTap: () => setModalState(() => _cartOrderType = 'subscription'),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: _cartOrderType == 'subscription' ? Colors.green : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: _cartOrderType == 'subscription'
+                                        ? [BoxShadow(color: Colors.green.withOpacity(0.2), blurRadius: 4)]
+                                        : null,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.repeat, size: 16, color: _cartOrderType == 'subscription' ? Colors.white : Colors.black87),
+                                      const SizedBox(width: 6),
                                       Text(
-                                        item.product['name'] ?? '',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                      ),
-                                      Text(
-                                        '₹${price.toStringAsFixed(2)} / ${item.product['unit']}',
-                                        style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                        'Auto-Delivery (-5%)',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: _cartOrderType == 'subscription' ? Colors.white : Colors.black87,
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
-                                Row(
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (_cartOrderType == 'subscription') ...[
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50.withOpacity(0.5),
+                            border: Border.all(color: Colors.green.shade200, width: 1.5),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.stars, color: Colors.green, size: 18),
+                                  const SizedBox(width: 6),
+                                  const Text('RECURRING SCHEDULE SETTINGS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green)),
+                                  const Spacer(),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(color: Colors.amber.shade400, borderRadius: BorderRadius.circular(8)),
+                                    child: const Text('SAVE 5%', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold)),
+                                  )
+                                ],
+                              ),
+                              const Divider(height: 20, color: Colors.green),
+                              const Text('Deliver every week on:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54)),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: daysOfWeek.map((day) {
+                                  final isSel = _cartDeliveryDay == day['id'];
+                                  return Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                                      child: InkWell(
+                                        onTap: () => setModalState(() => _cartDeliveryDay = day['id']!),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: isSel ? Colors.green : Colors.white,
+                                            border: Border.all(color: isSel ? Colors.green : Colors.grey.shade300),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            day['label']!,
+                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSel ? Colors.white : Colors.black87),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                              const SizedBox(height: 12),
+                              const Text('Preferred Time Slot:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54)),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: timeSlots.map((slot) {
+                                  final isSel = _cartDeliveryTimeSlot == slot['id'];
+                                  return Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                                      child: InkWell(
+                                        onTap: () => setModalState(() => _cartDeliveryTimeSlot = slot['id'] as String),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: isSel ? Colors.white : Colors.white.withOpacity(0.6),
+                                            border: Border.all(color: isSel ? Colors.green : Colors.grey.shade300, width: 1.5),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Icon(slot['icon'] as IconData, size: 14, color: isSel ? Colors.green : Colors.grey),
+                                                  const SizedBox(width: 4),
+                                                  Text(slot['label'] as String, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text((slot['time'] as String).replaceAll(' – ', '\n'), style: const TextStyle(fontSize: 8, color: Colors.grey)),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                              const SizedBox(height: 12),
+                              const Text('Schedule Duration:', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54)),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: durations.map((dur) {
+                                  final isSel = _cartDurationMonths == dur['months'];
+                                  return Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                                      child: InkWell(
+                                        onTap: () => setModalState(() => _cartDurationMonths = dur['months'] as int),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: isSel ? Colors.white : Colors.white.withOpacity(0.6),
+                                            border: Border.all(color: isSel ? Colors.green : Colors.grey.shade300, width: 1.5),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Column(
+                                            children: [
+                                              Text(dur['label'] as String, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                              Text(dur['desc'] as String, style: const TextStyle(fontSize: 9, color: Colors.grey)),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                              const SizedBox(height: 12),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.shade200)),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.remove_circle_outline, color: Colors.green, size: 20),
-                                      onPressed: () {
-                                        setModalState(() {
-                                          cart.updateQuantity(item.product['id'], item.quantity - 1);
-                                        });
-                                      },
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.calendar_month, color: Colors.green, size: 16),
+                                        const SizedBox(width: 6),
+                                        const Text('First Delivery:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                        const Spacer(),
+                                        Text(_getNextDeliveryDate(_cartDeliveryDay), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 12)),
+                                        Text(' ($_cartDeliveryTimeSlot)', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                                      ],
                                     ),
+                                    const SizedBox(height: 4),
                                     Text(
-                                      '${item.quantity.toStringAsFixed(0)}',
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.add_circle_outline, color: Colors.green, size: 20),
-                                      onPressed: () {
-                                        setModalState(() {
-                                          cart.updateQuantity(item.product['id'], item.quantity + 1);
-                                        });
-                                      },
+                                      '🔁 $totalDeliveries deliveries every $_cartDeliveryDay morning directly from farmer. Pause/cancel anytime.',
+                                      style: const TextStyle(color: Colors.grey, fontSize: 10),
                                     ),
                                   ],
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                                  onPressed: () {
-                                    setModalState(() {
-                                      cart.removeFromCart(item.product['id']);
-                                    });
-                                  },
-                                ),
-                              ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      Container(
+                        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.25),
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: cart.items.length,
+                          itemBuilder: (c, idx) {
+                            final item = cart.items[idx];
+                            final price = double.tryParse(item.product['price_per_unit'].toString()) ?? 0.0;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8.0),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          item.product['name'] ?? '',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                        ),
+                                        Text(
+                                          '₹${price.toStringAsFixed(2)} / ${item.product['unit']}',
+                                          style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (_cartOrderType == 'subscription')
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                      onPressed: () {
+                                        setModalState(() {
+                                          cart.removeFromCart(item.product['id']);
+                                        });
+                                      },
+                                    )
+                                  else
+                                    Row(
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.remove_circle_outline, color: Colors.green, size: 20),
+                                          onPressed: () {
+                                            setModalState(() {
+                                              cart.updateQuantity(item.product['id'], item.quantity - 1);
+                                            });
+                                          },
+                                        ),
+                                        Text(
+                                          '${item.quantity.toStringAsFixed(0)}',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.add_circle_outline, color: Colors.green, size: 20),
+                                          onPressed: () {
+                                            setModalState(() {
+                                              cart.updateQuantity(item.product['id'], item.quantity + 1);
+                                            });
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  if (_cartOrderType != 'subscription')
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                      onPressed: () {
+                                        setModalState(() {
+                                          cart.removeFromCart(item.product['id']);
+                                        });
+                                      },
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const Divider(),
+                      const Text('Delivery Address', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _addressCtrl,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'Shipping Address',
+                          contentPadding: EdgeInsets.all(10),
+                        ),
+                        onChanged: (_) => setModalState(() {}),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _checkoutPinCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: '6-digit Pincode',
+                          contentPadding: EdgeInsets.all(10),
+                        ),
+                        onChanged: (_) => setModalState(() {}),
+                      ),
+                      const Divider(height: 24),
+                      if (_cartOrderType == 'subscription') ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Produce Subtotal:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            Text('₹${baseSubtotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('5% Subscriber Savings:', style: TextStyle(fontSize: 12, color: Colors.green)),
+                            Text('- ₹${subscriberSavings.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green)),
+                          ],
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Estimated Shipping Charge:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            Text('+ ₹${shippingCharge.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const Divider(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Per Delivery Total:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                            Text('₹${perDeliveryTotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green)),
+                          ],
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Total Plan Amount ($totalDeliveries drops):', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                            Text('₹${totalPlanAmount.toStringAsFixed(2)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.green)),
+                          ],
+                        ),
+                      ] else ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Produce Subtotal:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                            Text('₹${baseSubtotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Shipping Charge:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                            Text('+ ₹${shippingCharge.toStringAsFixed(2)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                        const Divider(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Total Amount:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            Text(
+                              '₹${(baseSubtotal + shippingCharge).toStringAsFixed(2)}',
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.green),
                             ),
-                          );
-                        },
-                      ),
-                    ),
-                    const Divider(),
-                    // Delivery Details
-                    const Text('Delivery Address', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: _addressCtrl,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        labelText: 'Shipping Address',
-                        contentPadding: EdgeInsets.all(10),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _checkoutPinCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        labelText: '6-digit Pincode',
-                        contentPadding: EdgeInsets.all(10),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Total Amount:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                        Text(
-                          '₹${cart.getCartTotal().toStringAsFixed(2)}',
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.green),
+                          ],
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                        onPressed: () async {
-                          if (_addressCtrl.text.isEmpty || _checkoutPinCtrl.text.length != 6) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Please fill valid address and 6-digit Pincode')),
-                            );
-                            return;
-                          }
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                          onPressed: () async {
+                            if (_addressCtrl.text.isEmpty || _checkoutPinCtrl.text.length != 6) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Please fill valid address and 6-digit Pincode')),
+                              );
+                              return;
+                            }
 
-                          Navigator.pop(ctx); // Close cart sheet
-                          _processCheckout();
-                        },
-                        child: const Text(
-                          'Proceed to Checkout',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            Navigator.pop(ctx); // Close cart sheet
+                            if (_cartOrderType == 'subscription') {
+                              _processSubscriptionCheckout();
+                            } else {
+                              _processCheckout();
+                            }
+                          },
+                          child: Text(
+                            _cartOrderType == 'subscription'
+                                ? 'Confirm & Start Subscription'
+                                : 'Proceed to Checkout',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ),
-                    ),
-                  ]
-                ],
+                    ]
+                  ],
+                ),
               ),
             );
           },
@@ -504,6 +869,32 @@ class _ConsumerMarketplaceScreenState extends State<ConsumerMarketplaceScreen> w
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Checkout failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _processSubscriptionCheckout() async {
+    final cart = Provider.of<CartProvider>(context, listen: false);
+    final itemsPayload = cart.items.map((item) => {
+      'product': item.product['id'],
+      'quantity': item.quantity,
+    }).toList();
+
+    try {
+      final client = _getApiClient();
+      final res = await client.post('/orders/subscriptions/', {
+        'items': itemsPayload,
+        'shipping_address': _addressCtrl.text,
+        'shipping_pincode': _checkoutPinCtrl.text,
+        'delivery_day': _cartDeliveryDay,
+        'delivery_time_slot': _cartDeliveryTimeSlot,
+        'duration_months': _cartDurationMonths,
+      });
+
+      _showRazorpaySandbox(res);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Subscription checkout failed: $e')),
       );
     }
   }
@@ -627,13 +1018,10 @@ class _ConsumerMarketplaceScreenState extends State<ConsumerMarketplaceScreen> w
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                             onPressed: () {
-                              context.read<CartProvider>().addToCart(product, qty: qty);
                               Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('${product['name']} added to Basket!')),
-                              );
+                              _showOrderTypeDialog(product, qty);
                             },
-                            child: const Text('Add to Cart', style: TextStyle(color: Colors.white)),
+                            child: const Text('Add to Basket', style: TextStyle(color: Colors.white)),
                           )
                         ],
                       ),
@@ -645,6 +1033,509 @@ class _ConsumerMarketplaceScreenState extends State<ConsumerMarketplaceScreen> w
                   ),
                 );
               },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _getNextDeliveryDate(String targetDay) {
+    final dayOfWeekMap = {
+      'sunday': 0, 'monday': 1, 'tuesday': 2, 'wednesday': 3,
+      'thursday': 4, 'friday': 5, 'saturday': 6
+    };
+    final targetIdx = dayOfWeekMap[targetDay.toLowerCase()] ?? 1;
+    final now = DateTime.now();
+    final currentIdx = now.weekday == 7 ? 0 : now.weekday;
+    int daysUntil = (targetIdx - currentIdx + 7) % 7;
+    if (daysUntil == 0) daysUntil = 7;
+    final nextDate = now.add(Duration(days: daysUntil));
+    return DateFormat('EEE, d MMM').format(nextDate);
+  }
+
+  void _showOrderTypeDialog(dynamic product, double qty) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        String selectedType = 'onetime';
+        String deliveryDay = 'Monday';
+        String deliveryTimeSlot = 'morning';
+        int durationMonths = 2;
+
+        final pricePerUnit = double.tryParse(product['price_per_unit']?.toString() ?? '0.0') ?? 0.0;
+        final discountPerUnit = pricePerUnit * 0.05;
+        final discountedPrice = pricePerUnit - discountPerUnit;
+
+        final daysOfWeek = [
+          {'id': 'Monday', 'label': 'Mon'},
+          {'id': 'Tuesday', 'label': 'Tue'},
+          {'id': 'Wednesday', 'label': 'Wed'},
+          {'id': 'Thursday', 'label': 'Thu'},
+          {'id': 'Friday', 'label': 'Fri'},
+          {'id': 'Saturday', 'label': 'Sat'},
+          {'id': 'Sunday', 'label': 'Sun'},
+        ];
+
+        final timeSlots = [
+          {'id': 'morning', 'label': 'Morning', 'time': '6:00 AM – 9:00 AM', 'icon': Icons.light_mode},
+          {'id': 'afternoon', 'label': 'Afternoon', 'time': '12:00 PM – 3:00 PM', 'icon': Icons.wb_sunny},
+          {'id': 'evening', 'label': 'Evening', 'time': '5:00 PM – 8:00 PM', 'icon': Icons.nights_stay},
+        ];
+
+        final durations = [
+          {'months': 1, 'deliveries': 4, 'label': '1 Month', 'desc': '4 Drops'},
+          {'months': 2, 'deliveries': 8, 'label': '2 Months', 'desc': '8 Drops', 'popular': true},
+          {'months': 3, 'deliveries': 12, 'label': '3 Months', 'desc': '12 Drops'},
+        ];
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final double currentUnitPrice = selectedType == 'subscription' ? discountedPrice : pricePerUnit;
+            final double currentTotal = currentUnitPrice * qty;
+            final int totalDeliveries = durationMonths * 4;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                top: 20,
+                left: 20,
+                right: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        if (product['image_url'] != null)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              product['image_url'],
+                              width: 44,
+                              height: 44,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(Icons.spa, color: Colors.green),
+                            ),
+                          )
+                        else
+                          const Icon(Icons.spa, color: Colors.green, size: 36),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                product['name'] ?? 'Produce',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                              Text(
+                                '₹${pricePerUnit.toStringAsFixed(2)} / ${product['unit']} · Choose order type',
+                                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 24),
+                    InkWell(
+                      onTap: () => setModalState(() => selectedType = 'onetime'),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: selectedType == 'onetime'
+                              ? Colors.green.shade50.withOpacity(0.4)
+                              : Colors.white,
+                          border: Border.all(
+                            color: selectedType == 'onetime' ? Colors.green.shade600 : Colors.grey.shade200,
+                            width: 2,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Radio<String>(
+                              value: 'onetime',
+                              groupValue: selectedType,
+                              activeColor: Colors.green,
+                              onChanged: (val) => setModalState(() => selectedType = val!),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text(
+                                        'One-Time Order',
+                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                      ),
+                                      Text(
+                                        '₹${(pricePerUnit * qty).toStringAsFixed(2)}',
+                                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Single delivery directly to your doorstep.',
+                                    style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: () => setModalState(() => selectedType = 'subscription'),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: selectedType == 'subscription'
+                              ? Colors.green.shade50.withOpacity(0.6)
+                              : Colors.white,
+                          border: Border.all(
+                            color: selectedType == 'subscription' ? Colors.green.shade600 : Colors.grey.shade200,
+                            width: 2,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Radio<String>(
+                                  value: 'subscription',
+                                  groupValue: selectedType,
+                                  activeColor: Colors.green,
+                                  onChanged: (val) => setModalState(() => selectedType = val!),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Text(
+                                                'Recurring Order',
+                                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.amber.shade400,
+                                                  borderRadius: BorderRadius.circular(8),
+                                                ),
+                                                child: const Text(
+                                                  'SAVE 5%',
+                                                  style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.black),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          Column(
+                                            crossAxisAlignment: CrossAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                '₹${(discountedPrice * qty).toStringAsFixed(2)}',
+                                                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Colors.green.shade700),
+                                              ),
+                                              Text(
+                                                '₹${(pricePerUnit * qty).toStringAsFixed(2)}',
+                                                style: const TextStyle(fontSize: 10, color: Colors.grey, decoration: TextDecoration.lineThrough),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Order repeated deliveries on a scheduled day & time.',
+                                        style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (selectedType == 'subscription') ...[
+                              const Divider(height: 24, color: Colors.green),
+                              const Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'DELIVER EVERY WEEK ON:',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: daysOfWeek.map((day) {
+                                  final isSel = deliveryDay == day['id'];
+                                  return Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                                      child: InkWell(
+                                        onTap: () => setModalState(() => deliveryDay = day['id']!),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: isSel ? Colors.green : Colors.grey.shade100,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Text(
+                                            day['label']!,
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: isSel ? Colors.white : Colors.black87,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                              const SizedBox(height: 12),
+                              const Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'PREFERRED TIME SLOT:',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: timeSlots.map((slot) {
+                                  final isSel = deliveryTimeSlot == slot['id'];
+                                  return Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                                      child: InkWell(
+                                        onTap: () => setModalState(() => deliveryTimeSlot = slot['id'] as String),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: isSel ? Colors.white : Colors.grey.shade50,
+                                            border: Border.all(
+                                              color: isSel ? Colors.green : Colors.grey.shade200,
+                                              width: 1.5,
+                                            ),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Icon(
+                                                    slot['icon'] as IconData,
+                                                    size: 14,
+                                                    color: isSel ? Colors.green : Colors.grey,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    slot['label'] as String,
+                                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                (slot['time'] as String).replaceAll(' – ', '\n'),
+                                                style: const TextStyle(fontSize: 8, color: Colors.grey),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                              const SizedBox(height: 12),
+                              const Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'CONTRACT DURATION:',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: durations.map((dur) {
+                                  final isSel = durationMonths == dur['months'];
+                                  return Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                                      child: InkWell(
+                                        onTap: () => setModalState(() => durationMonths = dur['months'] as int),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: isSel ? Colors.white : Colors.grey.shade50,
+                                            border: Border.all(
+                                              color: isSel ? Colors.green : Colors.grey.shade200,
+                                              width: 1.5,
+                                            ),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          alignment: Alignment.center,
+                                          child: Column(
+                                            children: [
+                                              Text(
+                                                dur['label'] as String,
+                                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                              ),
+                                              Text(
+                                                dur['desc'] as String,
+                                                style: const TextStyle(fontSize: 9, color: Colors.grey),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                              const SizedBox(height: 12),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  border: Border.all(color: Colors.green.shade200),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.calendar_month, color: Colors.green, size: 16),
+                                        const SizedBox(width: 6),
+                                        const Text(
+                                          'First Delivery:',
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                        ),
+                                        const Spacer(),
+                                        Text(
+                                          _getNextDeliveryDate(deliveryDay),
+                                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 12),
+                                        ),
+                                        Text(
+                                          ' ($deliveryTimeSlot)',
+                                          style: const TextStyle(color: Colors.grey, fontSize: 11),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '🔁 $totalDeliveries scheduled drops every $deliveryDay for $durationMonths month(s) · ₹${(discountedPrice * qty).toStringAsFixed(2)} / delivery.',
+                                      style: TextStyle(color: Colors.grey.shade600, fontSize: 10),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ]
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('Cancel', style: TextStyle(color: Colors.black87)),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            onPressed: () {
+                              final subConfig = selectedType == 'subscription'
+                                  ? {
+                                      'orderType': 'subscription',
+                                      'deliveryDay': deliveryDay,
+                                      'deliveryTimeSlot': deliveryTimeSlot,
+                                      'durationMonths': durationMonths,
+                                    }
+                                  : {
+                                      'orderType': 'onetime',
+                                      'deliveryDay': 'Monday',
+                                      'deliveryTimeSlot': 'morning',
+                                      'durationMonths': 2,
+                                    };
+
+                              context.read<CartProvider>().addToCart(
+                                    product,
+                                    qty: qty,
+                                    isSubscription: selectedType == 'subscription',
+                                    subConfig: subConfig,
+                                  );
+
+                              Navigator.pop(ctx);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    selectedType == 'subscription'
+                                        ? '${product['name']} added as Auto-Delivery!'
+                                        : '${product['name']} added to Basket!',
+                                  ),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            },
+                            child: Text(
+                              selectedType == 'subscription'
+                                  ? 'Confirm Contract'
+                                  : 'Add (One-Time)',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             );
           },
         );
@@ -877,9 +1768,9 @@ class _ConsumerMarketplaceScreenState extends State<ConsumerMarketplaceScreen> w
           ),
           
           // SUBSCRIPTIONS TAB
-          const SingleChildScrollView(
-            padding: EdgeInsets.all(16),
-            child: SubscriptionPanel(role: 'buyer'),
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: MarketplaceSubscriptionsPanel(apiClient: _getApiClient()),
           ),
         ],
       ),
@@ -1247,6 +2138,331 @@ class _FarmerReviewsWidgetState extends State<FarmerReviewsWidget> {
               );
             },
           )
+      ],
+    );
+  }
+}
+
+class MarketplaceSubscriptionsPanel extends StatefulWidget {
+  final ApiClient apiClient;
+  const MarketplaceSubscriptionsPanel({Key? key, required this.apiClient}) : super(key: key);
+
+  @override
+  State<MarketplaceSubscriptionsPanel> createState() => _MarketplaceSubscriptionsPanelState();
+}
+
+class _MarketplaceSubscriptionsPanelState extends State<MarketplaceSubscriptionsPanel> {
+  bool _loading = true;
+  List<dynamic> _subscriptions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSubscriptions();
+  }
+
+  Future<void> _fetchSubscriptions() async {
+    setState(() {
+      _loading = true;
+    });
+    try {
+      final res = await widget.apiClient.get('/orders/subscriptions/');
+      setState(() {
+        _subscriptions = res['data'] ?? [];
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _loading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load subscriptions: $e')),
+      );
+    }
+  }
+
+  Future<void> _pauseSubscription(int subId) async {
+    try {
+      await widget.apiClient.post('/orders/subscriptions/$subId/pause/');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Subscription paused successfully.')),
+      );
+      _fetchSubscriptions();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to pause subscription: $e')),
+      );
+    }
+  }
+
+  Future<void> _resumeSubscription(int subId) async {
+    try {
+      await widget.apiClient.post('/orders/subscriptions/$subId/resume/');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Subscription resumed successfully.')),
+      );
+      _fetchSubscriptions();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to resume subscription: $e')),
+      );
+    }
+  }
+
+  Future<void> _cancelSubscription(int subId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cancel Subscription'),
+        content: const Text('Are you sure you want to cancel this subscription contract? This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes, Cancel', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await widget.apiClient.post('/orders/subscriptions/$subId/cancel/');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Subscription cancelled successfully.')),
+      );
+      _fetchSubscriptions();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to cancel subscription: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 48.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Your Auto-Deliveries 📅',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh, color: Colors.green),
+              onPressed: _fetchSubscriptions,
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        _subscriptions.isEmpty
+            ? Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 16),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.shade100),
+                ),
+                child: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.repeat, size: 40, color: Colors.grey),
+                    SizedBox(height: 8),
+                    Text(
+                      'No recurring subscriptions found.',
+                      style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Select Auto-Delivery during checkout to automate regular deliveries.',
+                      style: TextStyle(color: Colors.grey, fontSize: 11),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              )
+            : ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _subscriptions.length,
+                itemBuilder: (c, idx) {
+                  final sub = _subscriptions[idx];
+                  final subId = sub['id'];
+                  final status = (sub['status'] ?? 'active').toString().toLowerCase();
+                  final completed = sub['completed_deliveries'] ?? 0;
+                  final total = sub['total_deliveries'] ?? 8;
+                  final day = sub['delivery_day'] ?? 'Monday';
+                  final slot = sub['delivery_time_slot'] ?? 'morning';
+                  final perDeliveryTotal = double.tryParse(sub['per_delivery_total']?.toString() ?? '0.0') ?? 0.0;
+                  final totalPlanAmount = double.tryParse(sub['total_plan_amount']?.toString() ?? '0.0') ?? 0.0;
+                  final nextDate = sub['next_delivery_date'] != null
+                      ? DateFormat('dd MMM yyyy').format(DateTime.parse(sub['next_delivery_date']))
+                      : 'N/A';
+                  final items = sub['items'] ?? [];
+
+                  Color statusColor = Colors.green;
+                  if (status == 'paused') statusColor = Colors.orange;
+                  if (status == 'cancelled') statusColor = Colors.red;
+                  if (status == 'completed') statusColor = Colors.blue;
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Subscription #$subId',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  status.toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: statusColor,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 20),
+                          Row(
+                            children: [
+                              const Icon(Icons.schedule, size: 16, color: Colors.grey),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Every $day ($slot)',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.event, size: 16, color: Colors.grey),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Next Drop: $nextDate',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.sync, size: 16, color: Colors.grey),
+                              const SizedBox(width: 6),
+                              Text(
+                                '$completed / $total drops completed',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 20),
+                          const Text(
+                            'PRODUCE ITEMS:',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Colors.grey),
+                          ),
+                          const SizedBox(height: 4),
+                          ...items.map<Widget>((it) {
+                            final prodName = it['product_details']?['name'] ?? 'Produce';
+                            final qty = it['quantity'] ?? 1;
+                            final unit = it['product_details']?['unit'] ?? 'kg';
+                            final price = double.tryParse(it['price']?.toString() ?? '0.0') ?? 0.0;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2.0),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('• $prodName × $qty $unit', style: const TextStyle(fontSize: 12)),
+                                  Text('₹${(qty * price).toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          const Divider(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Per Delivery Total:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                              Text('₹${perDeliveryTotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.green)),
+                            ],
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Total Plan Contract Value:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                              Text('₹${totalPlanAmount.toStringAsFixed(2)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green)),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          if (status == 'active' || status == 'paused')
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                if (status == 'active')
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.orange.shade600,
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    ),
+                                    icon: const Icon(Icons.pause, size: 16, color: Colors.white),
+                                    label: const Text('Pause', style: TextStyle(fontSize: 11, color: Colors.white)),
+                                    onPressed: () => _pauseSubscription(subId),
+                                  ),
+                                if (status == 'paused') ...[
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    ),
+                                    icon: const Icon(Icons.play_arrow, size: 16, color: Colors.white),
+                                    label: const Text('Resume', style: TextStyle(fontSize: 11, color: Colors.white)),
+                                    onPressed: () => _resumeSubscription(subId),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.red,
+                                      side: const BorderSide(color: Colors.red),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    ),
+                                    icon: const Icon(Icons.cancel, size: 16, color: Colors.red),
+                                    label: const Text('Cancel Plan', style: TextStyle(fontSize: 11, color: Colors.red)),
+                                    onPressed: () => _cancelSubscription(subId),
+                                  ),
+                                ]
+                              ],
+                            )
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
       ],
     );
   }
