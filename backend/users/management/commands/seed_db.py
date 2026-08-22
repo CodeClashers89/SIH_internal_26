@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from products.models import Product
-from orders.models import Order, OrderItem
+from orders.models import Order, OrderItem, QuoteRequest, BulkRequirement, PreHarvestContract
 from logistics.models import LogisticsPartner
 from pricing.models import Market, MarketPrice
 from reviews.models import Review
@@ -18,6 +18,9 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         self.stdout.write("Clearing existing data...")
         Review.objects.all().delete()
+        PreHarvestContract.objects.all().delete()
+        QuoteRequest.objects.all().delete()
+        BulkRequirement.objects.all().delete()
         OrderItem.objects.all().delete()
         Order.objects.all().delete()
         Product.objects.all().delete()
@@ -306,6 +309,95 @@ class Command(BaseCommand):
             farmer=farmer2,
             rating=5,
             comment="Great wheat crop, bought 10 quintals. Moisture was minimal. FPO managed well."
+        )
+
+        self.stdout.write("Creating Quote Requests (Wholesale Bid Negotiations)...")
+        # 3 quotes for farmer1 and farmer2
+        QuoteRequest.objects.create(
+            buyer=bulk_buyer1,
+            product=p1, # Organic Red Tomatoes
+            quantity=250.00,
+            target_price=22.00,
+            status='pending'
+        )
+        QuoteRequest.objects.create(
+            buyer=bulk_buyer1,
+            product=p2, # Fresh Jyoti Potatoes
+            quantity=1000.00,
+            target_price=15.00,
+            offered_price=16.50,
+            status='offered'
+        )
+        QuoteRequest.objects.create(
+            buyer=bulk_buyer1,
+            product=p4, # Nashik Red Onions
+            quantity=500.00,
+            target_price=19.00,
+            status='pending'
+        )
+
+        self.stdout.write("Creating Bulk Requirements (Reverse Sourcing)...")
+        # 3 bulk demands from bulk buyer
+        BulkRequirement.objects.create(
+            buyer=bulk_buyer1,
+            crop_name="Tomato",
+            variety="Local",
+            quantity=1500.00,
+            unit="kg",
+            grade="FAQ",
+            required_date=today + timedelta(days=7),
+            target_price_min=18.00,
+            target_price_max=22.00,
+            location="Pune MIDC Delivery Hub",
+            status='pending'
+        )
+        BulkRequirement.objects.create(
+            buyer=bulk_buyer1,
+            crop_name="Potato",
+            variety="Jyoti",
+            quantity=5000.00,
+            unit="kg",
+            grade="A",
+            required_date=today + timedelta(days=12),
+            target_price_min=14.00,
+            target_price_max=17.00,
+            location="Junnar Processing Unit",
+            status='pending'
+        )
+        BulkRequirement.objects.create(
+            buyer=bulk_buyer1,
+            crop_name="Onion",
+            variety="Red",
+            quantity=3000.00,
+            unit="kg",
+            grade="FAQ",
+            required_date=today + timedelta(days=5),
+            target_price_min=20.00,
+            target_price_max=25.00,
+            location="Chakan Cold Storage",
+            status='pending'
+        )
+
+        self.stdout.write("Creating Pre-Harvest Contracts...")
+        # 2 pre harvest contracts
+        PreHarvestContract.objects.create(
+            farmer=farmer1,
+            buyer=bulk_buyer1,
+            crop_name="Premium Basmati Paddy",
+            expected_quantity=40.00,
+            unit="quintal",
+            contract_price=3500.00,
+            expected_harvest_date=today + timedelta(days=60),
+            status='accepted'
+        )
+        PreHarvestContract.objects.create(
+            farmer=farmer1,
+            crop_name="Organic Green Chilli",
+            expected_quantity=1000.00,
+            unit="kg",
+            contract_price=45.00,
+            expected_harvest_date=today + timedelta(days=45),
+            status='proposed'
         )
 
         self.stdout.write(self.style.SUCCESS("Database seeded successfully!"))
