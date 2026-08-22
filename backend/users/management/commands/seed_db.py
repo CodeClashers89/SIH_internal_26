@@ -160,40 +160,10 @@ class Command(BaseCommand):
             active=True
         )
 
-        self.stdout.write("Creating Mandi price benchmarks...")
-        commodities = [
-            ("Potato", "Jyoti"),
-            ("Tomato", "Local"),
-            ("Onion", "Red"),
-            ("Rice", "Basmati"),
-            ("Wheat", "Lokwan")
-        ]
-        
         today = date.today()
-        # Seed last 5 days of mandi prices
-        for day_offset in range(5):
-            mandi_date = today - timedelta(days=day_offset)
-            for commodity, variety in commodities:
-                min_p = Decimal(random.randint(15, 30))
-                modal_p = min_p + Decimal(random.randint(5, 10))
-                max_p = modal_p + Decimal(random.randint(5, 15))
-                
-                # Scale up grains
-                if commodity in ["Rice", "Wheat"]:
-                    min_p *= 2
-                    modal_p *= 2
-                    max_p *= 2
-                
-                m, _ = Market.objects.get_or_create(name='Pune Mandi', normalized_name='pune mandi', district='Pune', state='Maharashtra', latitude=18.5204, longitude=73.8567)
-                MarketPrice.objects.create(
-                    market=m, 
-                    reported_date=mandi_date, 
-                    commodity=commodity,
-                    variety=variety,
-                    min_price=min_p,
-                    max_price=max_p,
-                    modal_price=modal_p
-                )
+        self.stdout.write("Creating Mandi price benchmarks via AGMARKNET Sync...")
+        from pricing.services import sync_agmarknet_data
+        sync_agmarknet_data()
 
         self.stdout.write("Creating products...")
         p1 = Product.objects.create(
