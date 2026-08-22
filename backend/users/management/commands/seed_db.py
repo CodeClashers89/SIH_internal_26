@@ -94,7 +94,7 @@ class Command(BaseCommand):
         # Consumer
         consumer1 = User.objects.create_user(
             username='consumer1',
-            email='consumer1@gmail.com',
+            email='kamanipoojan@gmail.com',
             password='consumerpassword',
             role='consumer',
             phone='8765432109',
