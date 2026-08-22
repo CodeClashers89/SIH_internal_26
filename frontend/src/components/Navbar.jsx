@@ -56,6 +56,13 @@ const Navbar = ({ onCartToggle }) => {
                 Dashboard
               </Link>
             )}
+            
+            {user && user.role === 'admin' && (
+              <Link to="/control-tower" className="text-gray-600 hover:text-indigo-600 font-medium transition-colors flex items-center gap-1.5">
+                <ShieldAlert className="h-4 w-4" />
+                Control Tower
+              </Link>
+            )}
 
             {!user ? (
               <div className="flex items-center space-x-3">
@@ -162,6 +169,16 @@ const Navbar = ({ onCartToggle }) => {
               onClick={() => setIsOpen(false)}
             >
               Dashboard
+            </Link>
+          )}
+
+          {user && user.role === 'admin' && (
+            <Link 
+              to="/control-tower" 
+              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-indigo-50"
+              onClick={() => setIsOpen(false)}
+            >
+              Control Tower
             </Link>
           )}
 

@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'pricing',
     'payments',
     'reviews',
+    'control_tower',
 ]
 
 MIDDLEWARE = [

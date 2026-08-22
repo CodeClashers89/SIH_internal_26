@@ -12,6 +12,7 @@ import ConsumerMarketplace from './pages/ConsumerMarketplace';
 import BulkBuyerPortal from './pages/BulkBuyerPortal';
 import AdminPanel from './pages/AdminPanel';
 import LogisticsDashboard from './pages/LogisticsDashboard';
+import ControlTower from './pages/ControlTower';
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -90,6 +91,14 @@ function MainLayout() {
             element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <AdminPanel />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/control-tower" 
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <ControlTower />
               </ProtectedRoute>
             } 
           />
