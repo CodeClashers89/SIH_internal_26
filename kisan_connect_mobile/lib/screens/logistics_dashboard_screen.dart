@@ -469,11 +469,13 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
                         ],
                         onChanged: (val) => setState(() => _selectedVehicleType = val ?? 'tempo'),
                       ),
+                      const SizedBox(height: 12),
                       TextField(
                         controller: _capacityCtrl,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(labelText: 'Load Capacity (kg)'),
                       ),
+                      const SizedBox(height: 12),
                       TextField(
                         controller: _areaCtrl,
                         decoration: const InputDecoration(labelText: 'Service Pincodes / Area'),

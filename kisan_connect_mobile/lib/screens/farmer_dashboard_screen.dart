@@ -421,7 +421,15 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Sales Volume Trend (Last 30 Days)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Expanded(
+                child: Text(
+                  'Sales Volume Trend (Last 30 Days)',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
@@ -823,8 +831,6 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
                             ],
                           ),
                         ],
-                        const SizedBox(height: 16),
-                        _buildMandiChart(),
                         const SizedBox(height: 16),
                         _buildDemandForecastChart(),
                       ],
