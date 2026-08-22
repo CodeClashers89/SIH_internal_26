@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import DemandForecastingChart from '../components/DemandForecastingChart';
@@ -16,6 +17,13 @@ import RouteInfoPanel from '../components/RouteInfoPanel';
 
 const FarmerDashboard = () => {
   const { user, submitKyc } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleTabChange = (section) => {
+    setActiveSection(section);
+    navigate(`#${section}`, { replace: true });
+  };
   
   // Dashboard states
   const [stats, setStats] = useState(null);
@@ -137,6 +145,17 @@ const FarmerDashboard = () => {
     }
   }, [user]);
 
+  // Listen for hash changes to switch tabs
+  useEffect(() => {
+    const validSections = ['inventory', 'orders', 'quotes', 'sourcing', 'contracts', 'markets'];
+    if (location.hash) {
+      const hashSection = location.hash.replace('#', '');
+      if (validSections.includes(hashSection)) {
+        setActiveSection(hashSection);
+      }
+    }
+  }, [location.hash]);
+
   const handleAddProduct = async (e) => {
     e.preventDefault();
     setAddLoading(true);
@@ -177,7 +196,7 @@ const FarmerDashboard = () => {
       const response = await api.patch(`/orders/${orderId}/status/`, { status: newStatus });
       setOrders(orders.map(o => o.id === orderId ? { ...o, status: response.data.status } : o));
     } catch (err) {
-      alert('Error updating order status');
+      alert(err.response?.data?.error || 'Error updating order status');
     }
   };
 
@@ -400,7 +419,7 @@ const FarmerDashboard = () => {
       {/* Bottom Workspace Navigation Tabs */}
       <div className="flex border-b border-slate-200 gap-6">
         <button
-          onClick={() => setActiveSection('inventory')}
+          onClick={() => handleTabChange('inventory')}
           className={`pb-4 text-sm font-bold border-b-2 transition-all ${
             activeSection === 'inventory' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
@@ -408,7 +427,7 @@ const FarmerDashboard = () => {
           Crop Inventory ({listings.length})
         </button>
         <button
-          onClick={() => setActiveSection('orders')}
+          onClick={() => handleTabChange('orders')}
           className={`pb-4 text-sm font-bold border-b-2 transition-all ${
             activeSection === 'orders' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
@@ -416,7 +435,7 @@ const FarmerDashboard = () => {
           Incoming Retail Orders ({orders.length})
         </button>
         <button
-          onClick={() => setActiveSection('quotes')}
+          onClick={() => handleTabChange('quotes')}
           className={`pb-4 text-sm font-bold border-b-2 transition-all ${
             activeSection === 'quotes' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
@@ -424,7 +443,7 @@ const FarmerDashboard = () => {
           Wholesale Bid Negotiations ({quotes.length})
         </button>
         <button
-          onClick={() => setActiveSection('sourcing')}
+          onClick={() => handleTabChange('sourcing')}
           className={`pb-4 text-sm font-bold border-b-2 transition-all ${
             activeSection === 'sourcing' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
@@ -432,7 +451,7 @@ const FarmerDashboard = () => {
           Reverse Sourcing Requirements ({bulkReqs.length})
         </button>
         <button
-          onClick={() => setActiveSection('contracts')}
+          onClick={() => handleTabChange('contracts')}
           className={`pb-4 text-sm font-bold border-b-2 transition-all ${
             activeSection === 'contracts' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
@@ -440,7 +459,7 @@ const FarmerDashboard = () => {
           Pre-Harvest Contracts ({preHarvestContracts.length})
         </button>
         <button
-          onClick={() => setActiveSection('markets')}
+          onClick={() => handleTabChange('markets')}
           className={`pb-4 text-sm font-bold border-b-2 transition-all ${
             activeSection === 'markets' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'
           }`}
@@ -1363,6 +1382,12 @@ const FarmerDashboard = () => {
           </div>
         </div>
       )}
+      {activeSection === 'markets' && (
+        <div className="space-y-6">
+          <NearestMandiExplorer />
+        </div>
+      )}
+
     </div>
   );
 };

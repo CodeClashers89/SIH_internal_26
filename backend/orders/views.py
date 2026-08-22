@@ -5,12 +5,17 @@ from rest_framework.decorators import action
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
-from .models import Order, OrderItem, QuoteRequest, BulkRequirement, FarmerOffer, PreHarvestContract
+from datetime import timedelta, date
+from decimal import Decimal
+from .models import (
+    Order, OrderItem, Subscription, SubscriptionItem,
+    QuoteRequest, BulkRequirement, FarmerOffer, PreHarvestContract
+)
 from products.models import Product
 from payments.models import PaymentRecord
 from .serializers import (
-    OrderSerializer, CreateOrderSerializer, QuoteRequestSerializer,
-    BulkRequirementSerializer, FarmerOfferSerializer, PreHarvestContractSerializer
+    OrderSerializer, CreateOrderSerializer, SubscriptionSerializer, CreateSubscriptionSerializer,
+    QuoteRequestSerializer, BulkRequirementSerializer, FarmerOfferSerializer, PreHarvestContractSerializer
 )
 from logistics.services import create_open_shipment
 from users.permissions import IsFarmer, IsBulkBuyer, IsAdmin
@@ -592,3 +597,209 @@ class PreHarvestContractViewSet(viewsets.ModelViewSet):
         contract.save()
 
         return Response(PreHarvestContractSerializer(contract).data)
+
+
+def calculate_next_delivery_date(target_day_name):
+    day_map = {
+        'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
+        'friday': 4, 'saturday': 5, 'sunday': 6
+    }
+    target_idx = day_map.get(str(target_day_name).strip().lower(), 0)
+    today = timezone.now().date()
+    days_ahead = target_idx - today.weekday()
+    if days_ahead <= 0:
+        days_ahead += 7
+    return today + timedelta(days=days_ahead)
+
+
+class SubscriptionViewSet(viewsets.ModelViewSet):
+    queryset = Subscription.objects.select_related('buyer').prefetch_related('items__product__farmer').all().order_by('-created_at')
+    serializer_class = SubscriptionSerializer
+
+    def get_permissions(self):
+        return [permissions.IsAuthenticated()]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = super().get_queryset()
+        if user.role == 'admin':
+            return queryset
+        elif user.role == 'farmer':
+            return queryset.filter(items__product__farmer=user).distinct()
+        return queryset.filter(buyer=user)
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        serializer = CreateSubscriptionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        buyer = request.user
+        items_data = data['items']
+        shipping_address = data['shipping_address']
+        shipping_pincode = data['shipping_pincode']
+        delivery_day = data.get('delivery_day', 'Monday')
+        delivery_time_slot = data.get('delivery_time_slot', 'morning')
+        duration_months = int(data.get('duration_months', 2))
+        total_deliveries = duration_months * 4  # 4 weekly deliveries per month
+
+        if not items_data:
+            return Response({'error': 'Subscription must have at least one product.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Calculate pricing & verify stock
+        per_delivery_subtotal = Decimal('0.00')
+        items_to_create = []
+        farmer_pincode = None
+        farmer_district = None
+        buyer_district = (buyer.district or '').strip()
+
+        for item_dict in items_data:
+            prod_id = item_dict.get('product') or item_dict.get('id')
+            qty = Decimal(str(item_dict.get('quantity', 1)))
+            try:
+                product = Product.objects.get(id=prod_id)
+            except Product.DoesNotExist:
+                return Response({'error': f'Product with id {prod_id} does not exist.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if product.quantity < qty:
+                return Response({'error': f'Not enough stock for {product.name}. Available: {product.quantity} {product.unit}.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Deduct stock for the first batch
+            product.quantity -= qty
+            product.save()
+
+            price = product.price_per_unit
+            per_delivery_subtotal += price * qty
+            items_to_create.append((product, qty, price))
+
+            if farmer_pincode is None and product.farmer:
+                farmer_pincode = (product.farmer.pincode or '').strip()
+                farmer_district = (product.farmer.district or '').strip()
+
+        # 5% farm subscriber discount
+        discount_percentage = Decimal('5.0')
+        discount_factor = Decimal('0.95')
+        discounted_subtotal = round(per_delivery_subtotal * discount_factor, 2)
+
+        # Shipping estimation
+        RATE_PER_KM = 12
+        if farmer_pincode and farmer_pincode == shipping_pincode:
+            estimated_km = Decimal('3.5')
+        elif farmer_district and buyer_district and farmer_district.lower() == buyer_district.lower():
+            estimated_km = Decimal('17.5')
+        else:
+            estimated_km = Decimal('85.0')
+
+        shipping_charge = round(estimated_km * Decimal(str(RATE_PER_KM)), 2)
+        per_delivery_total = discounted_subtotal + shipping_charge
+        total_plan_amount = per_delivery_total * Decimal(str(total_deliveries))
+
+        first_delivery_date = calculate_next_delivery_date(delivery_day)
+
+        # Create Subscription record
+        subscription = Subscription.objects.create(
+            buyer=buyer,
+            frequency='weekly',
+            delivery_day=delivery_day,
+            delivery_time_slot=delivery_time_slot,
+            duration_months=duration_months,
+            total_deliveries=total_deliveries,
+            completed_deliveries=0,
+            start_date=first_delivery_date,
+            next_delivery_date=first_delivery_date,
+            shipping_address=shipping_address,
+            shipping_pincode=shipping_pincode,
+            per_delivery_subtotal=per_delivery_subtotal,
+            discount_percentage=discount_percentage,
+            shipping_charge=shipping_charge,
+            per_delivery_total=per_delivery_total,
+            total_plan_amount=total_plan_amount,
+            status='active'
+        )
+
+        for prod, qty, price in items_to_create:
+            SubscriptionItem.objects.create(
+                subscription=subscription,
+                product=prod,
+                quantity=qty,
+                price=price
+            )
+
+        # Create first scheduled order linked to this subscription
+        first_order = Order.objects.create(
+            buyer=buyer,
+            subscription=subscription,
+            product_subtotal=discounted_subtotal,
+            shipping_charge=shipping_charge,
+            total_amount=per_delivery_total,
+            status='placed',
+            shipping_address=shipping_address,
+            shipping_pincode=shipping_pincode,
+            payment_status='pending'
+        )
+
+        for prod, qty, price in items_to_create:
+            OrderItem.objects.create(
+                order=first_order,
+                product=prod,
+                quantity=qty,
+                price=price
+            )
+
+        # Setup Razorpay mock/live order for initial payment
+        razorpay_order_id = f"rzp_mock_sub_{subscription.id}_{first_order.id}_{random.randint(10000, 99999)}"
+        first_order.razorpay_order_id = razorpay_order_id
+        first_order.save()
+
+        PaymentRecord.objects.create(
+            order=first_order,
+            razorpay_order_id=razorpay_order_id,
+            amount=per_delivery_total,
+            status='created'
+        )
+
+        return Response({
+            'message': 'Subscription created successfully. Schedule activated!',
+            'subscription': SubscriptionSerializer(subscription).data,
+            'order': OrderSerializer(first_order).data,
+            'razorpay_key_id': settings.RAZORPAY_KEY_ID,
+            'amount_in_paise': int(float(per_delivery_total) * 100),
+            'currency': 'INR',
+            'summary': {
+                'first_delivery_date': str(first_delivery_date),
+                'total_deliveries': total_deliveries,
+                'per_delivery_subtotal': float(per_delivery_subtotal),
+                'discount_amount': float(per_delivery_subtotal - discounted_subtotal),
+                'shipping_charge': float(shipping_charge),
+                'per_delivery_total': float(per_delivery_total),
+                'total_plan_amount': float(total_plan_amount),
+            }
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='pause')
+    def pause_subscription(self, request, pk=None):
+        sub = self.get_object()
+        if sub.status == 'cancelled':
+            return Response({'error': 'Cancelled subscriptions cannot be paused.'}, status=status.HTTP_400_BAD_REQUEST)
+        sub.status = 'paused'
+        sub.save()
+        return Response(SubscriptionSerializer(sub).data)
+
+    @action(detail=True, methods=['post'], url_path='resume')
+    def resume_subscription(self, request, pk=None):
+        sub = self.get_object()
+        if sub.status != 'paused':
+            return Response({'error': 'Only paused subscriptions can be resumed.'}, status=status.HTTP_400_BAD_REQUEST)
+        sub.status = 'active'
+        sub.next_delivery_date = calculate_next_delivery_date(sub.delivery_day)
+        sub.save()
+        return Response(SubscriptionSerializer(sub).data)
+
+    @action(detail=True, methods=['post'], url_path='cancel')
+    def cancel_subscription(self, request, pk=None):
+        sub = self.get_object()
+        sub.status = 'cancelled'
+        sub.save()
+        return Response(SubscriptionSerializer(sub).data)
+

@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import Order, OrderItem, QuoteRequest, BulkRequirement, FarmerOffer, PreHarvestContract
+from .models import (
+    Order, OrderItem, Subscription, SubscriptionItem,
+    QuoteRequest, BulkRequirement, FarmerOffer, PreHarvestContract
+)
 from products.models import Product
 from products.serializers import ProductSerializer
 from users.serializers import UserSerializer
@@ -10,6 +13,51 @@ class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
         fields = ('id', 'product', 'product_details', 'quantity', 'price')
+
+class SubscriptionItemSerializer(serializers.ModelSerializer):
+    product_details = ProductSerializer(source='product', read_only=True)
+
+    class Meta:
+        model = SubscriptionItem
+        fields = ('id', 'product', 'product_details', 'quantity', 'price')
+
+class SubscriptionSerializer(serializers.ModelSerializer):
+    items = SubscriptionItemSerializer(many=True, read_only=True)
+    buyer_username = serializers.ReadOnlyField(source='buyer.username')
+    farmer_names = serializers.SerializerMethodField()
+
+    def get_farmer_names(self, obj):
+        farmers = set()
+        for item in obj.items.all():
+            if item.product and item.product.farmer:
+                farmers.add(item.product.farmer.username)
+        return list(farmers)
+
+    class Meta:
+        model = Subscription
+        fields = (
+            'id', 'buyer', 'buyer_username', 'frequency', 'delivery_day',
+            'delivery_time_slot', 'duration_months', 'total_deliveries',
+            'completed_deliveries', 'start_date', 'next_delivery_date',
+            'shipping_address', 'shipping_pincode', 'per_delivery_subtotal',
+            'discount_percentage', 'shipping_charge', 'per_delivery_total',
+            'total_plan_amount', 'status', 'items', 'farmer_names',
+            'created_at', 'updated_at'
+        )
+        read_only_fields = (
+            'id', 'buyer', 'per_delivery_subtotal', 'discount_percentage',
+            'shipping_charge', 'per_delivery_total', 'total_plan_amount',
+            'total_deliveries', 'completed_deliveries', 'start_date',
+            'next_delivery_date', 'created_at', 'updated_at'
+        )
+
+class CreateSubscriptionSerializer(serializers.Serializer):
+    items = serializers.ListField(child=serializers.DictField())
+    shipping_address = serializers.CharField()
+    shipping_pincode = serializers.CharField(max_length=10)
+    delivery_day = serializers.CharField(default='Monday')
+    delivery_time_slot = serializers.CharField(default='morning')
+    duration_months = serializers.IntegerField(default=2)
 
 class ShipmentSummarySerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
@@ -51,7 +99,7 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = (
-            'id', 'buyer', 'buyer_username',
+            'id', 'buyer', 'buyer_username', 'subscription',
             'product_subtotal', 'shipping_charge', 'total_amount',
             'status', 'shipping_address', 'shipping_pincode',
             'payment_status', 'payment_id', 'razorpay_order_id',

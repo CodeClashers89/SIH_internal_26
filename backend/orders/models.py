@@ -32,6 +32,13 @@ class Order(models.Model):
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending')
     payment_id = models.CharField(max_length=100, blank=True, null=True)
     razorpay_order_id = models.CharField(max_length=100, blank=True, null=True)
+    subscription = models.ForeignKey(
+        'Subscription',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders'
+    )
     cancellation_locked = models.BooleanField(default=False)
     cancellation_locked_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -39,6 +46,68 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Order #{self.id} by {self.buyer.username} - Status: {self.status}"
+
+
+class Subscription(models.Model):
+    STATUS_CHOICES = (
+        ('active', 'Active'),
+        ('paused', 'Paused'),
+        ('cancelled', 'Cancelled'),
+        ('completed', 'Completed'),
+    )
+    FREQUENCY_CHOICES = (
+        ('weekly', 'Weekly'),
+        ('biweekly', 'Bi-Weekly'),
+        ('daily', 'Daily'),
+    )
+    TIME_SLOT_CHOICES = (
+        ('morning', 'Morning (6:00 AM - 9:00 AM)'),
+        ('afternoon', 'Afternoon (12:00 PM - 3:00 PM)'),
+        ('evening', 'Evening (5:00 PM - 8:00 PM)'),
+    )
+
+    buyer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='subscriptions'
+    )
+    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES, default='weekly')
+    delivery_day = models.CharField(max_length=20, default='Monday')
+    delivery_time_slot = models.CharField(max_length=20, choices=TIME_SLOT_CHOICES, default='morning')
+    duration_months = models.IntegerField(default=2)
+    total_deliveries = models.IntegerField(default=8)
+    completed_deliveries = models.IntegerField(default=0)
+    start_date = models.DateField()
+    next_delivery_date = models.DateField()
+    
+    shipping_address = models.TextField()
+    shipping_pincode = models.CharField(max_length=10)
+    
+    per_delivery_subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=5.0)
+    shipping_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    per_delivery_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_plan_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    razorpay_subscription_id = models.CharField(max_length=100, blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Subscription #{self.id} by {self.buyer.username} ({self.delivery_day} {self.delivery_time_slot})"
+
+
+class SubscriptionItem(models.Model):
+    subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True)
+    quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.quantity} x {self.product.name if self.product else 'Product'} in Sub #{self.subscription.id}"
+
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')

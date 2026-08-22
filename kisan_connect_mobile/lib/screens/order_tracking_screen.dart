@@ -165,9 +165,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   CircleAvatar(
                     radius: 12,
                     backgroundColor: isCurrent
-                        ? Colors.green
+                        ? Theme.of(context).primaryColor
                         : isDone
-                            ? Colors.green.shade300
+                            ? Theme.of(context).primaryColor.withOpacity(0.5)
                             : Colors.grey.shade300,
                     child: Icon(
                       isDone ? Icons.check : Icons.circle,
@@ -280,7 +280,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                                       point: _pickupCoords!,
                                       width: 40,
                                       height: 40,
-                                      child: const Icon(Icons.location_on, color: Colors.green, size: 36),
+                                      child: Icon(Icons.location_on, color: Theme.of(context).colorScheme.secondary, size: 36),
                                     ),
                                   // Destination Marker
                                   if (_destCoords != null)
@@ -322,7 +322,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                               bottom: 16,
                               right: 16,
                               child: FloatingActionButton.extended(
-                                backgroundColor: Colors.green,
+                                backgroundColor: Theme.of(context).primaryColor,
                                 icon: const Icon(Icons.alt_route, color: Colors.white),
                                 label: const Text('Recalculate Route', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                 onPressed: _recalculateRoute,

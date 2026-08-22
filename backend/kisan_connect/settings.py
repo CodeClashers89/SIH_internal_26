@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'reviews',
     'control_tower',
     'route_planning',
+    'farmer_profile',
 ]
 
 # Route Planning Settings

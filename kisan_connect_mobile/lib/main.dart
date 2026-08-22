@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Theme
+import 'theme/app_theme.dart';
+
 // Providers
 import 'providers/api_config_provider.dart';
 import 'providers/auth_provider.dart';
@@ -62,25 +65,9 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'KisanConnect',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF059669),
-            primary: const Color(0xFF059669),
-          ),
-          inputDecorationTheme: InputDecorationTheme(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          ),
-          cardTheme: CardThemeData(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            elevation: 1,
-          ),
-        ),
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: ThemeMode.system,
         home: const AppNavigationShell(),
       ),
     );
@@ -94,11 +81,83 @@ class AppNavigationShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
 
-    // 1. Show loader while state loads
+    // 1. Show a beautiful pulsing logo loader while loading auth state
     if (auth.loading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
+      return Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF090D16), Color(0xFF064E3B), Color(0xFF090D16)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0.8, end: 1.15),
+                  duration: const Duration(milliseconds: 900),
+                  builder: (context, scale, child) {
+                    return Transform.scale(
+                      scale: scale,
+                      child: child,
+                    );
+                  },
+                  onEnd: () {},
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF10B981).withOpacity(0.3),
+                          blurRadius: 35,
+                          spreadRadius: 10,
+                        ),
+                      ],
+                      gradient: AppTheme.brandGradient,
+                    ),
+                    child: const Icon(Icons.spa, color: Colors.white, size: 48),
+                  ),
+                ),
+                const SizedBox(height: 32),
+                const Text(
+                  'KisanConnect',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.extrabold,
+                    letterSpacing: 1.2,
+                    fontFamily: 'SpaceGrotesk',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Decentralized Agri-Tech Platform',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2.2,
+                  ),
+                ),
+                const SizedBox(height: 48),
+                SizedBox(
+                  width: 120,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: const LinearProgressIndicator(
+                      backgroundColor: Colors.white10,
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF10B981)),
+                      minHeight: 3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       );
     }

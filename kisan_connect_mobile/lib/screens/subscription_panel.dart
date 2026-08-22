@@ -263,7 +263,7 @@ class _SubscriptionPanelState extends State<SubscriptionPanel> {
                   width: double.infinity,
                   height: 44,
                   child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
                     onPressed: _submitting ? null : _createSubscription,
                     child: _submitting
                         ? const CircularProgressIndicator(color: Colors.white)
@@ -322,7 +322,7 @@ class _SubscriptionPanelState extends State<SubscriptionPanel> {
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: status == 'ACCEPTED'
-                                      ? Colors.green.shade50
+                                      ? Theme.of(context).colorScheme.secondary.withOpacity(0.1)
                                       : status == 'REJECTED'
                                           ? Colors.red.shade50
                                           : Colors.amber.shade50,
@@ -334,7 +334,7 @@ class _SubscriptionPanelState extends State<SubscriptionPanel> {
                                     fontSize: 9,
                                     fontWeight: FontWeight.bold,
                                     color: status == 'ACCEPTED'
-                                        ? Colors.green.shade800
+                                        ? Theme.of(context).colorScheme.secondary
                                         : status == 'REJECTED'
                                             ? Colors.red.shade800
                                             : Colors.amber.shade800,
@@ -359,7 +359,7 @@ class _SubscriptionPanelState extends State<SubscriptionPanel> {
                                 ),
                                 const SizedBox(width: 8),
                                 ElevatedButton(
-                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                  style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
                                   onPressed: () => _respondSubscription(sub['_id'] ?? sub['id'], true),
                                   child: const Text('Accept', style: TextStyle(color: Colors.white)),
                                 ),
@@ -372,7 +372,7 @@ class _SubscriptionPanelState extends State<SubscriptionPanel> {
                                 const Text('Subscription Active Status:', style: TextStyle(fontSize: 12, color: Colors.grey)),
                                 Switch(
                                   value: active,
-                                  activeColor: Colors.green,
+                                  activeColor: Theme.of(context).colorScheme.secondary,
                                   onChanged: (val) {
                                     _toggleSubscription(sub['_id'] ?? sub['id'], active);
                                   },

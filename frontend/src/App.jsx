@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CartDrawer from './components/CartDrawer';
+import Preloader from './components/Preloader';
 import Landing from './pages/Landing';
 import LoginSignup from './pages/LoginSignup';
 import FarmerDashboard from './pages/FarmerDashboard';
+import FarmerProfilePage from './pages/FarmerProfilePage';
 import ConsumerMarketplace from './pages/ConsumerMarketplace';
+import ConsumerDashboard from './pages/ConsumerDashboard';
 import BulkBuyerPortal from './pages/BulkBuyerPortal';
 import AdminPanel from './pages/AdminPanel';
 import LogisticsDashboard from './pages/LogisticsDashboard';
@@ -18,7 +21,7 @@ import ControlTower from './pages/ControlTower';
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
   
-  if (loading) return null;
+  if (loading) return <Preloader />;
   
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -34,7 +37,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 // Redirect farmers away from consumer-only pages (e.g. /marketplace)
 const NonFarmerRoute = ({ children }) => {
   const { user, loading } = useAuth();
-  if (loading) return null;
+  if (loading) return <Preloader />;
   if (user && user.role === 'farmer') {
     return <Navigate to="/farmer-dashboard" replace />;
   }
@@ -47,11 +50,7 @@ function MainLayout() {
   const { loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
-        <div className="h-8 w-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
+    return <Preloader />;
   }
 
   return (
@@ -71,10 +70,26 @@ function MainLayout() {
           
           {/* Role Protected Paths */}
           <Route 
+            path="/consumer-dashboard" 
+            element={
+              <ProtectedRoute allowedRoles={['consumer', 'admin']}>
+                <ConsumerDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
             path="/farmer-dashboard" 
             element={
               <ProtectedRoute allowedRoles={['farmer']}>
                 <FarmerDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/farmer-profile" 
+            element={
+              <ProtectedRoute allowedRoles={['farmer']}>
+                <FarmerProfilePage />
               </ProtectedRoute>
             } 
           />
@@ -124,9 +139,19 @@ function MainLayout() {
 }
 
 function App() {
+  const [initialLoading, setInitialLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setInitialLoading(false);
+    }, 1800);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <AuthProvider>
       <CartProvider>
+        {initialLoading && <Preloader />}
         <Router>
           <MainLayout />
         </Router>

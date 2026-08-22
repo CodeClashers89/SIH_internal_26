@@ -9,6 +9,7 @@ urlpatterns = [
     
     # API endpoints
     path('api/', include('users.urls')),
+    path('api/v1/', include('farmer_profile.urls')),
     path('api/products/', include('products.urls')),
     path('api/orders/', include('orders.urls')),
     path('api/logistics/', include('logistics.urls')),
