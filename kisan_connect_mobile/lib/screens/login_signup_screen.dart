@@ -122,7 +122,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
+              backgroundColor: Theme.of(context).primaryColor,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () async {
@@ -265,7 +265,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
         validator: validator ?? (value) => value == null || value.isEmpty ? '$label is required' : null,
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: Icon(icon, color: Colors.green),
+          prefixIcon: Icon(icon, color: Theme.of(context).primaryColor),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
@@ -297,7 +297,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Brand Logo/Name
-                const Icon(Icons.spa, size: 64, color: Colors.green),
+                Icon(Icons.spa, size: 64, color: Theme.of(context).primaryColor),
                 const SizedBox(height: 12),
                 Text(
                   _showOtpScreen
@@ -322,11 +322,11 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                     padding: const EdgeInsets.all(12),
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      border: Border.all(color: Colors.green.shade100),
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(_infoMessage, style: TextStyle(color: Colors.green.shade800, fontSize: 13)),
+                    child: Text(_infoMessage, style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 13)),
                   ),
                 if (_errorMessage.isNotEmpty)
                   Container(
@@ -373,7 +373,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                     height: 50,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
+                        backgroundColor: Theme.of(context).primaryColor,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                       ),
                       onPressed: _isLoading ? null : _handleOtpVerify,
@@ -388,7 +388,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                       _showOtpScreen = false;
                       _infoMessage = '';
                     }),
-                    child: const Text('Back to Login/Signup', style: TextStyle(color: Colors.green)),
+                    child: Text('Back to Login/Signup', style: TextStyle(color: Theme.of(context).primaryColor)),
                   )
                 ] else if (_isLogin) ...[
                   // Login Screen Form
@@ -409,7 +409,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                     height: 50,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
+                        backgroundColor: Theme.of(context).primaryColor,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                       ),
                       onPressed: _isLoading ? null : _handleLogin,
@@ -428,7 +428,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                           _isLogin = false;
                           _errorMessage = '';
                         }),
-                        child: const Text('Sign Up', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                        child: Text('Sign Up', style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
@@ -483,7 +483,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                     value: _selectedRole,
                     decoration: InputDecoration(
                       labelText: 'Role Type',
-                      prefixIcon: const Icon(Icons.supervisor_account, color: Colors.green),
+                      prefixIcon: Icon(Icons.supervisor_account, color: Theme.of(context).primaryColor),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                     ),
                     items: const [
@@ -534,7 +534,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                       value: _businessType,
                       decoration: InputDecoration(
                         labelText: 'Business Type',
-                        prefixIcon: const Icon(Icons.store, color: Colors.green),
+                        prefixIcon: Icon(Icons.store, color: Theme.of(context).primaryColor),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                       ),
                       items: const [
@@ -568,7 +568,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                       value: _vehicleType,
                       decoration: InputDecoration(
                         labelText: 'Vehicle Type',
-                        prefixIcon: const Icon(Icons.local_shipping, color: Colors.green),
+                        prefixIcon: Icon(Icons.local_shipping, color: Theme.of(context).primaryColor),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                       ),
                       items: const [
@@ -601,7 +601,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                     height: 50,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
+                        backgroundColor: Theme.of(context).primaryColor,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                       ),
                       onPressed: _isLoading ? null : _handleSignup,
@@ -620,7 +620,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                           _isLogin = true;
                           _errorMessage = '';
                         }),
-                        child: const Text('Sign In', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                        child: Text('Sign In', style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),

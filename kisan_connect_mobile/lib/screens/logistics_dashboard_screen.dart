@@ -236,7 +236,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Logistics Console 🚚', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.green)),
+        title: Text('Logistics Console 🚚', style: TextStyle(fontWeight: FontWeight.w900, color: Theme.of(context).primaryColor)),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -245,8 +245,8 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
         ],
         bottom: TabBar(
           controller: _tabController,
-          labelColor: Colors.green,
-          indicatorColor: Colors.green,
+          labelColor: Theme.of(context).primaryColor,
+          indicatorColor: Theme.of(context).primaryColor,
           tabs: const [
             Tab(text: '🔔 Job Alerts'),
             Tab(text: '🚚 Active Route'),
@@ -286,7 +286,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
                                       mainAxisAlignment: MainAxisAlignment.end,
                                       children: [
                                         ElevatedButton(
-                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                          style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
                                           onPressed: () => _acceptJob(job['id']),
                                           child: const Text('Accept Job', style: TextStyle(color: Colors.white)),
                                         )
@@ -327,7 +327,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
                                       SizedBox(
                                         width: double.infinity,
                                         child: ElevatedButton(
-                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                          style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
                                           onPressed: () => _updateStatusPickedUp(_activeDelivery!['id']),
                                           child: const Text('Mark as Picked Up', style: TextStyle(color: Colors.white)),
                                         ),
@@ -350,7 +350,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
                                               ),
                                               const SizedBox(width: 8),
                                               ElevatedButton(
-                                                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                                style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
                                                 onPressed: () => _verifyOtpDelivery(_activeDelivery!['id']),
                                                 child: const Text('Confirm', style: TextStyle(color: Colors.white)),
                                               ),
@@ -398,7 +398,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
                                               point: _pickupCoords!,
                                               width: 32,
                                               height: 32,
-                                              child: const Icon(Icons.location_on, color: Colors.green, size: 30),
+                                              child: Icon(Icons.location_on, color: Theme.of(context).colorScheme.secondary, size: 30),
                                             ),
                                           if (_destCoords != null)
                                             Marker(
@@ -432,7 +432,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
                                     bottom: 12,
                                     right: 12,
                                     child: FloatingActionButton.extended(
-                                      backgroundColor: Colors.green,
+                                      backgroundColor: Theme.of(context).primaryColor,
                                       icon: const Icon(Icons.alt_route, color: Colors.white),
                                       label: const Text('Recalculate Route', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                                       onPressed: () => _recalculateRoute(_activeDelivery!['id']),
@@ -485,7 +485,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
                         width: double.infinity,
                         height: 48,
                         child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                          style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
                           onPressed: _updateProfile,
                           child: const Text('Save Details', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         ),

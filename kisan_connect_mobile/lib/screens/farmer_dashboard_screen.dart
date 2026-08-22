@@ -366,7 +366,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
                     x: idx,
                     barRods: [
                       BarChartRodData(toY: data['mandi'] as double, color: Colors.grey.shade400, width: 8, borderRadius: BorderRadius.circular(2)),
-                      BarChartRodData(toY: data['kisan'] as double, color: Colors.green, width: 8, borderRadius: BorderRadius.circular(2)),
+                      BarChartRodData(toY: data['kisan'] as double, color: Theme.of(context).colorScheme.secondary, width: 8, borderRadius: BorderRadius.circular(2)),
                       BarChartRodData(toY: data['retail'] as double, color: Colors.amber, width: 8, borderRadius: BorderRadius.circular(2)),
                     ],
                   );
@@ -380,7 +380,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _legendItem('Mandi Rate', Colors.grey.shade400),
-              _legendItem('KisanConnect Direct', Colors.green),
+              _legendItem('KisanConnect Direct', Theme.of(context).colorScheme.secondary),
               _legendItem('Retail Store', Colors.amber),
             ],
           )
@@ -594,7 +594,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
                   onPressed: _addListing,
                   child: const Text('Publish Listing', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
@@ -678,7 +678,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
                   onPressed: _createContract,
                   child: const Text('Create Contract', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
@@ -706,7 +706,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
             onPressed: () {
               Navigator.pop(ctx);
               _respondQuote(quoteId, 'counter', counterPrice: double.tryParse(_counterPriceCtrl.text));
@@ -744,7 +744,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
             onPressed: () => _submitBulkOffer(req['id']),
             child: const Text('Submit Offer', style: TextStyle(color: Colors.white)),
           ),
@@ -759,7 +759,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Farmer Console 🌾', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.green)),
+        title: Text('Farmer Console 🌾', style: TextStyle(fontWeight: FontWeight.w900, color: Theme.of(context).primaryColor)),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -768,8 +768,8 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
         ],
         bottom: TabBar(
           controller: _tabController,
-          labelColor: Colors.green,
-          indicatorColor: Colors.green,
+          labelColor: Theme.of(context).primaryColor,
+          indicatorColor: Theme.of(context).primaryColor,
           isScrollable: true,
           tabs: const [
             Tab(text: '📈 Overview'),
@@ -811,7 +811,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
                           else if (user['kyc_status'] == 'approved')
                             _buildKycBanner(
                               'KYC verified successfully. Account fully operational.',
-                              Colors.green,
+                              Theme.of(context).colorScheme.secondary,
                               false,
                             )
                         ],
@@ -824,7 +824,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
                             crossAxisCount: 2,
                             childAspectRatio: 2.2,
                             children: [
-                              _buildStatCard('Total Earnings', '₹${_stats!['total_earnings']?.toStringAsFixed(2) ?? '0.00'}', Icons.currency_rupee, Colors.green),
+                              _buildStatCard('Total Earnings', '₹${_stats!['total_earnings']?.toStringAsFixed(2) ?? '0.00'}', Icons.currency_rupee, Theme.of(context).primaryColor),
                               _buildStatCard('Pending Orders', '${_stats!['total_orders_received'] ?? 0}', Icons.schedule, Colors.amber),
                               _buildStatCard('Active listings', '${_listings.length}', Icons.grass, Colors.blue),
                               _buildStatCard('Total Yield Sold', '${_stats!['total_yield_sold'] ?? 0} items', Icons.local_mall, Colors.indigo),
@@ -848,7 +848,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
                         child: SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
                             icon: const Icon(Icons.add, color: Colors.white),
                             label: const Text('Add Fresh Crop Listing', style: TextStyle(color: Colors.white)),
                             onPressed: _showAddCropDialog,
@@ -928,7 +928,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
                                           ),
                                           const SizedBox(width: 8),
                                           ElevatedButton(
-                                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
                                             onPressed: () => _respondQuote(q['id'], 'accept'),
                                             child: const Text('Accept', style: TextStyle(color: Colors.white)),
                                           ),
@@ -964,7 +964,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
                                   ],
                                 ),
                                 trailing: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                  style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
                                   onPressed: () => _showSubmitBidDialog(req),
                                   child: const Text('Bid/Offer', style: TextStyle(color: Colors.white, fontSize: 11)),
                                 ),
@@ -984,7 +984,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
                         child: SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
                             icon: const Icon(Icons.edit_note, color: Colors.white),
                             label: const Text('Create Pre-Harvest Forward Contract', style: TextStyle(color: Colors.white)),
                             onPressed: _showContractDialog,
@@ -1074,7 +1074,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
                   onPressed: _submitKyc,
                   child: const Text('Verify', style: TextStyle(color: Colors.white)),
                 )

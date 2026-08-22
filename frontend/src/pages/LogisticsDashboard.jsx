@@ -97,6 +97,7 @@ const LogisticsDashboard = () => {
   const [successMsg, setSuccessMsg] = useState('');
   const [otpInputs, setOtpInputs] = useState({});
   const [otpErrors, setOtpErrors] = useState({});
+  const [handoverLoading, setHandoverLoading] = useState(null);
 
   // Route Planning & Geolocation state
   const [activeDeliveryData, setActiveDeliveryData] = useState(null);
@@ -220,6 +221,21 @@ const LogisticsDashboard = () => {
       } else {
         showError(errorMsg);
       }
+    }
+  };
+
+  const handleConfirmHandover = async (shipmentId) => {
+    setHandoverLoading(shipmentId);
+    try {
+      const res = await api.post(`/logistics/shipments/${shipmentId}/confirm-handover/`);
+      showSuccess(res.data.message || '🤝 Physical handover confirmed! Order cancellation is locked.');
+      fetchShipments();
+      fetchStats();
+      fetchActiveDeliveryRoute();
+    } catch (err) {
+      showError(err.response?.data?.error || 'Failed to confirm physical handover.');
+    } finally {
+      setHandoverLoading(null);
     }
   };
 
@@ -637,10 +653,15 @@ const LogisticsDashboard = () => {
                           </div>
                           <button
                             onClick={() => handleConfirmHandover(job.id)}
-                            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2 text-sm active:scale-[0.99]"
+                            disabled={handoverLoading === job.id}
+                            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2 text-sm active:scale-[0.99] disabled:opacity-60 cursor-pointer"
                           >
-                            <Package className="h-4 w-4" />
-                            Confirm Physical Handover
+                            {handoverLoading === job.id ? (
+                              <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            ) : (
+                              <Package className="h-4 w-4" />
+                            )}
+                            {handoverLoading === job.id ? 'Confirming Handover...' : 'Confirm Physical Handover'}
                           </button>
                         </div>
                       )}

@@ -196,7 +196,7 @@ const FarmerDashboard = () => {
       const response = await api.patch(`/orders/${orderId}/status/`, { status: newStatus });
       setOrders(orders.map(o => o.id === orderId ? { ...o, status: response.data.status } : o));
     } catch (err) {
-      alert('Error updating order status');
+      alert(err.response?.data?.error || 'Error updating order status');
     }
   };
 
