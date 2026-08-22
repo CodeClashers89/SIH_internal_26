@@ -81,7 +81,7 @@ const FarmerDashboard = () => {
         api.get('/orders/bulk-requirements/'),
         api.get('/orders/farmer-offers/'),
         api.get('/orders/pre-harvest-contracts/'),
-        api.get('/pricing/markets/')
+        api.get('/market-prices/markets/')
       ]);
       setStats(statsRes.data);
       setListings(listingsRes.data);

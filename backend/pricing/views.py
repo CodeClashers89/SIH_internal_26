@@ -9,6 +9,11 @@ class MarketViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.AllowAny]
     
     def get_queryset(self):
+        # Trigger automatic sync if the DB is completely empty
+        if Market.objects.filter(is_active=True).count() == 0:
+            from .services import sync_agmarknet_data
+            sync_agmarknet_data()
+
         queryset = Market.objects.filter(is_active=True)
         
         state = self.request.query_params.get('state')
@@ -22,16 +27,8 @@ class MarketViewSet(viewsets.ReadOnlyModelViewSet):
         # Optional: Filter by commodity by checking if market has related prices
         commodity = self.request.query_params.get('commodity')
         if commodity:
+            # We can still filter DB if we have cached relation, or return all
             queryset = queryset.filter(prices__commodity__icontains=commodity).distinct()
-            
-        # If detail view, prefetch prices so they load efficiently
-        if self.action == 'retrieve':
-            # Pre-filter prefetch if commodity param is passed to detail view
-            if commodity:
-                prefetch = Prefetch('prices', queryset=MarketPrice.objects.filter(commodity__icontains=commodity).order_by('-reported_date'))
-            else:
-                prefetch = Prefetch('prices', queryset=MarketPrice.objects.order_by('-reported_date'))
-            queryset = queryset.prefetch_related(prefetch)
             
         return queryset
 
@@ -40,17 +37,31 @@ class MarketViewSet(viewsets.ReadOnlyModelViewSet):
             return MarketListSerializer
         return MarketSerializer
 
-    @action(detail=True, methods=['get'])
-    def prices(self, request, pk=None):
+    def retrieve(self, request, *args, **kwargs):
         market = self.get_object()
-        prices = market.prices.all().order_by('-reported_date')
+        from .services import fetch_live_market_prices
+        live_prices = fetch_live_market_prices(market.name, market.district, market.state)
         
         commodity = request.query_params.get('commodity')
         if commodity:
-            prices = prices.filter(commodity__icontains=commodity)
+            live_prices = [p for p in live_prices if commodity.lower() in p['commodity'].lower()]
             
-        serializer = MarketPriceSerializer(prices, many=True)
-        return Response(serializer.data)
+        serializer = self.get_serializer(market)
+        data = serializer.data
+        data['prices'] = live_prices
+        return Response(data)
+
+    @action(detail=True, methods=['get'])
+    def prices(self, request, pk=None):
+        market = self.get_object()
+        from .services import fetch_live_market_prices
+        live_prices = fetch_live_market_prices(market.name, market.district, market.state)
+        
+        commodity = request.query_params.get('commodity')
+        if commodity:
+            live_prices = [p for p in live_prices if commodity.lower() in p['commodity'].lower()]
+            
+        return Response(live_prices)
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAdminUser])
     def sync(self, request):

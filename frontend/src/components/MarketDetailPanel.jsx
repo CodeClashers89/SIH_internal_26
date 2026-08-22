@@ -13,7 +13,7 @@ const MarketDetailPanel = ({ market, onClose }) => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(`http://localhost:8000/api/pricing/markets/${market.id}/prices/`);
+        const response = await fetch(`http://localhost:8000/api/market-prices/markets/${market.id}/prices/`);
         if (!response.ok) throw new Error("Failed to fetch market data");
         const data = await response.json();
         setPrices(data);

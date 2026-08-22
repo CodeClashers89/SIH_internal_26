@@ -86,7 +86,7 @@ const NearestMandiExplorer = ({ markets, onSelectMarketOnMap }) => {
   const fetchMarketPrices = async (marketId) => {
     setPricesLoading(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/pricing/markets/${marketId}/prices/`);
+      const response = await fetch(`http://localhost:8000/api/market-prices/markets/${marketId}/prices/`);
       if (!response.ok) throw new Error();
       const data = await response.json();
       setPrices(data);
