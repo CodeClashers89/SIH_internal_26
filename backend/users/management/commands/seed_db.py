@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from products.models import Product
 from orders.models import Order, OrderItem, QuoteRequest, BulkRequirement, PreHarvestContract
-from logistics.models import LogisticsPartner
+from logistics.models import LogisticsPartner, DeliveryShipment
 from pricing.models import Market, MarketPrice
 from reviews.models import Review
 from decimal import Decimal
@@ -18,6 +18,7 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         self.stdout.write("Clearing existing data...")
         Review.objects.all().delete()
+        DeliveryShipment.objects.all().delete()
         PreHarvestContract.objects.all().delete()
         QuoteRequest.objects.all().delete()
         BulkRequirement.objects.all().delete()
@@ -166,6 +167,7 @@ class Command(BaseCommand):
         sync_agmarknet_data()
 
         self.stdout.write("Creating products...")
+        # Farmer 1 Products
         p1 = Product.objects.create(
             farmer=farmer1,
             name="Organic Red Tomatoes",
@@ -178,7 +180,6 @@ class Command(BaseCommand):
             description="Freshly harvested organic vine tomatoes from Khed village.",
             image_url="https://images.unsplash.com/photo-1595855759920-86582396756a?auto=format&fit=crop&q=80&w=600"
         )
-
         p2 = Product.objects.create(
             farmer=farmer1,
             name="Fresh Jyoti Potatoes",
@@ -191,38 +192,11 @@ class Command(BaseCommand):
             description="Perfect grading potatoes, suitable for table use or chips processing.",
             image_url="https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&q=80&w=600"
         )
-
         p3 = Product.objects.create(
-            farmer=farmer2,
-            name="Sharbati Premium Wheat",
-            category="grains",
-            quantity=50.0,
-            unit="quintal",
-            price_per_unit=2200.00,
-            harvest_date=today - timedelta(days=15),
-            expiry_date=today + timedelta(days=360),
-            description="Sun-dried rich gold Sharbati wheat from Junnar valley.",
-            image_url="https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&q=80&w=600"
-        )
-
-        p4 = Product.objects.create(
-            farmer=farmer2,
-            name="Nashik Red Onions",
-            category="vegetables",
-            quantity=800.0,
-            unit="kg",
-            price_per_unit=22.00,
-            harvest_date=today - timedelta(days=3),
-            expiry_date=today + timedelta(days=20),
-            description="Medium size crisp onions direct from Junnar farms.",
-            image_url="https://images.unsplash.com/photo-1618512496248-a07fe83766ac?auto=format&fit=crop&q=80&w=600"
-        )
-
-        p5 = Product.objects.create(
             farmer=farmer1,
-            name="Alphonso Mangoes (Semi-Ripe)",
+            name="Alphonso Mangoes",
             category="fruits",
-            quantity=120.0,
+            quantity=200.0,
             unit="piece",
             price_per_unit=60.00,
             harvest_date=today - timedelta(days=1),
@@ -230,22 +204,135 @@ class Command(BaseCommand):
             description="Carbide-free naturally ripened premium Hapus mangoes.",
             image_url="https://images.unsplash.com/photo-1553279768-865429fa0078?auto=format&fit=crop&q=80&w=600"
         )
+        p4 = Product.objects.create(
+            farmer=farmer1,
+            name="Fresh Cabbage",
+            category="vegetables",
+            quantity=600.0,
+            unit="kg",
+            price_per_unit=15.00,
+            harvest_date=today - timedelta(days=2),
+            expiry_date=today + timedelta(days=10),
+            description="Crisp green cabbage harvested early morning.",
+            image_url="https://images.unsplash.com/photo-1581078426770-6d336e5de7bf?auto=format&fit=crop&q=80&w=600"
+        )
+        p5 = Product.objects.create(
+            farmer=farmer1,
+            name="Farm Cauliflower",
+            category="vegetables",
+            quantity=400.0,
+            unit="kg",
+            price_per_unit=22.00,
+            harvest_date=today - timedelta(days=3),
+            expiry_date=today + timedelta(days=8),
+            description="Pesticide-free white cauliflower heads.",
+            image_url="https://images.unsplash.com/photo-1568584711299-fd824941efc6?auto=format&fit=crop&q=80&w=600"
+        )
+        p6 = Product.objects.create(
+            farmer=farmer1,
+            name="Sweet Red Carrots",
+            category="vegetables",
+            quantity=800.0,
+            unit="kg",
+            price_per_unit=20.00,
+            harvest_date=today - timedelta(days=4),
+            expiry_date=today + timedelta(days=15),
+            description="Juicy native winter carrots direct from farms.",
+            image_url="https://images.unsplash.com/photo-1590865507245-562a1628d097?auto=format&fit=crop&q=80&w=600"
+        )
+
+        # Farmer 2 Products
+        p7 = Product.objects.create(
+            farmer=farmer2,
+            name="Sharbati Premium Wheat",
+            category="grains",
+            quantity=80.0,
+            unit="quintal",
+            price_per_unit=2200.00,
+            harvest_date=today - timedelta(days=15),
+            expiry_date=today + timedelta(days=360),
+            description="Sun-dried rich gold Sharbati wheat from Junnar valley.",
+            image_url="https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&q=80&w=600"
+        )
+        p8 = Product.objects.create(
+            farmer=farmer2,
+            name="Nashik Red Onions",
+            category="vegetables",
+            quantity=1200.0,
+            unit="kg",
+            price_per_unit=22.00,
+            harvest_date=today - timedelta(days=3),
+            expiry_date=today + timedelta(days=20),
+            description="Medium size crisp onions direct from Junnar farms.",
+            image_url="https://images.unsplash.com/photo-1618512496248-a07fe83766ac?auto=format&fit=crop&q=80&w=600"
+        )
+        p9 = Product.objects.create(
+            farmer=farmer2,
+            name="Dry Garlic Bulbs",
+            category="vegetables",
+            quantity=300.0,
+            unit="kg",
+            price_per_unit=110.00,
+            harvest_date=today - timedelta(days=10),
+            expiry_date=today + timedelta(days=90),
+            description="Premium pungent dry garlic bulbs.",
+            image_url="https://images.unsplash.com/photo-1540148426945-6cf22a6b2383?auto=format&fit=crop&q=80&w=600"
+        )
+        p10 = Product.objects.create(
+            farmer=farmer2,
+            name="Organic Ginger Roots",
+            category="vegetables",
+            quantity=500.0,
+            unit="kg",
+            price_per_unit=75.00,
+            harvest_date=today - timedelta(days=6),
+            expiry_date=today + timedelta(days=45),
+            description="Fresh spicy native ginger roots.",
+            image_url="https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&q=80&w=600"
+        )
+        p11 = Product.objects.create(
+            farmer=farmer2,
+            name="Premium Basmati Paddy",
+            category="grains",
+            quantity=100.0,
+            unit="quintal",
+            price_per_unit=3200.00,
+            harvest_date=today - timedelta(days=20),
+            expiry_date=today + timedelta(days=270),
+            description="Aromatic Basmati rice paddy grains.",
+            image_url="https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&q=80&w=600"
+        )
+        p12 = Product.objects.create(
+            farmer=farmer2,
+            name="Natural Mustard Seeds",
+            category="grains",
+            quantity=40.0,
+            unit="quintal",
+            price_per_unit=4800.00,
+            harvest_date=today - timedelta(days=12),
+            expiry_date=today + timedelta(days=360),
+            description="High oil content natural yellow mustard seeds.",
+            image_url="https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&q=80&w=600"
+        )
+
+        all_products = [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12]
 
         self.stdout.write("Creating historical orders for demand forecasting chart...")
-        # Create orders over the last 30 days
+        # Create multiple orders per day over the last 30 days to build "High Data"
         for i in range(30):
             past_date = timezone.now() - timedelta(days=i)
-            # 50% chance of an order on this day
-            if random.choice([True, False]):
-                total_qty = random.randint(5, 50)
-                selected_product = random.choice([p1, p2, p4, p5])
+            # Create 1 to 3 orders for each day
+            for _ in range(random.randint(1, 3)):
+                total_qty = random.randint(10, 100)
+                selected_product = random.choice(all_products)
                 cost = selected_product.price_per_unit * total_qty
                 
+                order_status = random.choice(['placed', 'delivered'])
                 order = Order.objects.create(
                     buyer=consumer1,
                     total_amount=cost,
-                    status=random.choice(['placed', 'delivered']),
-                    shipping_address="Pune Central, Maharashtra",
+                    status=order_status,
+                    shipping_address=f"Flat {random.randint(101, 909)}, Central Society, Pune",
                     shipping_pincode="411002",
                     payment_status='paid',
                     payment_id=f"pay_mock_{random.randint(100000, 999999)}"
@@ -260,6 +347,81 @@ class Command(BaseCommand):
                 
                 # Update the order's created_at to the past date (bypassing auto_now_add)
                 Order.objects.filter(id=order.id).update(created_at=past_date)
+
+                # Create DeliveryShipment for the order
+                if order_status == 'delivered':
+                    DeliveryShipment.objects.create(
+                        order=order,
+                        partner=partner1,
+                        pickup_address=f"Village Farm Pick-up point, Pune",
+                        delivery_address=order.shipping_address,
+                        distance_km=Decimal(random.randint(15, 60)),
+                        status='delivered',
+                        shipped_at=past_date - timedelta(hours=3),
+                        delivered_at=past_date
+                    )
+                else:
+                    DeliveryShipment.objects.create(
+                        order=order,
+                        partner=None,
+                        pickup_address=f"Village Farm Pick-up point, Pune",
+                        delivery_address=order.shipping_address,
+                        distance_km=Decimal(random.randint(15, 60)),
+                        status='assigned'
+                    )
+
+        # Create active shipments for driver1
+        self.stdout.write("Creating active shipments for driver1...")
+        active_statuses = [
+            ('assigned', 'confirmed', 'Aundh Road, Pune', '28.5'),
+            ('assigned', 'confirmed', 'Wakad Bypass, Pune', '32.1'),
+            ('assigned', 'confirmed', 'Baner Main St, Pune', '19.4'),
+            ('picked_up', 'in_transit', 'Kothrud, Pune', '35.2'),
+            ('picked_up', 'in_transit', 'Viman Nagar, Pune', '44.8'),
+            ('picked_up', 'in_transit', 'Hadapsar MIDC, Pune', '25.6'),
+            ('handover_completed', 'packed', 'Shivajinagar, Pune', '15.0'),
+            ('handover_completed', 'packed', 'Pimple Saudagar, Pune', '29.3'),
+        ]
+
+        for idx, (ds_status, order_status, address, dist) in enumerate(active_statuses):
+            prod = random.choice(all_products)
+            qty = random.randint(10, 50)
+            cost = prod.price_per_unit * qty
+            
+            o = Order.objects.create(
+                buyer=consumer1,
+                total_amount=cost,
+                status=order_status,
+                shipping_address=address,
+                shipping_pincode="411002",
+                payment_status='paid',
+                payment_id=f"pay_mock_active_{idx}"
+            )
+            OrderItem.objects.create(
+                order=o,
+                product=prod,
+                quantity=qty,
+                price=prod.price_per_unit
+            )
+            
+            ds = DeliveryShipment.objects.create(
+                order=o,
+                partner=partner1,
+                pickup_address="Village Khed operations center",
+                delivery_address=address,
+                distance_km=Decimal(dist),
+                status=ds_status
+            )
+            if ds_status == 'picked_up':
+                ds.shipped_at = timezone.now() - timedelta(minutes=45)
+                ds.save()
+            elif ds_status == 'handover_completed':
+                ds.handover_completed_at = timezone.now() - timedelta(minutes=15)
+                ds.handover_confirmed_by = farmer1
+                ds.save()
+                o.cancellation_locked = True
+                o.cancellation_locked_at = timezone.now() - timedelta(minutes=15)
+                o.save()
 
         self.stdout.write("Creating farmer reviews...")
         Review.objects.create(
@@ -282,92 +444,74 @@ class Command(BaseCommand):
         )
 
         self.stdout.write("Creating Quote Requests (Wholesale Bid Negotiations)...")
-        # 3 quotes for farmer1 and farmer2
-        QuoteRequest.objects.create(
-            buyer=bulk_buyer1,
-            product=p1, # Organic Red Tomatoes
-            quantity=250.00,
-            target_price=22.00,
-            status='pending'
-        )
-        QuoteRequest.objects.create(
-            buyer=bulk_buyer1,
-            product=p2, # Fresh Jyoti Potatoes
-            quantity=1000.00,
-            target_price=15.00,
-            offered_price=16.50,
-            status='offered'
-        )
-        QuoteRequest.objects.create(
-            buyer=bulk_buyer1,
-            product=p4, # Nashik Red Onions
-            quantity=500.00,
-            target_price=19.00,
-            status='pending'
-        )
+        # 8 quotes for farmer1 and farmer2
+        quotes_data = [
+            (p1, 200, 23.00, None, 'pending'),
+            (p2, 1000, 15.00, 16.50, 'offered'),
+            (p4, 500, 19.00, None, 'pending'),
+            (p5, 300, 18.00, 20.00, 'offered'),
+            (p7, 50, 2100.00, 2150.00, 'accepted'),
+            (p8, 800, 18.00, None, 'pending'),
+            (p9, 200, 100.00, 105.00, 'offered'),
+            (p10, 400, 70.00, None, 'pending'),
+        ]
+        for prod, qty, target, offered, q_status in quotes_data:
+            QuoteRequest.objects.create(
+                buyer=bulk_buyer1,
+                product=prod,
+                quantity=Decimal(qty),
+                target_price=Decimal(target),
+                offered_price=Decimal(offered) if offered else None,
+                status=q_status
+            )
 
         self.stdout.write("Creating Bulk Requirements (Reverse Sourcing)...")
-        # 3 bulk demands from bulk buyer
-        BulkRequirement.objects.create(
-            buyer=bulk_buyer1,
-            crop_name="Tomato",
-            variety="Local",
-            quantity=1500.00,
-            unit="kg",
-            grade="FAQ",
-            required_date=today + timedelta(days=7),
-            target_price_min=18.00,
-            target_price_max=22.00,
-            location="Pune MIDC Delivery Hub",
-            status='pending'
-        )
-        BulkRequirement.objects.create(
-            buyer=bulk_buyer1,
-            crop_name="Potato",
-            variety="Jyoti",
-            quantity=5000.00,
-            unit="kg",
-            grade="A",
-            required_date=today + timedelta(days=12),
-            target_price_min=14.00,
-            target_price_max=17.00,
-            location="Junnar Processing Unit",
-            status='pending'
-        )
-        BulkRequirement.objects.create(
-            buyer=bulk_buyer1,
-            crop_name="Onion",
-            variety="Red",
-            quantity=3000.00,
-            unit="kg",
-            grade="FAQ",
-            required_date=today + timedelta(days=5),
-            target_price_min=20.00,
-            target_price_max=25.00,
-            location="Chakan Cold Storage",
-            status='pending'
-        )
+        # 8 bulk demands from bulk buyer
+        reqs_data = [
+            ("Tomato", "Local", 1500, 18.00, 22.00, "Pune MIDC Delivery Hub"),
+            ("Potato", "Jyoti", 5000, 14.00, 17.00, "Junnar Processing Unit"),
+            ("Onion", "Red", 3000, 20.00, 25.00, "Chakan Cold Storage"),
+            ("Garlic", "Local", 1000, 95.00, 115.00, "Hadapsar Spices Market"),
+            ("Ginger", "Local", 2000, 65.00, 78.00, "Pune Wholesale Yard"),
+            ("Wheat", "Lokwan", 50, 2100.00, 2250.00, "MIDC Bhosari Food Park"),
+            ("Rice", "Basmati", 80, 5000.00, 5800.00, "Junnar Rice Mills"),
+            ("Apple", "Kashmiri", 1500, 80.00, 95.00, "Pune Cold Chain Hub"),
+        ]
+        for crop, var, qty, p_min, p_max, loc in reqs_data:
+            BulkRequirement.objects.create(
+                buyer=bulk_buyer1,
+                crop_name=crop,
+                variety=var,
+                quantity=Decimal(qty),
+                unit="quintal" if crop in ["Wheat", "Rice"] else "kg",
+                grade="A" if qty > 2000 else "FAQ",
+                required_date=today + timedelta(days=random.randint(5, 20)),
+                target_price_min=Decimal(p_min),
+                target_price_max=Decimal(p_max),
+                location=loc,
+                status='pending'
+            )
 
         self.stdout.write("Creating Pre-Harvest Contracts...")
-        # 2 pre harvest contracts
-        PreHarvestContract.objects.create(
-            farmer=farmer1,
-            buyer=bulk_buyer1,
-            crop_name="Premium Basmati Paddy",
-            expected_quantity=40.00,
-            unit="quintal",
-            contract_price=3500.00,
-            expected_harvest_date=today + timedelta(days=60),
-            status='accepted'
-        )
-        PreHarvestContract.objects.create(
-            farmer=farmer1,
-            crop_name="Organic Green Chilli",
-            expected_quantity=1000.00,
-            unit="kg",
-            contract_price=45.00,
-            expected_harvest_date=today + timedelta(days=45),
-            status='proposed'
-        )
+        # 6 pre harvest contracts
+        contracts_data = [
+            (farmer1, "Premium Basmati Paddy", 40.00, "quintal", 3500.00, today + timedelta(days=60), 'accepted'),
+            (farmer1, "Organic Green Chilli", 1000.00, "kg", 45.00, today + timedelta(days=45), 'proposed'),
+            (farmer2, "Lokwan Wheat Grains", 60.00, "quintal", 2150.00, today + timedelta(days=90), 'accepted'),
+            (farmer2, "Pungent Red Chilli", 500.00, "kg", 85.00, today + timedelta(days=30), 'proposed'),
+            (farmer1, "Vine Ripe Tomatoes", 2000.00, "kg", 20.00, today + timedelta(days=15), 'harvest_pending'),
+            (farmer2, "Robusta Bananas", 5000.00, "piece", 1.80, today + timedelta(days=40), 'ready'),
+        ]
+        for farm, crop, qty, unit, price, exp_date, c_status in contracts_data:
+            PreHarvestContract.objects.create(
+                farmer=farm,
+                buyer=bulk_buyer1 if c_status != 'proposed' else None,
+                crop_name=crop,
+                expected_quantity=Decimal(qty),
+                unit=unit,
+                contract_price=Decimal(price),
+                expected_harvest_date=exp_date,
+                status=c_status
+            )
 
         self.stdout.write(self.style.SUCCESS("Database seeded successfully!"))
