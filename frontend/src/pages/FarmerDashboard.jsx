@@ -5,6 +5,7 @@ import DemandForecastingChart from '../components/DemandForecastingChart';
 import Stepper from '../components/Stepper';
 import MarketMap from '../components/MarketMap';
 import MarketDetailPanel from '../components/MarketDetailPanel';
+import NearestMandiExplorer from '../components/NearestMandiExplorer';
 import { 
   Plus, Loader2, Calendar, FileCheck, Package, ShoppingBag, 
   DollarSign, RefreshCcw, Handshake, MapPin, PlusCircle, CheckCircle, Info, Award
@@ -855,19 +856,23 @@ const FarmerDashboard = () => {
       )}
 
       {activeSection === 'markets' && (
-        <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-6 relative flex flex-col md:flex-row gap-6">
-          <div className="flex-1">
-            <div>
-              <h3 className="font-bold text-lg text-slate-800">AGMARKNET Live Market Prices</h3>
-              <p className="text-xs text-slate-500 mb-4">Discover nearby markets and government-reported commodity prices.</p>
+        <div className="space-y-6">
+          <NearestMandiExplorer markets={markets} onSelectMarketOnMap={setSelectedMarket} />
+          
+          <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs relative flex flex-col md:flex-row gap-6">
+            <div className="flex-1">
+              <div>
+                <h3 className="font-bold text-lg text-slate-800">AGMARKNET Live Market Prices Map</h3>
+                <p className="text-xs text-slate-500 mb-4">Discover markets and government-reported commodity prices around India.</p>
+              </div>
+              <MarketMap markets={markets} onMarketSelect={setSelectedMarket} />
             </div>
-            <MarketMap markets={markets} onMarketSelect={setSelectedMarket} />
+            {selectedMarket && (
+              <div className="w-full md:w-1/3">
+                <MarketDetailPanel market={selectedMarket} onClose={() => setSelectedMarket(null)} />
+              </div>
+            )}
           </div>
-          {selectedMarket && (
-            <div className="w-full md:w-1/3">
-              <MarketDetailPanel market={selectedMarket} onClose={() => setSelectedMarket(null)} />
-            </div>
-          )}
         </div>
       )}
 
