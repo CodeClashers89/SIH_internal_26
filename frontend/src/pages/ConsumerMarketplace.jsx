@@ -6,6 +6,7 @@ import ProductCard from '../components/ProductCard';
 import ReviewWidget from '../components/ReviewWidget';
 import Stepper from '../components/Stepper';
 import CartDrawer from '../components/CartDrawer';
+import SubscriptionWidget from '../components/SubscriptionWidget';
 import {
   Search, MapPin, X, Loader2, ArrowRight, ShoppingBag,
   Truck, CheckCircle, CreditCard, Key, RefreshCw, Package,
@@ -189,6 +190,14 @@ const ConsumerMarketplace = () => {
               }`}
             >
               📦 My Orders
+            </button>
+            <button
+              onClick={() => setActiveTab('subscriptions')}
+              className={`pb-4 px-6 text-sm font-extrabold border-b-2 transition-all ${
+                activeTab === 'subscriptions' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              🔄 Subscriptions
             </button>
             <button
               onClick={() => setCartOpen(true)}
@@ -524,6 +533,11 @@ const ConsumerMarketplace = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Subscriptions Tab ── */}
+      {activeTab === 'subscriptions' && (
+        <SubscriptionWidget role="buyer" />
       )}
 
       {/* ── Product Detail Modal ── */}

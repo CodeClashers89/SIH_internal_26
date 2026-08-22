@@ -43,6 +43,88 @@ const BulkBuyerPortal = () => {
   const [sandboxOrder, setSandboxOrder] = useState(null);
   const [showPayModal, setShowPayModal] = useState(false);
 
+  // Subscriptions State
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [subCrop, setSubCrop] = useState('');
+  const [subQty, setSubQty] = useState('');
+  const [subPrice, setSubPrice] = useState('');
+  const [subDays, setSubDays] = useState('Daily');
+  const [submittingSub, setSubmittingSub] = useState(false);
+  const [subError, setSubError] = useState('');
+
+  const fetchSubscriptions = async () => {
+    try {
+      const res = await fetch(`http://localhost:8001/api/v1/subscription/list?buyer_id=${user.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSubscriptions(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch subscriptions', err);
+    }
+  };
+
+  const handleCreateSubscription = async (e) => {
+    e.preventDefault();
+    setSubmittingSub(true);
+    setSubError('');
+
+    const payload = {
+      buyer_profile: {
+        buyer_id: String(user.id),
+        name: user.username || "B2B Buyer",
+        delivery_address: "Registered Address"
+      },
+      schedule_matrix: {
+        recurring_days: [subDays]
+      },
+      items_breakdown: [
+        {
+          commodity_name: subCrop,
+          quantity: parseFloat(subQty),
+          unit: "kg",
+          price_per_unit: parseFloat(subPrice)
+        }
+      ]
+    };
+
+    try {
+      const res = await fetch('http://localhost:8001/api/v1/subscription/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        setSubCrop('');
+        setSubQty('');
+        setSubPrice('');
+        alert('Recurring Subscription created successfully!');
+        fetchSubscriptions();
+      } else {
+        setSubError('Failed to create subscription.');
+      }
+    } catch (err) {
+      setSubError('Network error connecting to subscription engine.');
+    } finally {
+      setSubmittingSub(false);
+    }
+  };
+
+  const handleToggleSubscription = async (subId, currentStatus) => {
+    try {
+      const res = await fetch('http://localhost:8001/api/v1/subscription/toggle-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription_id: subId, active: !currentStatus })
+      });
+      if (res.ok) {
+        fetchSubscriptions();
+      }
+    } catch (err) {
+      alert('Failed to toggle subscription status');
+    }
+  };
+
   const fetchPortalData = async () => {
     try {
       const [prodRes, quotesRes, reqRes, contractRes] = await Promise.allSettled([
@@ -81,6 +163,7 @@ const BulkBuyerPortal = () => {
   useEffect(() => {
     if (user) {
       fetchPortalData();
+      fetchSubscriptions();
     }
   }, [user]);
 
@@ -281,6 +364,16 @@ const BulkBuyerPortal = () => {
           }`}
         >
           Pre-Harvest Contracts ({preHarvestContracts.filter(c => c.status === 'proposed' || c.buyer === user.id).length})
+        </button>
+        <button
+          onClick={() => setActiveTab('subscriptions')}
+          className={`pb-4 text-sm font-bold border-b-2 transition-all ${
+            activeTab === 'subscriptions'
+              ? 'border-emerald-600 text-emerald-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Recurring Subscriptions ({subscriptions.length})
         </button>
       </div>
 
@@ -810,6 +903,97 @@ const BulkBuyerPortal = () => {
                         </span>
                       )
                     )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Recurring Subscriptions */}
+      {activeTab === 'subscriptions' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-1 bg-white border border-slate-100 rounded-3xl p-6 shadow-xs h-fit space-y-6">
+            <div>
+              <h3 className="font-bold text-base text-slate-800">New Subscription</h3>
+              <p className="text-[10px] text-slate-500 mt-1">Setup automated recurring orders for your restaurant/business.</p>
+            </div>
+            
+            {subError && (
+              <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 text-xs text-rose-600 font-semibold">
+                {subError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateSubscription} className="space-y-4 text-sm">
+              <div>
+                <label className="block text-slate-600 font-bold mb-1 text-xs uppercase">Produce Name</label>
+                <input required type="text" value={subCrop} onChange={e => setSubCrop(e.target.value)} className="w-full px-3 py-2 border rounded-xl" placeholder="e.g. Tomatoes" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1 text-xs uppercase">Quantity (kg)</label>
+                  <input required type="number" min="1" value={subQty} onChange={e => setSubQty(e.target.value)} className="w-full px-3 py-2 border rounded-xl" />
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1 text-xs uppercase">Est. Price/kg</label>
+                  <input required type="number" min="1" value={subPrice} onChange={e => setSubPrice(e.target.value)} className="w-full px-3 py-2 border rounded-xl" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-slate-600 font-bold mb-1 text-xs uppercase">Schedule</label>
+                <select value={subDays} onChange={e => setSubDays(e.target.value)} className="w-full px-3 py-2 border rounded-xl">
+                  <option value="Daily">Daily</option>
+                  <option value="Monday">Every Monday</option>
+                  <option value="Tuesday">Every Tuesday</option>
+                  <option value="Wednesday">Every Wednesday</option>
+                  <option value="Thursday">Every Thursday</option>
+                  <option value="Friday">Every Friday</option>
+                  <option value="Saturday">Every Saturday</option>
+                  <option value="Sunday">Every Sunday</option>
+                </select>
+              </div>
+              <button disabled={submittingSub} type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-all shadow-md">
+                {submittingSub ? 'Setting up...' : 'Create Subscription'}
+              </button>
+            </form>
+          </div>
+
+          <div className="lg:col-span-2 space-y-4">
+            {subscriptions.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-slate-100 p-12 text-center text-slate-400">
+                <Calendar className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                <p>No active recurring subscriptions found.</p>
+              </div>
+            ) : (
+              subscriptions.map(sub => (
+                <div key={sub.subscription_id} className={`bg-white rounded-3xl border ${sub.is_active ? 'border-emerald-200' : 'border-slate-200'} p-5 shadow-xs flex justify-between items-center`}>
+                  <div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sub.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                      {sub.is_active ? 'ACTIVE' : 'PAUSED'}
+                    </span>
+                    <h4 className="font-bold text-lg text-slate-800 mt-2">
+                      {sub.items_breakdown[0].quantity} {sub.items_breakdown[0].unit} {sub.items_breakdown[0].commodity_name}
+                    </h4>
+                    <p className="text-xs text-slate-500 flex items-center gap-2 mt-1">
+                      <Calendar className="h-3.5 w-3.5" />
+                      {sub.schedule_matrix.recurring_days.join(', ')}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-black text-slate-800">
+                      ₹{sub.billing_summary.weekly_estimate.toFixed(2)} <span className="text-[10px] text-slate-400 font-medium">/ week</span>
+                    </div>
+                    {sub.billing_summary.discount_applied_pct > 0 && (
+                      <div className="text-[10px] text-emerald-600 font-bold mb-2">10% Volume Discount Applied!</div>
+                    )}
+                    <button 
+                      onClick={() => handleToggleSubscription(sub.subscription_id, sub.is_active)}
+                      className={`text-xs font-bold px-4 py-1.5 rounded-lg border ${sub.is_active ? 'border-rose-200 text-rose-600 hover:bg-rose-50' : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50'}`}
+                    >
+                      {sub.is_active ? 'Pause Schedule' : 'Resume Schedule'}
+                    </button>
                   </div>
                 </div>
               ))
