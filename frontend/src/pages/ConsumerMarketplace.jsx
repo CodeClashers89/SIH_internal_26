@@ -98,6 +98,21 @@ const ConsumerMarketplace = () => {
   };
 
   // ── Retry payment for unpaid orders ──────────────────────────────────────
+  const handleCancelOrder = async (orderId) => {
+    if (!window.confirm("Are you sure you want to cancel this order?")) return;
+    try {
+      await api.patch(`/orders/${orderId}/status/`, { status: 'cancelled' });
+      fetchOrders();
+      alert("Order cancelled successfully.");
+    } catch (err) {
+      if (err.response?.data?.error === 'CANCELLATION_LOCKED_AFTER_TRANSPORT_HANDOVER') {
+        alert("CANCELLATION LOCKED: This order can no longer be cancelled because the produce has already been handed over to the transport partner.");
+      } else {
+        alert(err.response?.data?.error || "Failed to cancel order.");
+      }
+    }
+  };
+
   const handleRetryPayment = async (order) => {
     setRetryLoading(true);
     try {
@@ -441,6 +456,29 @@ const ConsumerMarketplace = () => {
                       <Stepper currentStatus={o.status} />
                     </div>
                   </div>
+
+                  <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+                    {!o.cancellation_locked && o.status !== 'cancelled' && o.status !== 'delivered' && (
+                      <button 
+                        onClick={() => handleCancelOrder(o.id)}
+                        className="px-4 py-2 bg-rose-50 text-rose-600 font-semibold text-xs rounded-xl hover:bg-rose-100 transition-colors"
+                      >
+                        Cancel Order
+                      </button>
+                    )}
+                    {o.cancellation_locked && o.status !== 'delivered' && o.status !== 'cancelled' && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-semibold text-rose-600 bg-rose-50 px-3 py-2 rounded-xl">Cancellation Locked</span>
+                        <button 
+                          onClick={() => alert("Post-handover resolution feature coming soon.")}
+                          className="px-4 py-2 bg-indigo-50 text-indigo-600 font-semibold text-xs rounded-xl hover:bg-indigo-100 transition-colors"
+                        >
+                          Request Resolution
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 </div>
               </div>
             ))

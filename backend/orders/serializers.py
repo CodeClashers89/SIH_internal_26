@@ -55,6 +55,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'product_subtotal', 'shipping_charge', 'total_amount',
             'status', 'shipping_address', 'shipping_pincode',
             'payment_status', 'payment_id', 'razorpay_order_id',
+            'cancellation_locked', 'cancellation_locked_at',
             'items', 'shipment', 'created_at', 'updated_at'
         )
         read_only_fields = (

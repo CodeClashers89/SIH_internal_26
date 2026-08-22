@@ -10,6 +10,7 @@ from decimal import Decimal
 from .models import LogisticsPartner, DeliveryShipment
 from .serializers import LogisticsPartnerSerializer, DeliveryShipmentSerializer
 from .email_service import send_delivery_otp_email
+from control_tower.models import OperationalEvent
 from users.permissions import IsAdmin
 
 # Earnings rate per km (in INR)
@@ -155,6 +156,50 @@ class DeliveryShipmentViewSet(viewsets.ModelViewSet):
 
         print(f"[LOGISTICS] Driver '{user.username}' (partner #{partner.id}) accepted shipment #{shipment.id} for order #{shipment.order_id}. OTP Email: {email_info}")
         return Response(DeliveryShipmentSerializer(shipment).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='confirm-handover')
+    @transaction.atomic
+    def confirm_handover(self, request, pk=None):
+        shipment = self.get_object()
+        user = request.user
+        
+        # Verify permissions: For example, an FPO operator or the assigned driver
+        # Simplified: any authenticated user involved in operations can confirm for now
+        # You can tighten this based on actual roles
+        
+        if shipment.status not in ['assigned']:
+            return Response(
+                {'error': 'Handover can only be confirmed for shipments currently assigned and not yet picked up or delivered.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        shipment.status = 'handover_completed'
+        shipment.handover_completed_at = timezone.now()
+        shipment.handover_confirmed_by = user
+        shipment.save()
+        
+        order = shipment.order
+        order.cancellation_locked = True
+        order.cancellation_locked_at = timezone.now()
+        order.save()
+        
+        # Emit event to Control Tower
+        OperationalEvent.objects.create(
+            event_type='TRANSPORT_HANDOVER_COMPLETED',
+            entity_type='DeliveryShipment',
+            entity_id=str(shipment.id),
+            actor_id=str(user.id),
+            metadata={
+                'order_id': order.id,
+                'logistics_partner': shipment.partner.name if shipment.partner else 'Unassigned'
+            },
+            description=f"Physical handover confirmed by {user.username}. Cancellation locked."
+        )
+        
+        return Response({
+            'message': 'Transport handover confirmed. Order cancellation is now locked.',
+            'shipment': DeliveryShipmentSerializer(shipment).data
+        })
 
     @action(detail=True, methods=['post'], url_path='update-status')
     def update_delivery_status(self, request, pk=None):

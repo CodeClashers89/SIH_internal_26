@@ -66,6 +66,13 @@ class OrderViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_403_FORBIDDEN
                 )
 
+        if new_status == 'cancelled':
+            if getattr(order, 'cancellation_locked', False):
+                return Response(
+                    {'error': 'CANCELLATION_LOCKED_AFTER_TRANSPORT_HANDOVER'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         order.status = new_status
         order.save()
 

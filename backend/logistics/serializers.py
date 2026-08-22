@@ -16,6 +16,7 @@ class DeliveryShipmentSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'order', 'order_details', 'partner', 'partner_details',
             'pickup_address', 'delivery_address', 'distance_km', 'status',
-            'delivery_otp', 'assigned_at', 'shipped_at', 'delivered_at'
+            'delivery_otp', 'assigned_at', 'shipped_at', 'delivered_at',
+            'handover_completed_at', 'handover_confirmed_by'
         )
         read_only_fields = ('id', 'assigned_at')

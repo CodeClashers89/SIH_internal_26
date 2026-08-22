@@ -23,6 +23,9 @@ class ControlTowerSummaryView(views.APIView):
 
         produce_in_transit_qty = 0 # Calculate from active shipments
         
+        pending_handovers = DeliveryShipment.objects.filter(status='assigned').count()
+        completed_handovers = DeliveryShipment.objects.filter(status='handover_completed').count()
+        
         available_trucks = LogisticsPartner.objects.filter(active=True).count()
         
         critical_exceptions = ControlTowerException.objects.filter(status='open', severity='CRITICAL').count()
@@ -36,6 +39,8 @@ class ControlTowerSummaryView(views.APIView):
             "payment_disputes": payment_disputes,
             "produce_in_transit_qty": produce_in_transit_qty,
             "available_trucks": available_trucks,
+            "pending_handovers": pending_handovers,
+            "completed_handovers": completed_handovers,
             "critical_exceptions": critical_exceptions
         })
 

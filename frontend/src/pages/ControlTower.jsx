@@ -80,6 +80,24 @@ const ControlTower = () => {
                         </div>
                         <p className="text-3xl font-bold text-emerald-700 mt-2">{summary.available_trucks}</p>
                     </div>
+
+                    {/* Pending Handovers */}
+                    <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-6 bg-blue-50/30">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-medium text-blue-600">Pending Handovers</h3>
+                            <ExclamationTriangleIcon className="w-5 h-5 text-blue-500" />
+                        </div>
+                        <p className="text-3xl font-bold text-blue-700 mt-2">{summary.pending_handovers}</p>
+                    </div>
+
+                    {/* Completed Handovers */}
+                    <div className="bg-white rounded-xl shadow-sm border border-green-100 p-6 bg-green-50/30">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-medium text-green-600">Locked & In Transit</h3>
+                            <CheckCircleIcon className="w-5 h-5 text-green-500" />
+                        </div>
+                        <p className="text-3xl font-bold text-green-700 mt-2">{summary.completed_handovers}</p>
+                    </div>
                 </div>
             </section>
 

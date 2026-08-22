@@ -24,6 +24,7 @@ class DeliveryShipment(models.Model):
     STATUS_CHOICES = (
         ('assigned', 'Assigned'),
         ('picked_up', 'Picked Up'),
+        ('handover_completed', 'Transport Handover Completed'),
         ('delivered', 'Delivered'),
     )
 
@@ -37,6 +38,15 @@ class DeliveryShipment(models.Model):
     assigned_at = models.DateTimeField(auto_now_add=True)
     shipped_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
+    
+    handover_completed_at = models.DateTimeField(null=True, blank=True)
+    handover_confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='confirmed_handovers'
+    )
 
     def save(self, *args, **kwargs):
         if not self.delivery_otp:

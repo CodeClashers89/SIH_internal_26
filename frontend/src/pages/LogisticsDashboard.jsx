@@ -594,14 +594,29 @@ const LogisticsDashboard = () => {
                       {job.status === 'assigned' && (
                         <div className="space-y-3 pt-2 border-t border-slate-100">
                           <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-800 font-medium">
-                            🔔 <strong>Next step:</strong> Head to the pickup address and collect the package from the farmer. Then confirm pickup below.
+                            📝 <strong>Next step:</strong> Head to the pickup address and collect the package from the farmer. Then confirm handover below to lock cancellation.
+                          </div>
+                          <button
+                            onClick={() => handleConfirmHandover(job.id)}
+                            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2 text-sm active:scale-[0.99]"
+                          >
+                            <Package className="h-4 w-4" />
+                            Confirm Physical Handover
+                          </button>
+                        </div>
+                      )}
+
+                      {job.status === 'handover_completed' && (
+                        <div className="space-y-3 pt-2 border-t border-slate-100">
+                          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-800 font-medium">
+                            🚚 <strong>Next step:</strong> Start your journey. Tap to mark as in-transit and notify buyer.
                           </div>
                           <button
                             onClick={() => handleMarkPickedUp(job.id)}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2 text-sm active:scale-[0.99]"
                           >
-                            <Package className="h-4 w-4" />
-                            Confirm Package Picked Up
+                            <Truck className="h-4 w-4" />
+                            Start Transit (Pick Up)
                           </button>
                         </div>
                       )}
