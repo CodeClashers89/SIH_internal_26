@@ -717,32 +717,56 @@ const FarmerDashboard = () => {
               {bulkReqs.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-6 bg-white border border-slate-100 rounded-3xl">No bulk demands published.</p>
               ) : (
-                bulkReqs.map(req => (
-                  <div key={req.id} className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs space-y-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-bold text-slate-800 text-base">{req.crop_name}</h4>
-                        <p className="text-[10px] text-slate-500">Variety: {req.variety || 'Standard'} | Target Date: {req.required_date}</p>
-                      </div>
-                      <div className="text-right text-xs">
-                        <span className="text-slate-400 block font-semibold">Needed Qty</span>
-                        <span className="text-slate-800 font-extrabold">{req.quantity} {req.unit}</span>
-                      </div>
-                    </div>
+                bulkReqs.map(req => {
+                  const totalTarget = parseFloat(req.quantity) || 0;
+                  const totalOffered = (req.offers || []).reduce((sum, o) => sum + (parseFloat(o.quantity) || 0), 0);
+                  const remainingQty = Math.max(0, totalTarget - totalOffered);
+                  const progressPct = Math.min(100, Math.round((totalOffered / (totalTarget || 1)) * 100));
 
-                    <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl text-xs text-slate-600">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Target Budget</span>
-                        <span className="font-bold text-slate-800">₹{req.target_price_min} - ₹{req.target_price_max} per {req.unit}</span>
+                  return (
+                    <div key={req.id} className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs space-y-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-base">{req.crop_name}</h4>
+                          <p className="text-[10px] text-slate-500">Variety: {req.variety || 'Standard'} | Target Date: {req.required_date}</p>
+                        </div>
+                        <div className="text-right text-xs">
+                          <span className="text-slate-400 block font-semibold">Total Pool</span>
+                          <span className="text-slate-800 font-extrabold">{totalTarget} {req.unit}</span>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Deliver Location</span>
-                        <span className="font-bold text-slate-800 flex items-center gap-0.5">
-                          <MapPin className="h-3 w-3 text-slate-400" />
-                          {req.location}
-                        </span>
+
+                      {/* Aggregation Progress Bar */}
+                      <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 space-y-2 text-xs">
+                        <div className="flex justify-between items-center text-[11px]">
+                          <span className="font-semibold text-slate-600">Farmer Sourcing Pool Progress</span>
+                          <span className="font-bold text-emerald-700">{progressPct}% Pooled</span>
+                        </div>
+                        <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                          <div
+                            className="bg-emerald-600 h-full rounded-full transition-all"
+                            style={{ width: `${progressPct}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[10px] text-slate-500 pt-0.5">
+                          <span>Pledged: <strong className="text-emerald-700 font-bold">{totalOffered} {req.unit}</strong></span>
+                          <span>Remaining Needed: <strong className="text-amber-700 font-bold">{remainingQty} {req.unit}</strong></span>
+                        </div>
                       </div>
-                    </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl text-xs text-slate-600">
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">Target Budget</span>
+                          <span className="font-bold text-slate-800">₹{req.target_price_min} - ₹{req.target_price_max} per {req.unit}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">Deliver Location</span>
+                          <span className="font-bold text-slate-800 flex items-center gap-0.5">
+                            <MapPin className="h-3 w-3 text-slate-400" />
+                            {req.location}
+                          </span>
+                        </div>
+                      </div>
 
                     {req.status === 'pending' && (
                       <div className="space-y-3 pt-1">
@@ -841,7 +865,8 @@ const FarmerDashboard = () => {
                       </div>
                     )}
                   </div>
-                ))
+                );
+              })
               )}
             </div>
           </div>

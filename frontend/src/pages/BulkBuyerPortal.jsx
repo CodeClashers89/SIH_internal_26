@@ -594,65 +594,132 @@ const BulkBuyerPortal = () => {
                 You have not published any sourcing requirements.
               </div>
             ) : (
-              requirements.map(req => (
-                <div key={req.id} className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs space-y-4">
-                  <div className="flex flex-wrap justify-between items-center gap-2">
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-base">{req.crop_name}</h4>
-                      <p className="text-[10px] text-slate-500">Variety: {req.variety || 'Standard'} | Target: {req.quantity} {req.unit} | Target Budget: ₹{req.target_price_min} - ₹{req.target_price_max}/{req.unit}</p>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                      req.status === 'fulfilled' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                    }`}>
-                      {req.status}
-                    </span>
-                  </div>
+              requirements.map(req => {
+                const totalTarget = parseFloat(req.quantity) || 0;
+                const totalOffered = (req.offers || []).reduce((sum, o) => sum + (parseFloat(o.quantity) || 0), 0);
+                const remainingQty = Math.max(0, totalTarget - totalOffered);
+                const progressPct = Math.min(100, Math.round((totalOffered / (totalTarget || 1)) * 100));
 
-                  {/* Farmer Offers List */}
-                  <div className="border-t border-slate-100 pt-3">
-                    <h5 className="font-bold text-slate-700 text-xs mb-2">Farmer Offers & Contributions</h5>
-                    {req.offers && req.offers.length > 0 ? (
-                      <div className="space-y-2">
-                        {req.offers.map(offer => (
-                          <div key={offer.id} className="bg-slate-50 rounded-2xl p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs">
-                            <div>
-                              <p className="font-semibold text-slate-800">Farmer: {offer.farmer_username}</p>
-                              <p className="text-[10px] text-slate-500">Quantity Offered: {offer.quantity} {req.unit} @ ₹{offer.price_per_unit}/{req.unit} (Delivery: {offer.delivery_date})</p>
-                              {offer.notes && <p className="text-[10px] italic text-slate-400 mt-1">Notes: "{offer.notes}"</p>}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {offer.status === 'pending' ? (
-                                <>
-                                  <button
-                                    onClick={() => handleAcceptFarmerOffer(offer.id)}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg text-[10px]"
-                                  >
-                                    Accept Offer
-                                  </button>
-                                  <button
-                                    onClick={() => handleRejectFarmerOffer(offer.id)}
-                                    className="bg-rose-50 border border-rose-100 text-rose-600 font-semibold px-3 py-1.5 rounded-lg text-[10px]"
-                                  >
-                                    Reject
-                                  </button>
-                                </>
-                              ) : (
-                                <span className={`px-2.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                  offer.status === 'accepted' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
-                                }`}>
-                                  {offer.status}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                return (
+                  <div key={req.id} className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs space-y-4">
+                    <div className="flex flex-wrap justify-between items-start gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-slate-800 text-base">{req.crop_name}</h4>
+                          <span className="text-xs text-slate-500 font-medium">({req.variety || 'Standard'})</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Delivery: <strong className="text-slate-700">{req.location}</strong> | Needed by: <strong className="text-slate-700">{req.required_date}</strong>
+                        </p>
                       </div>
-                    ) : (
-                      <p className="text-[10px] text-slate-400 italic">No offers received from farmers yet.</p>
-                    )}
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                        req.status === 'fulfilled' || remainingQty === 0
+                          ? 'bg-emerald-100 text-emerald-800' 
+                          : totalOffered > 0
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {req.status === 'fulfilled' || remainingQty === 0 ? 'Fully Pooled' : totalOffered > 0 ? `${req.offers.length} Offer Received` : 'Awaiting Offers'}
+                      </span>
+                    </div>
+
+                    {/* Smart Aggregation Pool Status Bar */}
+                    <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-3">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                          <Handshake className="h-4 w-4 text-emerald-600" />
+                          Order Aggregation Progress
+                        </span>
+                        <span className="font-extrabold text-emerald-700 text-xs">
+                          {progressPct}% Pooled
+                        </span>
+                      </div>
+
+                      {/* Visual Progress Bar */}
+                      <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                        <div 
+                          className="bg-gradient-to-r from-emerald-500 to-green-600 h-full rounded-full transition-all duration-500"
+                          style={{ width: `${progressPct}%` }}
+                        />
+                      </div>
+
+                      {/* 3 Metric Pills: Target, Fulfilled/Offered, Remaining */}
+                      <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                        <div className="bg-white rounded-xl p-2 border border-slate-100 shadow-2xs">
+                          <span className="text-[10px] text-slate-400 block font-semibold">Total Target</span>
+                          <span className="text-xs font-bold text-slate-800">{totalTarget} {req.unit}</span>
+                        </div>
+                        <div className="bg-emerald-50/70 rounded-xl p-2 border border-emerald-100 shadow-2xs">
+                          <span className="text-[10px] text-emerald-700 block font-semibold">Pledged / Offered</span>
+                          <span className="text-xs font-extrabold text-emerald-800">{totalOffered} {req.unit}</span>
+                        </div>
+                        <div className={`rounded-xl p-2 border shadow-2xs ${
+                          remainingQty === 0 
+                            ? 'bg-emerald-100/60 border-emerald-200 text-emerald-900' 
+                            : 'bg-amber-50/70 border-amber-100 text-amber-900'
+                        }`}>
+                          <span className="text-[10px] opacity-75 block font-semibold">Remaining Needed</span>
+                          <span className="text-xs font-extrabold">{remainingQty} {req.unit}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Farmer Offers List */}
+                    <div className="border-t border-slate-100 pt-3">
+                      <div className="flex justify-between items-center mb-2">
+                        <h5 className="font-bold text-slate-700 text-xs">Farmer Offers & Sourcing Contributions ({req.offers?.length || 0})</h5>
+                        <span className="text-[10px] text-slate-400">Budget: ₹{req.target_price_min} - ₹{req.target_price_max}/{req.unit}</span>
+                      </div>
+                      {req.offers && req.offers.length > 0 ? (
+                        <div className="space-y-2">
+                          {req.offers.map(offer => (
+                            <div key={offer.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-xs">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-bold text-slate-800">🌾 {offer.farmer_username}</p>
+                                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                    Contributes {offer.quantity} {req.unit}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-slate-500 mt-1">
+                                  Offered Price: <strong className="text-slate-800">₹{offer.price_per_unit}/{req.unit}</strong> | Delivery: <strong className="text-slate-800">{offer.delivery_date}</strong>
+                                </p>
+                                {offer.notes && <p className="text-[10px] italic text-slate-400 mt-0.5">Notes: "{offer.notes}"</p>}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {offer.status === 'pending' ? (
+                                  <>
+                                    <button
+                                      onClick={() => handleAcceptFarmerOffer(offer.id)}
+                                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-xs transition"
+                                    >
+                                      Accept & Lock Qty
+                                    </button>
+                                    <button
+                                      onClick={() => handleRejectFarmerOffer(offer.id)}
+                                      className="bg-rose-50 border border-rose-100 hover:bg-rose-100 text-rose-600 font-semibold px-3 py-1.5 rounded-xl text-xs transition"
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span className={`px-3 py-1 rounded-xl text-[10px] font-bold uppercase tracking-wider ${
+                                    offer.status === 'accepted' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-200 text-slate-700'
+                                  }`}>
+                                    {offer.status === 'accepted' ? '✓ Accepted & Allocated' : offer.status}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-slate-400 italic py-2">No offers received from nearby farmers yet.</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
