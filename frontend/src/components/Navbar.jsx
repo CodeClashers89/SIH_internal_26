@@ -176,10 +176,18 @@ const Navbar = ({ onCartToggle }) => {
             )}
             
             {user && (
-              <Link to={getDashboardLink()} className="text-gray-600 hover:text-emerald-600 font-medium transition-colors flex items-center gap-1.5">
-                <BarChart3 className="h-4 w-4" />
-                Dashboard
-              </Link>
+              <div className="flex items-center space-x-6">
+                <Link to={getDashboardLink()} className="text-gray-600 hover:text-emerald-600 font-medium transition-colors flex items-center gap-1.5">
+                  <BarChart3 className="h-4 w-4" />
+                  Dashboard
+                </Link>
+                {user.role === 'farmer' && (
+                  <Link to="/farmer-profile" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors flex items-center gap-1.5 border-l border-gray-200 pl-6">
+                    <User className="h-4 w-4" />
+                    My Profile
+                  </Link>
+                )}
+              </div>
             )}
             
             {user && user.role === 'admin' && (
@@ -232,13 +240,15 @@ const Navbar = ({ onCartToggle }) => {
 
                 {/* Profile display & Logout */}
                 <div className="flex items-center space-x-2 pl-2 border-l border-gray-200">
-                  <div className="flex flex-col text-right">
-                    <span className="text-sm font-semibold text-gray-700">{user.username}</span>
-                    <span className="text-[10px] text-gray-400 capitalize">{user.role.replace('_', ' ')}</span>
-                  </div>
-                  <div className="h-8 w-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                    <User className="h-4 w-4" />
-                  </div>
+                  <Link to={user.role === 'farmer' ? '/farmer-profile' : '#'} className="flex items-center space-x-2 hover:opacity-80 transition-opacity cursor-pointer">
+                    <div className="flex flex-col text-right">
+                      <span className="text-sm font-semibold text-gray-700">{user.username}</span>
+                      <span className="text-[10px] text-gray-400 capitalize">{user.role.replace('_', ' ')}</span>
+                    </div>
+                    <div className="h-8 w-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                      <User className="h-4 w-4" />
+                    </div>
+                  </Link>
                   <button 
                     onClick={handleLogout} 
                     className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"

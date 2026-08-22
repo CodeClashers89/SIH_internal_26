@@ -8,6 +8,7 @@ import CartDrawer from './components/CartDrawer';
 import Landing from './pages/Landing';
 import LoginSignup from './pages/LoginSignup';
 import FarmerDashboard from './pages/FarmerDashboard';
+import FarmerProfilePage from './pages/FarmerProfilePage';
 import ConsumerMarketplace from './pages/ConsumerMarketplace';
 import ConsumerDashboard from './pages/ConsumerDashboard';
 import BulkBuyerPortal from './pages/BulkBuyerPortal';
@@ -84,6 +85,14 @@ function MainLayout() {
             element={
               <ProtectedRoute allowedRoles={['farmer']}>
                 <FarmerDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/farmer-profile" 
+            element={
+              <ProtectedRoute allowedRoles={['farmer']}>
+                <FarmerProfilePage />
               </ProtectedRoute>
             } 
           />
