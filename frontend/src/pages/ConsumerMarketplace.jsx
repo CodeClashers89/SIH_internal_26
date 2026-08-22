@@ -6,7 +6,7 @@ import ProductCard from '../components/ProductCard';
 import ReviewWidget from '../components/ReviewWidget';
 import Stepper from '../components/Stepper';
 import CartDrawer from '../components/CartDrawer';
-import SubscriptionWidget from '../components/SubscriptionWidget';
+import OrderTypeModal from '../components/OrderTypeModal';
 import {
   Search, MapPin, X, Loader2, ArrowRight, ShoppingBag,
   Truck, CheckCircle, CreditCard, Key, RefreshCw, Package,
@@ -43,6 +43,7 @@ const ConsumerMarketplace = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [orderModalProduct, setOrderModalProduct] = useState(null);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -190,14 +191,6 @@ const ConsumerMarketplace = () => {
               }`}
             >
               📦 My Orders
-            </button>
-            <button
-              onClick={() => setActiveTab('subscriptions')}
-              className={`pb-4 px-6 text-sm font-extrabold border-b-2 transition-all ${
-                activeTab === 'subscriptions' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              🔄 Subscriptions
             </button>
             <button
               onClick={() => setCartOpen(true)}
@@ -535,11 +528,6 @@ const ConsumerMarketplace = () => {
         </div>
       )}
 
-      {/* ── Subscriptions Tab ── */}
-      {activeTab === 'subscriptions' && (
-        <SubscriptionWidget role="buyer" />
-      )}
-
       {/* ── Product Detail Modal ── */}
       {selectedProduct && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -583,8 +571,8 @@ const ConsumerMarketplace = () => {
                     <p><strong>Harvest:</strong> {new Date(selectedProduct.harvest_date).toLocaleDateString('en-IN')}</p>
                   </div>
                   <button
-                    onClick={() => { addToCart(selectedProduct, 1); setSelectedProduct(null); setCartOpen(true); }}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-2xl text-sm flex items-center justify-center gap-2 transition-all"
+                    onClick={() => { setOrderModalProduct(selectedProduct); }}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-2xl text-sm flex items-center justify-center gap-2 transition-all shadow-sm shadow-emerald-200 active:scale-[0.98]"
                   >
                     <ShoppingBag className="h-4 w-4" /> Add to Basket
                   </button>
@@ -595,6 +583,18 @@ const ConsumerMarketplace = () => {
           </div>
         </div>
       )}
+
+      {/* Order Type Selector Modal for Detail Modal */}
+      <OrderTypeModal
+        isOpen={!!orderModalProduct}
+        onClose={() => setOrderModalProduct(null)}
+        product={orderModalProduct}
+        onConfirm={(type, config) => {
+          addToCart(orderModalProduct, 1, config);
+          setSelectedProduct(null);
+          setCartOpen(true);
+        }}
+      />
     </div>
   );
 };
