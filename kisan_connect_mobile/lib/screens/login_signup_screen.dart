@@ -72,6 +72,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
   void _showSettingsDialog() {
     final configProvider = Provider.of<ApiConfigProvider>(context, listen: false);
     final urlController = TextEditingController(text: configProvider.baseUrl);
+    final subController = TextEditingController(text: configProvider.subscriptionUrl);
 
     showDialog(
       context: context,
@@ -83,10 +84,10 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Enter the backend API server URL:',
-              style: TextStyle(fontSize: 13, color: Colors.grey),
+              'Backend API server URL:',
+              style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             TextField(
               controller: urlController,
               decoration: const InputDecoration(
@@ -94,10 +95,23 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
                 hintText: 'http://10.0.2.2:8000/api',
               ),
             ),
+            const SizedBox(height: 12),
+            const Text(
+              'B2B Subscription API URL:',
+              style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: subController,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'http://10.0.2.2:8001/api/v1/subscription',
+              ),
+            ),
             const SizedBox(height: 8),
             const Text(
-              'Use http://10.0.2.2:8000/api for Android Emulator.\nUse http://192.168.x.x:8000/api for real devices.',
-              style: TextStyle(fontSize: 11, color: Colors.amber, fontWeight: FontWeight.w600),
+              'Use 10.0.2.2 for Android Emulator, or local machine IP for real devices.',
+              style: TextStyle(fontSize: 10, color: Colors.amber, fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -112,10 +126,10 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             onPressed: () async {
-              await configProvider.updateBaseUrl(urlController.text);
+              await configProvider.updateConfig(urlController.text, subController.text);
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('API Base URL updated to: ${configProvider.baseUrl}')),
+                SnackBar(content: Text('API Configuration updated!')),
               );
             },
             child: const Text('Save', style: TextStyle(color: Colors.white)),

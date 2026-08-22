@@ -5,6 +5,7 @@ import '../providers/api_config_provider.dart';
 import '../services/api_client.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'subscription_panel.dart';
 
 class FarmerDashboardScreen extends StatefulWidget {
   const FarmerDashboardScreen({Key? key}) : super(key: key);
@@ -56,7 +57,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _fetchDashboardData();
     });
@@ -768,6 +769,7 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
             Tab(text: '🤝 Negotiations'),
             Tab(text: '💼 Bulk Demands'),
             Tab(text: '📝 Forward Contracts'),
+            Tab(text: '📅 Subscriptions'),
           ],
         ),
       ),
@@ -1017,6 +1019,12 @@ class _FarmerDashboardScreenState extends State<FarmerDashboardScreen> with Sing
                       ),
                     ],
                   ),
+                ),
+                
+                // SUBSCRIPTIONS TAB
+                const SingleChildScrollView(
+                  padding: EdgeInsets.all(16),
+                  child: SubscriptionPanel(role: 'farmer'),
                 ),
               ],
             ),

@@ -6,6 +6,7 @@ import '../providers/api_config_provider.dart';
 import '../services/api_client.dart';
 import 'package:intl/intl.dart';
 import 'order_tracking_screen.dart';
+import 'subscription_panel.dart';
 
 class ConsumerMarketplaceScreen extends StatefulWidget {
   const ConsumerMarketplaceScreen({Key? key}) : super(key: key);
@@ -41,7 +42,7 @@ class _ConsumerMarketplaceScreenState extends State<ConsumerMarketplaceScreen> w
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (_tabController.index == 1) {
         _fetchOrders();
@@ -757,6 +758,7 @@ class _ConsumerMarketplaceScreenState extends State<ConsumerMarketplaceScreen> w
           tabs: const [
             Tab(text: '🌾 Browse Fresh'),
             Tab(text: '📦 My Orders'),
+            Tab(text: '📅 Subscriptions'),
           ],
         ),
       ),
@@ -872,6 +874,12 @@ class _ConsumerMarketplaceScreenState extends State<ConsumerMarketplaceScreen> w
                           return _buildOrderCard(order);
                         },
                       ),
+          ),
+          
+          // SUBSCRIPTIONS TAB
+          const SingleChildScrollView(
+            padding: EdgeInsets.all(16),
+            child: SubscriptionPanel(role: 'buyer'),
           ),
         ],
       ),
