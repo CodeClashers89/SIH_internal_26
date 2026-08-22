@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from products.models import Product
 from orders.models import Order, OrderItem, QuoteRequest, BulkRequirement, PreHarvestContract
-from logistics.models import LogisticsPartner
+from logistics.models import LogisticsPartner, DeliveryShipment
 from pricing.models import Market, MarketPrice
 from reviews.models import Review
 from decimal import Decimal
@@ -18,6 +18,7 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         self.stdout.write("Clearing existing data...")
         Review.objects.all().delete()
+        DeliveryShipment.objects.all().delete()
         PreHarvestContract.objects.all().delete()
         QuoteRequest.objects.all().delete()
         BulkRequirement.objects.all().delete()
@@ -241,10 +242,11 @@ class Command(BaseCommand):
                 selected_product = random.choice([p1, p2, p4, p5])
                 cost = selected_product.price_per_unit * total_qty
                 
+                order_status = random.choice(['placed', 'delivered'])
                 order = Order.objects.create(
                     buyer=consumer1,
                     total_amount=cost,
-                    status=random.choice(['placed', 'delivered']),
+                    status=order_status,
                     shipping_address="Pune Central, Maharashtra",
                     shipping_pincode="411002",
                     payment_status='paid',
@@ -260,6 +262,79 @@ class Command(BaseCommand):
                 
                 # Update the order's created_at to the past date (bypassing auto_now_add)
                 Order.objects.filter(id=order.id).update(created_at=past_date)
+
+                # Create DeliveryShipment for the order
+                if order_status == 'delivered':
+                    ds = DeliveryShipment.objects.create(
+                        order=order,
+                        partner=partner1,
+                        pickup_address=f"Village Khed Farm, Pune",
+                        delivery_address=order.shipping_address,
+                        distance_km=Decimal(random.randint(10, 45)),
+                        status='delivered',
+                        shipped_at=past_date - timedelta(hours=2),
+                        delivered_at=past_date
+                    )
+                else:
+                    ds = DeliveryShipment.objects.create(
+                        order=order,
+                        partner=None,
+                        pickup_address=f"Village Khed Farm, Pune",
+                        delivery_address=order.shipping_address,
+                        distance_km=Decimal(random.randint(10, 45)),
+                        status='assigned'
+                    )
+
+        # Create active shipments for driver1
+        self.stdout.write("Creating active shipments for driver1...")
+        active_order1 = Order.objects.create(
+            buyer=consumer1,
+            total_amount=Decimal('450.00'),
+            status='confirmed',
+            shipping_address="Aundh Road, Pune",
+            shipping_pincode="411002",
+            payment_status='paid',
+            payment_id="pay_mock_active1"
+        )
+        OrderItem.objects.create(
+            order=active_order1,
+            product=p1,
+            quantity=18.0,
+            price=25.00
+        )
+        DeliveryShipment.objects.create(
+            order=active_order1,
+            partner=partner1,
+            pickup_address="Village Khed, Near Chakan",
+            delivery_address="Aundh Road, Pune",
+            distance_km=Decimal('28.5'),
+            status='assigned'
+        )
+
+        active_order2 = Order.objects.create(
+            buyer=consumer1,
+            total_amount=Decimal('540.00'),
+            status='in_transit',
+            shipping_address="Kothrud, Pune",
+            shipping_pincode="411002",
+            payment_status='paid',
+            payment_id="pay_mock_active2"
+        )
+        OrderItem.objects.create(
+            order=active_order2,
+            product=p2,
+            quantity=30.0,
+            price=18.00
+        )
+        DeliveryShipment.objects.create(
+            order=active_order2,
+            partner=partner1,
+            pickup_address="Village Khed, Near Chakan",
+            delivery_address="Kothrud, Pune",
+            distance_km=Decimal('35.2'),
+            status='picked_up',
+            shipped_at=timezone.now() - timedelta(hours=1)
+        )
 
         self.stdout.write("Creating farmer reviews...")
         Review.objects.create(
