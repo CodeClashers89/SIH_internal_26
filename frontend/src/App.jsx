@@ -9,6 +9,7 @@ import Landing from './pages/Landing';
 import LoginSignup from './pages/LoginSignup';
 import FarmerDashboard from './pages/FarmerDashboard';
 import ConsumerMarketplace from './pages/ConsumerMarketplace';
+import ConsumerDashboard from './pages/ConsumerDashboard';
 import BulkBuyerPortal from './pages/BulkBuyerPortal';
 import AdminPanel from './pages/AdminPanel';
 import LogisticsDashboard from './pages/LogisticsDashboard';
@@ -70,6 +71,14 @@ function MainLayout() {
           } />
           
           {/* Role Protected Paths */}
+          <Route 
+            path="/consumer-dashboard" 
+            element={
+              <ProtectedRoute allowedRoles={['consumer', 'admin']}>
+                <ConsumerDashboard />
+              </ProtectedRoute>
+            } 
+          />
           <Route 
             path="/farmer-dashboard" 
             element={

@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { Calendar, MapPin, Sparkles, User, ShoppingCart, Info } from 'lucide-react';
+import { Calendar, MapPin, User, ShoppingCart, Info, Plus, Minus, Trash2, Repeat } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
+import OrderTypeModal from './OrderTypeModal';
 
 const ProductCard = ({ product, onAddToCart }) => {
   const { user } = useAuth();
-  const [qty, setQty] = useState(1);
+  const { cartItems, addToCart, updateQuantity, removeFromCart } = useCart();
+  const [showOrderModal, setShowOrderModal] = useState(false);
 
   const getFreshnessColor = (pct) => {
     if (pct >= 90) return 'bg-emerald-100 text-emerald-800 border-emerald-200';
@@ -23,10 +26,40 @@ const ProductCard = ({ product, onAddToCart }) => {
   const isFarmerOwner = user && user.id === product.farmer;
   const isFarmerRole = user && user.role === 'farmer';
   const isAdminRole = user && user.role === 'admin';
-  const outOfStock = parseFloat(product.quantity) <= 0;
+  const maxStock = parseFloat(product.quantity) || 0;
+  const outOfStock = maxStock <= 0;
 
-  const handleAdd = () => {
-    onAddToCart(product, qty);
+  // Check if item is already in cart
+  const cartItem = cartItems.find((item) => item.product.id === product.id);
+  const cartQty = cartItem ? cartItem.quantity : 0;
+
+  const handleInitialAdd = (e) => {
+    e.stopPropagation();
+    setShowOrderModal(true);
+  };
+
+  const handleOrderConfirm = (type, config) => {
+    if (onAddToCart) {
+      onAddToCart(product, 1, config);
+    } else {
+      addToCart(product, 1, config);
+    }
+  };
+
+  const handleIncrement = (e) => {
+    e.stopPropagation();
+    if (cartQty < maxStock) {
+      updateQuantity(product.id, cartQty + 1);
+    }
+  };
+
+  const handleDecrement = (e) => {
+    e.stopPropagation();
+    if (cartQty <= 1) {
+      removeFromCart(product.id);
+    } else {
+      updateQuantity(product.id, cartQty - 1);
+    }
   };
 
   return (
@@ -91,26 +124,72 @@ const ProductCard = ({ product, onAddToCart }) => {
           </div>
         </div>
 
-        {/* Add block */}
+        {/* Add / Stepper Block */}
         {!isFarmerRole && !isAdminRole && (
-          <div className="mt-5 pt-3 border-t border-slate-100 flex items-center gap-2">
-            <input 
-              type="number" 
-              min="1" 
-              max={product.quantity}
-              value={qty}
-              onChange={(e) => setQty(Math.max(1, Math.min(parseFloat(product.quantity), parseFloat(e.target.value) || 1)))}
-              disabled={outOfStock}
-              className="w-16 px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm text-center focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50"
-            />
-            <button
-              onClick={handleAdd}
-              disabled={outOfStock}
-              className="flex-1 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-bold py-1.5 px-3 rounded-lg text-sm shadow-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:pointer-events-none"
-            >
-              <ShoppingCart className="h-4 w-4" />
-              Add to Cart
-            </button>
+          <div className="mt-5 pt-3 border-t border-slate-100">
+            {cartQty === 0 ? (
+              <button
+                type="button"
+                onClick={handleInitialAdd}
+                disabled={outOfStock}
+                className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-bold py-2 px-4 rounded-xl text-sm shadow-xs hover:shadow-md hover:shadow-emerald-600/20 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98]"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                Add to Cart
+              </button>
+            ) : cartItem?.isSubscription ? (
+              <div 
+                onClick={(e) => e.stopPropagation()}
+                className="w-full flex items-center justify-between bg-emerald-50/90 border-2 border-emerald-600 rounded-xl p-1.5 shadow-xs transition-all animate-fadeIn"
+              >
+                <div className="flex items-center gap-1.5 font-black text-emerald-900 text-xs px-2 select-none">
+                  <Repeat className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Recurring Order</span>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeFromCart(product.id);
+                  }}
+                  className="h-8 px-2.5 rounded-lg bg-white text-rose-600 hover:bg-rose-50 hover:border-rose-200 border border-slate-200 flex items-center justify-center gap-1 font-bold text-xs transition-all shadow-xs active:scale-95"
+                  title="Delete recurring order"
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                  <span>Delete</span>
+                </button>
+              </div>
+            ) : (
+              <div 
+                onClick={(e) => e.stopPropagation()}
+                className="w-full flex items-center justify-between bg-emerald-50/90 border-2 border-emerald-600 rounded-xl p-1 shadow-xs transition-all animate-fadeIn"
+              >
+                <button
+                  type="button"
+                  onClick={handleDecrement}
+                  className="h-8 w-8 rounded-lg bg-white text-slate-700 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 border border-slate-200 flex items-center justify-center font-bold transition-all shadow-xs active:scale-90"
+                  title={cartQty <= 1 ? "Remove from cart" : "Decrease quantity (-1)"}
+                >
+                  {cartQty <= 1 ? <Trash2 className="h-3.5 w-3.5 text-rose-500" /> : <Minus className="h-4 w-4 text-emerald-800" />}
+                </button>
+                
+                <div className="flex items-center gap-1.5 font-black text-emerald-900 text-sm px-2 select-none">
+                  <span className="text-base font-black">{cartQty}</span>
+                  <span className="text-xs text-emerald-700 font-semibold">in cart</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleIncrement}
+                  disabled={cartQty >= maxStock}
+                  className="h-8 w-8 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center font-bold transition-all shadow-xs active:scale-90"
+                  title="Increase quantity (+1)"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -121,6 +200,14 @@ const ProductCard = ({ product, onAddToCart }) => {
           </div>
         )}
       </div>
+
+      {/* Order Type Selector Modal */}
+      <OrderTypeModal
+        isOpen={showOrderModal}
+        onClose={() => setShowOrderModal(false)}
+        product={product}
+        onConfirm={handleOrderConfirm}
+      />
     </div>
   );
 };

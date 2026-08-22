@@ -147,7 +147,8 @@ const Navbar = ({ onCartToggle }) => {
       case 'bulk_buyer': return '/bulk-portal';
       case 'logistics_partner': return '/logistics-dashboard';
       case 'admin': return '/admin-panel';
-      default: return '/marketplace';
+      case 'consumer': return '/consumer-dashboard';
+      default: return '/consumer-dashboard';
     }
   };
 
