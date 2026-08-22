@@ -1,9 +1,70 @@
-import React from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Sprout, Users, ArrowRight, ShieldCheck, TrendingUp, HandCoins, Truck } from 'lucide-react';
 import PriceComparisonChart from '../components/PriceComparisonChart';
 
 const Landing = () => {
+  const videoRef = useRef(null);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    // 1. Accessibility: Check if user prefers reduced motion
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const prefersReducedMotion = mediaQuery.matches;
+
+    // Ensure DOM muted attribute is set for strict browser autoplay policies
+    if (videoRef.current) {
+      videoRef.current.muted = true;
+      videoRef.current.defaultMuted = true;
+    }
+
+    // 2. Play/Pause based on viewport intersection
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            if (videoRef.current && !prefersReducedMotion) {
+              const playPromise = videoRef.current.play();
+              if (playPromise !== undefined) {
+                playPromise.catch(() => {
+                  // Handled silent autoplay error
+                });
+              }
+            }
+          } else {
+            if (videoRef.current) {
+              videoRef.current.pause();
+            }
+          }
+        });
+      },
+      { rootMargin: '100px', threshold: 0.05 }
+    );
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    const handleMotionChange = (e) => {
+      if (e.matches && videoRef.current) {
+        videoRef.current.pause();
+      } else if (!e.matches && videoRef.current) {
+        videoRef.current.play().catch(() => {});
+      }
+    };
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleMotionChange);
+    }
+
+    return () => {
+      observer.disconnect();
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener('change', handleMotionChange);
+      }
+    };
+  }, []);
+
   const stats = [
     { label: 'Registered Farmers & FPOs', value: '1,200+', icon: Users, color: 'text-emerald-600 bg-emerald-50' },
     { label: 'Platform Transactions', value: '₹48 Lakhs+', icon: HandCoins, color: 'text-amber-600 bg-amber-50' },
@@ -48,13 +109,38 @@ const Landing = () => {
             </div>
           </div>
 
-          <div className="hidden lg:block relative">
+          <div ref={containerRef} className="hidden lg:block relative">
+            {/* Ambient background glow */}
             <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/20 to-green-500/20 rounded-3xl filter blur-xl"></div>
-            <img
-              src="https://images.unsplash.com/photo-1593113598332-cd288d649433?auto=format&fit=crop&q=80&w=800"
-              alt="Indian Farmer harvesting crops"
+            
+            {/* Living Hero Background Video (with fallback poster & ambient loop) */}
+            <video
+              ref={videoRef}
+              autoPlay
+              loop
+              muted
+              playsInline
+              poster="https://images.unsplash.com/photo-1593113598332-cd288d649433?auto=format&fit=crop&q=80&w=800"
+              preload="metadata"
               className="rounded-3xl shadow-2xl border border-white/10 object-cover w-full h-[400px] relative z-10"
-            />
+              aria-label="Farmers and workers loading fresh harvest crates onto logistics transport"
+            >
+              {/* WebM format for modern browsers */}
+              <source src="/videos/hero-video.webm" type="video/webm" />
+              <source src="/hero-video.webm" type="video/webm" />
+              
+              {/* MP4 H.264 standard format fallbacks */}
+              <source src="/videos/hero-video.mp4" type="video/mp4" />
+              <source src="/hero-video.mp4" type="video/mp4" />
+              <source src="/video.mp4" type="video/mp4" />
+              
+              {/* Fallback image for browsers without HTML5 video support */}
+              <img
+                src="https://images.unsplash.com/photo-1593113598332-cd288d649433?auto=format&fit=crop&q=80&w=800"
+                alt="Indian Farmer harvesting crops"
+                className="rounded-3xl object-cover w-full h-full"
+              />
+            </video>
           </div>
         </div>
       </section>
