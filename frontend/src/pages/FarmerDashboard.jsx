@@ -6,6 +6,7 @@ import Stepper from '../components/Stepper';
 import MarketMap from '../components/MarketMap';
 import MarketDetailPanel from '../components/MarketDetailPanel';
 import NearestMandiExplorer from '../components/NearestMandiExplorer';
+import SubscriptionWidget from '../components/SubscriptionWidget';
 import { 
   Plus, Loader2, Calendar, FileCheck, Package, ShoppingBag, 
   DollarSign, RefreshCcw, Handshake, MapPin, PlusCircle, CheckCircle, Info, Award, Route, ChevronDown, ChevronUp
@@ -1221,6 +1222,12 @@ const FarmerDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* ── Subscriptions Widget ── */}
+      <div className="pt-8 border-t border-slate-200 mt-12">
+        <h2 className="text-xl font-black text-slate-800 mb-2">Regular Subscriptions (B2B)</h2>
+        <SubscriptionWidget role="farmer" />
+      </div>
 
       {/* Add Produce Modal */}
       {showAddModal && (

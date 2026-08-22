@@ -8,6 +8,7 @@ import ReviewWidget from '../components/ReviewWidget';
 import Stepper from '../components/Stepper';
 import CartDrawer from '../components/CartDrawer';
 import OrderTypeModal from '../components/OrderTypeModal';
+import SubscriptionWidget from '../components/SubscriptionWidget';
 import {
   Search, MapPin, X, Loader2, ArrowRight, ShoppingBag,
   Truck, CheckCircle, CreditCard, Key, RefreshCw, Package,
@@ -807,6 +808,11 @@ const ConsumerMarketplace = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Subscriptions Tab ── */}
+      {activeTab === 'subscriptions' && (
+        <SubscriptionWidget role="buyer" />
       )}
 
       {/* ── Product Detail Modal ── */}
