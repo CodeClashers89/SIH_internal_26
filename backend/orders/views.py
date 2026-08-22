@@ -21,7 +21,7 @@ import hashlib
 
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
-    queryset = Order.objects.all().order_by('-created_at')
+    queryset = Order.objects.select_related('buyer').prefetch_related('items__product__farmer').all().order_by('-created_at')
 
     def get_permissions(self):
         return [permissions.IsAuthenticated()]
@@ -304,7 +304,7 @@ class PaymentCallbackView(APIView):
 
 class QuoteRequestViewSet(viewsets.ModelViewSet):
     serializer_class = QuoteRequestSerializer
-    queryset = QuoteRequest.objects.all().order_by('-created_at')
+    queryset = QuoteRequest.objects.select_related('buyer', 'product__farmer').all().order_by('-created_at')
 
     def get_permissions(self):
         return [permissions.IsAuthenticated()]
@@ -401,7 +401,7 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
 from decimal import Decimal
 
 class BulkRequirementViewSet(viewsets.ModelViewSet):
-    queryset = BulkRequirement.objects.all().order_by('-created_at')
+    queryset = BulkRequirement.objects.select_related('buyer').prefetch_related('offers__farmer').all().order_by('-created_at')
     serializer_class = BulkRequirementSerializer
 
     def get_permissions(self):
@@ -443,7 +443,7 @@ class BulkRequirementViewSet(viewsets.ModelViewSet):
         return Response(FarmerOfferSerializer(offer).data, status=status.HTTP_201_CREATED)
 
 class FarmerOfferViewSet(viewsets.ModelViewSet):
-    queryset = FarmerOffer.objects.all().order_by('-created_at')
+    queryset = FarmerOffer.objects.select_related('farmer', 'requirement__buyer').all().order_by('-created_at')
     serializer_class = FarmerOfferSerializer
 
     def get_permissions(self):
@@ -523,7 +523,7 @@ class FarmerOfferViewSet(viewsets.ModelViewSet):
         return Response(FarmerOfferSerializer(offer).data)
 
 class PreHarvestContractViewSet(viewsets.ModelViewSet):
-    queryset = PreHarvestContract.objects.all().order_by('-created_at')
+    queryset = PreHarvestContract.objects.select_related('farmer', 'buyer').all().order_by('-created_at')
     serializer_class = PreHarvestContractSerializer
 
     def get_permissions(self):

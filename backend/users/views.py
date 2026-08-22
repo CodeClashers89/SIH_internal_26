@@ -130,18 +130,23 @@ class FarmerDashboardStatsView(APIView):
         today = timezone.now().date()
         days_30_ago = today - timedelta(days=30)
         
+        # Optimize 30 queries into a single group-by query
+        sales_qs = OrderItem.objects.filter(
+            product__farmer=farmer,
+            order__created_at__date__gte=days_30_ago,
+            order__created_at__date__lte=today,
+            order__payment_status='paid'
+        ).values('order__created_at__date').annotate(total=Sum('quantity'))
+        
+        sales_dict = {item['order__created_at__date'].strftime('%Y-%m-%d'): item['total'] for item in sales_qs}
+        
         sales_by_day = []
         for i in range(30):
             target_date = days_30_ago + timedelta(days=i)
-            day_sales = OrderItem.objects.filter(
-                product__farmer=farmer,
-                order__created_at__date=target_date,
-                order__payment_status='paid'
-            ).aggregate(total=Sum('quantity'))['total'] or 0
-            
+            date_str = target_date.strftime('%Y-%m-%d')
             sales_by_day.append({
-                'date': target_date.strftime('%Y-%m-%d'),
-                'quantity': float(day_sales)
+                'date': date_str,
+                'quantity': float(sales_dict.get(date_str, 0))
             })
 
         return Response({

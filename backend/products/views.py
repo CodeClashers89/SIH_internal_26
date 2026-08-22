@@ -17,7 +17,7 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
         return obj.farmer == request.user
 
 class ProductViewSet(viewsets.ModelViewSet):
-    queryset = Product.objects.all().order_by('-created_at')
+    queryset = Product.objects.select_related('farmer').all().order_by('-created_at')
     serializer_class = ProductSerializer
 
     def get_permissions(self):
@@ -64,7 +64,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         serializer.save(farmer=self.request.user)
 
 class AuctionViewSet(viewsets.ModelViewSet):
-    queryset = Auction.objects.all().order_by('-created_at')
+    queryset = Auction.objects.select_related('farmer').all().order_by('-created_at')
     serializer_class = AuctionSerializer
 
     def get_permissions(self):
@@ -98,7 +98,7 @@ class AuctionViewSet(viewsets.ModelViewSet):
         return Response(AuctionSerializer(auction).data)
 
 class GroupOrderViewSet(viewsets.ModelViewSet):
-    queryset = GroupOrder.objects.all().order_by('-created_at')
+    queryset = GroupOrder.objects.select_related('creator').all().order_by('-created_at')
     serializer_class = GroupOrderSerializer
 
     def get_permissions(self):
@@ -143,7 +143,7 @@ class FlashSaleViewSet(viewsets.ModelViewSet):
         return [permissions.IsAuthenticated()]
 
 class TraceabilityLotViewSet(viewsets.ModelViewSet):
-    queryset = TraceabilityLot.objects.all().order_by('-created_at')
+    queryset = TraceabilityLot.objects.select_related('product', 'product__farmer').all().order_by('-created_at')
     serializer_class = TraceabilityLotSerializer
     permission_classes = [permissions.AllowAny]
     lookup_field = 'lot_id'

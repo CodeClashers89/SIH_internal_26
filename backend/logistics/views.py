@@ -27,7 +27,7 @@ class LogisticsPartnerViewSet(viewsets.ModelViewSet):
 
 
 class DeliveryShipmentViewSet(viewsets.ModelViewSet):
-    queryset = DeliveryShipment.objects.all().order_by('-assigned_at')
+    queryset = DeliveryShipment.objects.select_related('partner', 'order', 'order__buyer').prefetch_related('order__items__product__farmer').all().order_by('-assigned_at')
     serializer_class = DeliveryShipmentSerializer
 
     def get_permissions(self):
