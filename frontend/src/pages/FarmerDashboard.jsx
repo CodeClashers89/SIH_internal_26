@@ -8,8 +8,10 @@ import MarketDetailPanel from '../components/MarketDetailPanel';
 import NearestMandiExplorer from '../components/NearestMandiExplorer';
 import { 
   Plus, Loader2, Calendar, FileCheck, Package, ShoppingBag, 
-  DollarSign, RefreshCcw, Handshake, MapPin, PlusCircle, CheckCircle, Info, Award
+  DollarSign, RefreshCcw, Handshake, MapPin, PlusCircle, CheckCircle, Info, Award, Route, ChevronDown, ChevronUp
 } from 'lucide-react';
+import DeliveryMap from '../components/DeliveryMap';
+import RouteInfoPanel from '../components/RouteInfoPanel';
 
 const FarmerDashboard = () => {
   const { user, submitKyc } = useAuth();
@@ -24,6 +26,35 @@ const FarmerDashboard = () => {
   const [preHarvestContracts, setPreHarvestContracts] = useState([]);
   const [markets, setMarkets] = useState([]);
   const [selectedMarket, setSelectedMarket] = useState(null);
+
+  // Route tracking states
+  const [orderRoutes, setOrderRoutes] = useState({});
+  const [expandedRoutes, setExpandedRoutes] = useState({});
+  const [routeLoadingOrder, setRouteLoadingOrder] = useState({});
+
+  const toggleOrderRoute = async (orderId) => {
+    const isExpanded = !!expandedRoutes[orderId];
+    setExpandedRoutes(prev => ({ ...prev, [orderId]: !isExpanded }));
+
+    if (!isExpanded && !orderRoutes[orderId]) {
+      setRouteLoadingOrder(prev => ({ ...prev, [orderId]: true }));
+      try {
+        const shipmentRes = await api.get('/logistics/shipments/');
+        const shipment = shipmentRes.data.find(s => s.order === orderId);
+        if (shipment) {
+          const routeRes = await api.get(`/route-planning/farmer/shipments/${shipment.id}/route/`);
+          setOrderRoutes(prev => ({ ...prev, [orderId]: routeRes.data }));
+        } else {
+          setOrderRoutes(prev => ({ ...prev, [orderId]: { error: 'No shipment generated for this order yet.' } }));
+        }
+      } catch (err) {
+        console.error('Farmer route fetch error:', err);
+        setOrderRoutes(prev => ({ ...prev, [orderId]: { error: 'Failed to load transportation route.' } }));
+      } finally {
+        setRouteLoadingOrder(prev => ({ ...prev, [orderId]: false }));
+      }
+    }
+  };
   
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -598,6 +629,62 @@ const FarmerDashboard = () => {
                       <span className="font-bold text-slate-400 uppercase text-[10px] mb-2 text-center">Tracking Progression</span>
                       <Stepper currentStatus={o.status} />
                     </div>
+                  </div>
+
+                  {/* Transportation & Route Visualization toggle */}
+                  <div className="border-t border-slate-100 pt-3">
+                    <button
+                      onClick={() => toggleOrderRoute(o.id)}
+                      className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors"
+                    >
+                      <Route className="h-4 w-4" />
+                      <span>{expandedRoutes[o.id] ? 'Hide Delivery Route Map' : 'View Transportation Route & Weather Map'}</span>
+                      {expandedRoutes[o.id] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </button>
+
+                    {expandedRoutes[o.id] && (
+                      <div className="mt-4 space-y-4 animate-fade-in border-t border-slate-100 pt-3">
+                        {routeLoadingOrder[o.id] ? (
+                          <div className="flex items-center justify-center p-6 text-xs text-slate-500 gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                            Loading authoritative transportation route...
+                          </div>
+                        ) : orderRoutes[o.id]?.error ? (
+                          <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl text-xs">
+                            ⚠️ {orderRoutes[o.id].error}
+                          </div>
+                        ) : orderRoutes[o.id]?.route ? (
+                          <div className="space-y-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border">
+                              <div>
+                                <span className="font-bold text-slate-800">Transport Partner: </span>
+                                <span>{orderRoutes[o.id].partner_name}</span>
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-800">Vehicle Number: </span>
+                                <span>{orderRoutes[o.id].vehicle_number}</span>
+                              </div>
+                              <div>
+                                <span className="font-bold text-slate-800">Shipment Status: </span>
+                                <span className="uppercase text-blue-600 font-extrabold">{orderRoutes[o.id].status}</span>
+                              </div>
+                            </div>
+
+                            <DeliveryMap
+                              pickupAddress={orderRoutes[o.id].pickup_address}
+                              deliveryAddress={orderRoutes[o.id].delivery_address}
+                              pickupCoordinates={orderRoutes[o.id].route?.route_geometry?.[0]}
+                              destinationCoordinates={orderRoutes[o.id].route?.route_geometry?.[orderRoutes[o.id].route.route_geometry.length - 1]}
+                              routeGeometry={orderRoutes[o.id].route?.route_geometry || []}
+                              weatherCheckpoints={orderRoutes[o.id].route?.weather_snapshot || []}
+                              height="350px"
+                            />
+
+                            <RouteInfoPanel route={orderRoutes[o.id].route} isDriver={false} />
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))

@@ -43,6 +43,10 @@ def create_open_shipment(order):
     pickup_addr = (farmer.address or f"{farmer.district or 'Farmer'}, {farmer.pincode or ''}").strip(", ")
     delivery_addr = (order.shipping_address or f"{order.buyer.district or ''}, {order_pincode}").strip(", ")
 
+    from route_planning.services.geocoding import geocode_city
+    p_coords = geocode_city(farmer.district or pickup_addr) or (22.5645, 72.9289)
+    d_coords = geocode_city(order.buyer.district or order.shipping_address) or (19.0760, 72.8777)
+
     # Create open shipment — partner=None means it's broadcast to all drivers
     shipment, created = DeliveryShipment.objects.get_or_create(
         order=order,
@@ -50,6 +54,10 @@ def create_open_shipment(order):
             'partner': None,          # ← Open job, no driver assigned yet
             'pickup_address': pickup_addr,
             'delivery_address': delivery_addr,
+            'pickup_lat': p_coords[0],
+            'pickup_lng': p_coords[1],
+            'destination_lat': d_coords[0],
+            'destination_lng': d_coords[1],
             'distance_km': distance,
             'status': 'assigned',     # 'assigned' status means waiting for driver pickup
         }

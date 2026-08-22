@@ -15,7 +15,9 @@ class DeliveryShipmentSerializer(serializers.ModelSerializer):
         model = DeliveryShipment
         fields = (
             'id', 'order', 'order_details', 'partner', 'partner_details',
-            'pickup_address', 'delivery_address', 'distance_km', 'status',
+            'pickup_address', 'delivery_address',
+            'pickup_lat', 'pickup_lng', 'destination_lat', 'destination_lng',
+            'distance_km', 'status',
             'delivery_otp', 'assigned_at', 'shipped_at', 'delivered_at',
             'handover_completed_at', 'handover_confirmed_by'
         )

@@ -40,7 +40,13 @@ INSTALLED_APPS = [
     'payments',
     'reviews',
     'control_tower',
+    'route_planning',
 ]
+
+# Route Planning Settings
+SOP_ENGINE_URL = os.environ.get('SOP_ENGINE_URL', 'http://localhost:8004')
+OSRM_BASE_URL = os.environ.get('OSRM_BASE_URL', 'https://router.project-osrm.org')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware', # Must be at the top

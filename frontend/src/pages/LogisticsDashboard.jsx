@@ -8,6 +8,8 @@ import {
   TrendingUp, Zap, Star, Edit3, Save, X, ChevronRight,
   Loader2, Circle, CheckCircle2, PackageCheck
 } from 'lucide-react';
+import DeliveryMap from '../components/DeliveryMap';
+import RouteInfoPanel from '../components/RouteInfoPanel';
 
 const EARNINGS_PER_KM = 12;
 
@@ -96,6 +98,11 @@ const LogisticsDashboard = () => {
   const [otpInputs, setOtpInputs] = useState({});
   const [otpErrors, setOtpErrors] = useState({});
 
+  // Route Planning & Geolocation state
+  const [activeDeliveryData, setActiveDeliveryData] = useState(null);
+  const [driverLocation, setDriverLocation] = useState(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+
   // Vehicle edit state
   const [editingVehicle, setEditingVehicle] = useState(false);
   const [vehicleSaving, setVehicleSaving] = useState(false);
@@ -142,9 +149,38 @@ const LogisticsDashboard = () => {
     }
   }, []);
 
+  const fetchActiveDeliveryRoute = useCallback(async () => {
+    try {
+      setRouteLoading(true);
+      const res = await api.get('/route-planning/driver/active-delivery/');
+      setActiveDeliveryData(res.data.active_delivery);
+    } catch (err) {
+      console.error('Active delivery route fetch error:', err);
+    } finally {
+      setRouteLoading(false);
+    }
+  }, []);
+
+  const handleGetLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setDriverLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          showSuccess('📍 Driver location updated on map!');
+        },
+        (err) => {
+          showError('Geolocation unavailable or permission denied.');
+        }
+      );
+    } else {
+      showError('Geolocation is not supported by your browser.');
+    }
+  };
+
   useEffect(() => {
     fetchShipments();
     fetchStats();
+    fetchActiveDeliveryRoute();
     if (user) {
       setVehicleForm({
         vehicle_number: user.vehicle_number || '',
@@ -161,6 +197,7 @@ const LogisticsDashboard = () => {
   const handleRefresh = () => {
     fetchShipments();
     fetchStats();
+    fetchActiveDeliveryRoute();
   };
 
   const handleAcceptJob = async (shipmentId) => {
@@ -256,6 +293,7 @@ const LogisticsDashboard = () => {
     { key: 'overview', label: 'Overview', icon: BarChart3 },
     { key: 'available', label: 'Available Jobs', icon: Zap, badge: availableJobs.length },
     { key: 'active', label: 'Active Shipments', icon: Truck, badge: myActiveShipments.length },
+    { key: 'delivery_map', label: 'Delivery Map & Route', icon: Route, badge: activeDeliveryData ? 1 : 0 },
     { key: 'completed', label: 'Completed', icon: CheckCircle },
     { key: 'vehicle', label: 'Vehicle Profile', icon: Settings },
   ];
@@ -743,6 +781,91 @@ const LogisticsDashboard = () => {
                   ))}
                 </div>
               </>
+            )}
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════
+            TAB: DELIVERY MAP & ROUTE
+        ════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'delivery_map' && (
+          <div className="space-y-6">
+            {!activeDeliveryData ? (
+              <div className="bg-white border border-slate-100 rounded-3xl p-12 text-center space-y-3 shadow-xs">
+                <div className="p-4 bg-slate-50 text-slate-400 rounded-full w-16 h-16 mx-auto flex items-center justify-center">
+                  <Route className="h-8 w-8" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800">No active delivery</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Your active delivery route will appear here when a shipment is assigned and accepted.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Active delivery order info header */}
+                <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-blue-100 text-blue-800 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">
+                        Active Delivery {activeDeliveryData.order_number}
+                      </span>
+                      <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase">
+                        {activeDeliveryData.status}
+                      </span>
+                    </div>
+                    <h2 className="text-xl font-black text-slate-800">
+                      {activeDeliveryData.commodity} ({activeDeliveryData.quantity})
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      📍 {activeDeliveryData.pickup} ➔ 🏁 {activeDeliveryData.destination}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleGetLocation}
+                      className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 transition-all"
+                    >
+                      <MapPin className="h-4 w-4 text-blue-600" />
+                      Locate Me on Map
+                    </button>
+                    {activeDeliveryData.status === 'assigned' && (
+                      <button
+                        onClick={() => handleMarkPickedUp(activeDeliveryData.shipment_id)}
+                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm"
+                      >
+                        Start Delivery (Pick Up)
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Leaflet Delivery Map */}
+                <DeliveryMap
+                  pickupAddress={activeDeliveryData.pickup}
+                  deliveryAddress={activeDeliveryData.destination}
+                  pickupCoordinates={activeDeliveryData.pickup_coordinates}
+                  destinationCoordinates={activeDeliveryData.destination_coordinates}
+                  routeGeometry={activeDeliveryData.route?.route_geometry || []}
+                  weatherCheckpoints={activeDeliveryData.route?.weather_snapshot || []}
+                  driverLocation={driverLocation}
+                  height="480px"
+                />
+
+                {/* Route Information & Weather Checkpoints Panel */}
+                <RouteInfoPanel
+                  route={activeDeliveryData.route}
+                  isDriver={true}
+                  onRecalculate={() => {
+                    api.post(`/route-planning/shipments/${activeDeliveryData.shipment_id}/recalculate-route/`)
+                      .then(() => {
+                        showSuccess('Route recalculated with latest weather data!');
+                        fetchActiveDeliveryRoute();
+                      })
+                      .catch(err => showError(err.response?.data?.error || 'Recalculation failed.'));
+                  }}
+                />
+              </div>
             )}
           </div>
         )}

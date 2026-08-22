@@ -16,6 +16,7 @@ urlpatterns = [
     path('api/market-prices/', include('pricing.urls')),
     path('api/reviews/', include('reviews.urls')),
     path('api/control-tower/', include('control_tower.urls')),
+    path('api/route-planning/', include('route_planning.urls')),
     
     # API documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
