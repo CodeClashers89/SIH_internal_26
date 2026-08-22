@@ -1,10 +1,12 @@
 from rest_framework import serializers
 from .models import Product, Auction, Bid, GroupOrder, GroupOrderParticipant, FlashSale, TraceabilityLot
 from users.serializers import UserSerializer
+from datetime import timedelta
 
 class ProductSerializer(serializers.ModelSerializer):
     farmer_details = UserSerializer(source='farmer', read_only=True)
     freshness_percentage = serializers.ReadOnlyField()
+    expiry_date = serializers.DateField(required=False)
 
     class Meta:
         model = Product
@@ -17,6 +19,23 @@ class ProductSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'farmer', 'created_at', 'freshness_percentage')
 
     def validate(self, data):
+        # Calculate a dummy expiry_date if not provided
+        if not data.get('expiry_date') and data.get('harvest_date'):
+            category = data.get('category', '').lower()
+            name = data.get('name', '').lower()
+            shelf_life_hours = 120
+            if category == 'fruits':
+                shelf_life_hours = 168
+            elif category in ['grains', 'pulses', 'spices']:
+                shelf_life_hours = 720
+            elif category == 'vegetables':
+                if any(word in name for word in ['leafy', 'spinach', 'cabbage', 'lettuce', 'kale']):
+                    shelf_life_hours = 36
+                else:
+                    shelf_life_hours = 120
+            
+            data['expiry_date'] = data['harvest_date'] + timedelta(days=shelf_life_hours/24.0)
+
         if data.get('harvest_date') and data.get('expiry_date'):
             if data['harvest_date'] > data['expiry_date']:
                 raise serializers.ValidationError("Expiry date must be after harvest date.")

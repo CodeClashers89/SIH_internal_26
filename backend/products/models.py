@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
-from datetime import date
+from datetime import date, datetime
+from django.utils import timezone
 
 class Product(models.Model):
     CATEGORY_CHOICES = (
@@ -30,21 +31,39 @@ class Product(models.Model):
 
     @property
     def freshness_percentage(self):
-        # Freshness is based on how close current date is to expiry compared to harvest date
-        today = date.today()
-        if today >= self.expiry_date:
-            return 0
-        if today <= self.harvest_date:
-            return 100
+        current_time = timezone.now()
         
-        total_shelf_life = (self.expiry_date - self.harvest_date).days
-        remaining_life = (self.expiry_date - today).days
+        # Convert harvest_date to timezone-aware datetime at midnight
+        harvest_dt = datetime.combine(self.harvest_date, datetime.min.time())
+        harvest_dt = timezone.make_aware(harvest_dt, timezone.get_current_timezone())
         
-        if total_shelf_life <= 0:
-            return 0
+        elapsed_hours = (current_time - harvest_dt).total_seconds() / 3600.0
         
-        percentage = int((remaining_life / total_shelf_life) * 100)
-        return max(0, min(100, percentage))
+        # Shelf life lookup based on category and name
+        category_lower = self.category.lower() if self.category else ''
+        name_lower = self.name.lower() if self.name else ''
+        
+        shelf_life_hours = 120 # Default fallback (Standard Vegetables)
+        
+        if category_lower == 'fruits':
+            shelf_life_hours = 168
+        elif category_lower in ['grains', 'pulses', 'spices']:
+            shelf_life_hours = 720
+        elif category_lower == 'vegetables':
+            if any(word in name_lower for word in ['leafy', 'spinach', 'cabbage', 'lettuce', 'kale']):
+                shelf_life_hours = 36
+            else:
+                shelf_life_hours = 120
+                
+        # Calculate dynamic freshness score
+        # Freshness_Score = MAX(0, MIN(100, ROUND(100 - ((Elapsed_Hours / Shelf_Life_Hours) * 100), 2)))
+        raw_score = 100 - ((elapsed_hours / shelf_life_hours) * 100)
+        score = max(0, min(100, round(raw_score, 2)))
+        
+        # We can return it as an int for backward compatibility with frontend, but round to float works too
+        # Since frontend expects a number that can be compared, rounding to 2 decimals is fine, or converting to int.
+        # Original was int, let's keep it as int/float.
+        return max(0, min(100, int(score)))
 
     def __str__(self):
         return f"{self.name} - {self.quantity} {self.unit} @ Rs.{self.price_per_unit}/{self.unit}"

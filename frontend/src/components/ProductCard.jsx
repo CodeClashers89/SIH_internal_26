@@ -7,9 +7,17 @@ const ProductCard = ({ product, onAddToCart }) => {
   const [qty, setQty] = useState(1);
 
   const getFreshnessColor = (pct) => {
-    if (pct >= 80) return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-    if (pct >= 50) return 'bg-amber-100 text-amber-800 border-amber-200';
+    if (pct >= 90) return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    if (pct >= 70) return 'bg-teal-100 text-teal-800 border-teal-200';
+    if (pct >= 40) return 'bg-amber-100 text-amber-800 border-amber-200';
     return 'bg-rose-100 text-rose-800 border-rose-200';
+  };
+
+  const getFreshnessBadgeText = (pct) => {
+    if (pct >= 90) return 'Ultra Fresh';
+    if (pct >= 70) return 'Fresh';
+    if (pct >= 40) return 'Standard';
+    return 'Processing Grade';
   };
 
   const isFarmerOwner = user && user.id === product.farmer;
@@ -34,8 +42,10 @@ const ProductCard = ({ product, onAddToCart }) => {
           }}
         />
         <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
-          <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getFreshnessColor(product.freshness_percentage)}`}>
-            {product.freshness_percentage}% Fresh
+          <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getFreshnessColor(product.freshness_percentage)} flex items-center gap-1`}>
+            <span>{product.freshness_percentage}%</span>
+            <span className="opacity-75">|</span>
+            <span>{getFreshnessBadgeText(product.freshness_percentage)}</span>
           </span>
           <span className="bg-slate-900/80 backdrop-blur-xs text-white px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider">
             {product.category}

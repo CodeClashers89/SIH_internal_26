@@ -43,7 +43,6 @@ const FarmerDashboard = () => {
   const [pUnit, setPUnit] = useState('kg');
   const [pPrice, setPPrice] = useState('');
   const [pHarvest, setPHarvest] = useState('');
-  const [pExpiry, setPExpiry] = useState('');
   const [pDesc, setPDesc] = useState('');
   const [pImage, setPImage] = useState('');
 
@@ -117,7 +116,6 @@ const FarmerDashboard = () => {
       unit: pUnit,
       price_per_unit: parseFloat(pPrice),
       harvest_date: pHarvest,
-      expiry_date: pExpiry,
       description: pDesc,
       image_url: pImage
     };
@@ -131,7 +129,6 @@ const FarmerDashboard = () => {
       setPQuantity('');
       setPPrice('');
       setPHarvest('');
-      setPExpiry('');
       setPDesc('');
       setPImage('');
       fetchDashboardData(); // update stats
@@ -445,7 +442,7 @@ const FarmerDashboard = () => {
                   <th className="py-3 px-2">Stock Level</th>
                   <th className="py-3 px-2">Price per Unit</th>
                   <th className="py-3 px-2">Freshness Gauge</th>
-                  <th className="py-3 px-2">Harvest / Expiry</th>
+                  <th className="py-3 px-2">Harvest Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -481,17 +478,21 @@ const FarmerDashboard = () => {
                       <td className="py-3.5 px-2 font-medium text-slate-700">{l.quantity} {l.unit}</td>
                       <td className="py-3.5 px-2 font-extrabold text-slate-900">₹{parseFloat(l.price_per_unit).toFixed(2)}</td>
                       <td className="py-3.5 px-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          l.freshness_percentage >= 80 ? 'bg-emerald-100 text-emerald-800' :
-                          l.freshness_percentage >= 50 ? 'bg-amber-100 text-amber-800' :
-                          'bg-red-100 text-red-800'
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${
+                          l.freshness_percentage >= 90 ? 'bg-emerald-100 text-emerald-800' :
+                          l.freshness_percentage >= 70 ? 'bg-teal-100 text-teal-800' :
+                          l.freshness_percentage >= 40 ? 'bg-amber-100 text-amber-800' :
+                          'bg-rose-100 text-rose-800'
                         }`}>
-                          {l.freshness_percentage}% Fresh
+                          {l.freshness_percentage}% | {
+                            l.freshness_percentage >= 90 ? 'Ultra Fresh' :
+                            l.freshness_percentage >= 70 ? 'Fresh' :
+                            l.freshness_percentage >= 40 ? 'Standard' : 'Processing Grade'
+                          }
                         </span>
                       </td>
                       <td className="py-3.5 px-2 text-slate-500 leading-relaxed">
-                        Harv: {new Date(l.harvest_date).toLocaleDateString('en-IN')}<br />
-                        Exp: {new Date(l.expiry_date).toLocaleDateString('en-IN')}
+                        {new Date(l.harvest_date).toLocaleDateString('en-IN')}
                       </td>
                     </tr>
                   ))
@@ -1207,7 +1208,7 @@ const FarmerDashboard = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 <div>
                   <label className="block text-slate-600 font-bold mb-1 uppercase">Harvest Date</label>
                   <input
@@ -1215,16 +1216,6 @@ const FarmerDashboard = () => {
                     required
                     value={pHarvest}
                     onChange={(e) => setPHarvest(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-600 font-bold mb-1 uppercase">Expiry Date</label>
-                  <input
-                    type="date"
-                    required
-                    value={pExpiry}
-                    onChange={(e) => setPExpiry(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
                 </div>
