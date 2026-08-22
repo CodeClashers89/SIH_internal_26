@@ -45,18 +45,31 @@ const BulkBuyerPortal = () => {
 
   const fetchPortalData = async () => {
     try {
-      const [prodRes, quotesRes, reqRes, contractRes] = await Promise.all([
+      const [prodRes, quotesRes, reqRes, contractRes] = await Promise.allSettled([
         api.get('/products/'),
         api.get('/orders/quotes/'),
         api.get('/orders/bulk-requirements/'),
         api.get('/orders/pre-harvest-contracts/')
       ]);
-      setProducts(prodRes.data);
-      setQuotes(quotesRes.data);
-      setRequirements(reqRes.data);
-      setPreHarvestContracts(contractRes.data);
-      if (prodRes.data.length > 0) {
-        setSelectedProdId(prodRes.data[0].id);
+      
+      if (prodRes.status === 'fulfilled') {
+        const prodData = Array.isArray(prodRes.value.data) ? prodRes.value.data : (prodRes.value.data?.results || []);
+        setProducts(prodData);
+        if (prodData.length > 0) {
+          setSelectedProdId(prodData[0].id);
+        }
+      }
+      if (quotesRes.status === 'fulfilled') {
+        const quotesData = Array.isArray(quotesRes.value.data) ? quotesRes.value.data : (quotesRes.value.data?.results || []);
+        setQuotes(quotesData);
+      }
+      if (reqRes.status === 'fulfilled') {
+        const reqData = Array.isArray(reqRes.value.data) ? reqRes.value.data : (reqRes.value.data?.results || []);
+        setRequirements(reqData);
+      }
+      if (contractRes.status === 'fulfilled') {
+        const contractData = Array.isArray(contractRes.value.data) ? contractRes.value.data : (contractRes.value.data?.results || []);
+        setPreHarvestContracts(contractData);
       }
     } catch (err) {
       console.error('Failed to fetch portal data', err);
