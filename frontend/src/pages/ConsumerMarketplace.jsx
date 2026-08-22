@@ -479,7 +479,6 @@ const ConsumerMarketplace = () => {
                     )}
                   </div>
                 </div>
-                </div>
               </div>
             ))
           )}
