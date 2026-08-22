@@ -7,102 +7,42 @@ from .geocoding import geocode_market
 
 MOCK_AGMARKNET_DATA = {
     "records": [
-        {
-            "state": "Gujarat",
-            "district": "Anand",
-            "market": "Anand APMC",
-            "commodity": "Tomato",
-            "variety": "Local",
-            "grade": "FAQ",
-            "arrival_date": "22/08/2026",
-            "min_price": "1200",
-            "max_price": "1800",
-            "modal_price": "1500"
-        },
-        {
-            "state": "Gujarat",
-            "district": "Anand",
-            "market": "Anand APMC",
-            "commodity": "Potato",
-            "variety": "Other",
-            "grade": "FAQ",
-            "arrival_date": "22/08/2026",
-            "min_price": "1500",
-            "max_price": "1900",
-            "modal_price": "1700"
-        },
-        {
-            "state": "Gujarat",
-            "district": "Anand",
-            "market": "Anand APMC",
-            "commodity": "Wheat",
-            "variety": "Lokwan",
-            "grade": "FAQ",
-            "arrival_date": "22/08/2026",
-            "min_price": "2100",
-            "max_price": "2350",
-            "modal_price": "2250"
-        },
-        {
-            "state": "Gujarat",
-            "district": "Kheda",
-            "market": "Nadiad Market",
-            "commodity": "Tomato",
-            "variety": "Hybrid",
-            "grade": "FAQ",
-            "arrival_date": "22/08/2026",
-            "min_price": "1300",
-            "max_price": "1900",
-            "modal_price": "1650"
-        },
-        {
-            "state": "Gujarat",
-            "district": "Kheda",
-            "market": "Nadiad Market",
-            "commodity": "Potato",
-            "variety": "Local",
-            "grade": "FAQ",
-            "arrival_date": "22/08/2026",
-            "min_price": "1400",
-            "max_price": "1800",
-            "modal_price": "1600"
-        },
-        {
-            "state": "Gujarat",
-            "district": "Ahmedabad",
-            "market": "Ahmedabad Mandi",
-            "commodity": "Tomato",
-            "variety": "Local",
-            "grade": "FAQ",
-            "arrival_date": "22/08/2026",
-            "min_price": "1150",
-            "max_price": "1700",
-            "modal_price": "1450"
-        },
-        {
-            "state": "Gujarat",
-            "district": "Vadodara",
-            "market": "Vadodara APMC",
-            "commodity": "Tomato",
-            "variety": "Local",
-            "grade": "FAQ",
-            "arrival_date": "22/08/2026",
-            "min_price": "1250",
-            "max_price": "1850",
-            "modal_price": "1580"
-        },
-        {
-            "state": "Maharashtra",
-            "district": "Pune",
-            "market": "Pune Mandi",
-            "commodity": "Tomato",
-            "variety": "Local",
-            "grade": "FAQ",
-            "arrival_date": "22/08/2026",
-            "min_price": "1200",
-            "max_price": "1800",
-            "modal_price": "1500"
-        }
+        # Anand APMC
+        {"state": "Gujarat", "district": "Anand", "market": "Anand APMC", "commodity": "Tomato", "variety": "Local", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1200", "max_price": "1800", "modal_price": "1500"},
+        {"state": "Gujarat", "district": "Anand", "market": "Anand APMC", "commodity": "Potato", "variety": "Other", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1500", "max_price": "1900", "modal_price": "1700"},
+        {"state": "Gujarat", "district": "Anand", "market": "Anand APMC", "commodity": "Wheat", "variety": "Lokwan", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "2100", "max_price": "2350", "modal_price": "2250"},
+        {"state": "Gujarat", "district": "Anand", "market": "Anand APMC", "commodity": "Rice", "variety": "Basmati", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "5500", "max_price": "6800", "modal_price": "6200"},
+        {"state": "Gujarat", "district": "Anand", "market": "Anand APMC", "commodity": "Mustard", "variety": "Local", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "4500", "max_price": "5200", "modal_price": "4900"},
+        {"state": "Gujarat", "district": "Anand", "market": "Anand APMC", "commodity": "Onion", "variety": "Red", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1800", "max_price": "2400", "modal_price": "2100"},
+        
+        # Nadiad Market
+        {"state": "Gujarat", "district": "Kheda", "market": "Nadiad Market", "commodity": "Tomato", "variety": "Hybrid", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1300", "max_price": "1900", "modal_price": "1650"},
+        {"state": "Gujarat", "district": "Kheda", "market": "Nadiad Market", "commodity": "Potato", "variety": "Local", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1400", "max_price": "1800", "modal_price": "1600"},
+        {"state": "Gujarat", "district": "Kheda", "market": "Nadiad Market", "commodity": "Onion", "variety": "White", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1600", "max_price": "2200", "modal_price": "1950"},
+        {"state": "Gujarat", "district": "Kheda", "market": "Nadiad Market", "commodity": "Wheat", "variety": "Sharbati", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "2300", "max_price": "2600", "modal_price": "2450"},
+
+        # Ahmedabad Mandi
+        {"state": "Gujarat", "district": "Ahmedabad", "market": "Ahmedabad Mandi", "commodity": "Tomato", "variety": "Local", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1150", "max_price": "1700", "modal_price": "1450"},
+        {"state": "Gujarat", "district": "Ahmedabad", "market": "Ahmedabad Mandi", "commodity": "Potato", "variety": "Local", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1350", "max_price": "1750", "modal_price": "1550"},
+        {"state": "Gujarat", "district": "Ahmedabad", "market": "Ahmedabad Mandi", "commodity": "Onion", "variety": "Red", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1700", "max_price": "2300", "modal_price": "2000"},
+        {"state": "Gujarat", "district": "Ahmedabad", "market": "Ahmedabad Mandi", "commodity": "Wheat", "variety": "Lokwan", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "2150", "max_price": "2400", "modal_price": "2280"},
+        {"state": "Gujarat", "district": "Ahmedabad", "market": "Ahmedabad Mandi", "commodity": "Rice", "variety": "Basmati", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "5200", "max_price": "6600", "modal_price": "5900"},
+        {"state": "Gujarat", "district": "Ahmedabad", "market": "Ahmedabad Mandi", "commodity": "Apple", "variety": "Kashmiri", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "8000", "max_price": "12000", "modal_price": "10000"},
+
+        # Vadodara APMC
+        {"state": "Gujarat", "district": "Vadodara", "market": "Vadodara APMC", "commodity": "Tomato", "variety": "Local", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1250", "max_price": "1850", "modal_price": "1580"},
+        {"state": "Gujarat", "district": "Vadodara", "market": "Vadodara APMC", "commodity": "Onion", "variety": "Red", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1750", "max_price": "2350", "modal_price": "2050"},
+        {"state": "Gujarat", "district": "Vadodara", "market": "Vadodara APMC", "commodity": "Potato", "variety": "Other", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1450", "max_price": "1850", "modal_price": "1650"},
+        {"state": "Gujarat", "district": "Vadodara", "market": "Vadodara APMC", "commodity": "Garlic", "variety": "Local", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "9000", "max_price": "12000", "modal_price": "10500"},
+        {"state": "Gujarat", "district": "Vadodara", "market": "Vadodara APMC", "commodity": "Banana", "variety": "Robusta", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1500", "max_price": "2200", "modal_price": "1800"},
+
+        # Pune Mandi
+        {"state": "Maharashtra", "district": "Pune", "market": "Pune Mandi", "commodity": "Tomato", "variety": "Local", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1200", "max_price": "1800", "modal_price": "1500"},
+        {"state": "Maharashtra", "district": "Pune", "market": "Pune Mandi", "commodity": "Onion", "variety": "Red", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1900", "max_price": "2500", "modal_price": "2200"},
+        {"state": "Maharashtra", "district": "Pune", "market": "Pune Mandi", "commodity": "Potato", "variety": "Local", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1400", "max_price": "1800", "modal_price": "1600"},
+        {"state": "Maharashtra", "district": "Pune", "market": "Pune Mandi", "commodity": "Ginger", "variety": "Local", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "6000", "max_price": "8000", "modal_price": "7000"},
+        {"state": "Maharashtra", "district": "Pune", "market": "Pune Mandi", "commodity": "Apple", "variety": "Kashmiri", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "8500", "max_price": "13000", "modal_price": "11000"},
+        {"state": "Maharashtra", "district": "Pune", "market": "Pune Mandi", "commodity": "Wheat", "variety": "Lokwan", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "2200", "max_price": "2450", "modal_price": "2350"}
     ]
 }
 
