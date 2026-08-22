@@ -456,6 +456,9 @@ class FarmerOfferViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         return [permissions.IsAuthenticated()]
 
+    def perform_create(self, serializer):
+        serializer.save(farmer=self.request.user)
+
     def get_queryset(self):
         user = self.request.user
         queryset = super().get_queryset()

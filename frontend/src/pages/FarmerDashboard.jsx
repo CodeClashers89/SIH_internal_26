@@ -745,12 +745,100 @@ const FarmerDashboard = () => {
                     </div>
 
                     {req.status === 'pending' && (
-                      <button
-                        onClick={() => handleOpenOfferForm(req)}
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1"
-                      >
-                        <Handshake className="h-4 w-4" /> Submit Sourcing Contribution
-                      </button>
+                      <div className="space-y-3 pt-1">
+                        <button
+                          onClick={() => {
+                            if (offerReqId === req.id) {
+                              setOfferReqId(null);
+                            } else {
+                              handleOpenOfferForm(req);
+                            }
+                          }}
+                          className={`w-full font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow-xs ${
+                            offerReqId === req.id
+                              ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                              : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          }`}
+                        >
+                          <Handshake className="h-4 w-4" /> 
+                          {offerReqId === req.id ? 'Close Offer Form' : 'Submit Sourcing Contribution'}
+                        </button>
+
+                        {offerReqId === req.id && (
+                          <div className="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 space-y-3 animate-fade-in text-xs">
+                            <div className="flex justify-between items-center pb-1 border-b border-emerald-100/60">
+                              <span className="font-bold text-emerald-900 text-xs">Your Sourcing Contribution Offer</span>
+                              <span className="text-[10px] text-emerald-600 font-medium">Target: ₹{req.target_price_min} - ₹{req.target_price_max}/{req.unit}</span>
+                            </div>
+
+                            <form onSubmit={handleSubmitSourcingOffer} className="space-y-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                <div>
+                                  <label className="block text-slate-700 font-bold mb-1 text-[11px]">Your Quantity ({req.unit})</label>
+                                  <input
+                                    type="number"
+                                    required
+                                    placeholder={`e.g. ${req.quantity}`}
+                                    value={offerQty}
+                                    onChange={(e) => setOfferQty(e.target.value)}
+                                    className="w-full px-3 py-1.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-slate-700 font-bold mb-1 text-[11px]">Your Offered Price (₹/{req.unit})</label>
+                                  <input
+                                    type="number"
+                                    required
+                                    placeholder={`e.g. ${req.target_price_max}`}
+                                    value={offerPrice}
+                                    onChange={(e) => setOfferPrice(e.target.value)}
+                                    className="w-full px-3 py-1.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white text-xs"
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-slate-700 font-bold mb-1 text-[11px]">Expected Delivery Date</label>
+                                <input
+                                  type="date"
+                                  required
+                                  value={offerDate}
+                                  onChange={(e) => setOfferDate(e.target.value)}
+                                  className="w-full px-3 py-1.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white text-xs"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-slate-700 font-bold mb-1 text-[11px]">Notes / Terms (Optional)</label>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. Moisture 11%, graded, direct from farm..."
+                                  value={offerNotes}
+                                  onChange={(e) => setOfferNotes(e.target.value)}
+                                  className="w-full px-3 py-1.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white text-xs"
+                                />
+                              </div>
+
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  type="submit"
+                                  disabled={submittingOffer}
+                                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 text-xs shadow-xs"
+                                >
+                                  {submittingOffer ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Send Offer to Wholesaler'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setOfferReqId(null)}
+                                  className="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-semibold"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </form>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))
