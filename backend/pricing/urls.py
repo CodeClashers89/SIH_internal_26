@@ -1,9 +1,9 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import MandiPriceViewSet
+from .views import MarketViewSet
 
 router = DefaultRouter()
-router.register(r'', MandiPriceViewSet, basename='mandiprice')
+router.register(r'markets', MarketViewSet, basename='market')
 
 urlpatterns = [
     path('', include(router.urls)),

@@ -4,7 +4,7 @@ from django.utils import timezone
 from products.models import Product
 from orders.models import Order, OrderItem
 from logistics.models import LogisticsPartner
-from pricing.models import MandiPrice
+from pricing.models import Market, MarketPrice
 from reviews.models import Review
 from decimal import Decimal
 from datetime import timedelta, date
@@ -22,7 +22,8 @@ class Command(BaseCommand):
         Order.objects.all().delete()
         Product.objects.all().delete()
         LogisticsPartner.objects.all().delete()
-        MandiPrice.objects.all().delete()
+        MarketPrice.objects.all().delete()
+        Market.objects.all().delete()
         # Delete non-superuser users
         User.objects.filter(is_superuser=False).delete()
         User.objects.filter(username='admin').delete()
@@ -180,16 +181,15 @@ class Command(BaseCommand):
                     modal_p *= 2
                     max_p *= 2
                 
-                MandiPrice.objects.create(
-                    state="Maharashtra",
-                    district="Pune",
-                    market="Pune Mandi",
+                m, _ = Market.objects.get_or_create(name='Pune Mandi', normalized_name='pune mandi', district='Pune', state='Maharashtra', latitude=18.5204, longitude=73.8567)
+                MarketPrice.objects.create(
+                    market=m, 
+                    reported_date=mandi_date, 
                     commodity=commodity,
                     variety=variety,
                     min_price=min_p,
                     max_price=max_p,
-                    modal_price=modal_p,
-                    date=mandi_date
+                    modal_price=modal_p
                 )
 
         self.stdout.write("Creating products...")

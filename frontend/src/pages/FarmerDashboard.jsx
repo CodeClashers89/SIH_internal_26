@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import DemandForecastingChart from '../components/DemandForecastingChart';
 import Stepper from '../components/Stepper';
+import MarketMap from '../components/MarketMap';
+import MarketDetailPanel from '../components/MarketDetailPanel';
 import { 
   Plus, Loader2, Calendar, FileCheck, Package, ShoppingBag, 
   DollarSign, RefreshCcw, Handshake, MapPin, PlusCircle, CheckCircle, Info, Award
@@ -19,6 +21,8 @@ const FarmerDashboard = () => {
   const [bulkReqs, setBulkReqs] = useState([]);
   const [myOffers, setMyOffers] = useState([]);
   const [preHarvestContracts, setPreHarvestContracts] = useState([]);
+  const [markets, setMarkets] = useState([]);
+  const [selectedMarket, setSelectedMarket] = useState(null);
   
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -68,14 +72,15 @@ const FarmerDashboard = () => {
   const fetchDashboardData = async () => {
     setRefreshing(true);
     try {
-      const [statsRes, listingsRes, ordersRes, quotesRes, bulkRes, myOffersRes, contractRes] = await Promise.all([
+      const [statsRes, listingsRes, ordersRes, quotesRes, bulkRes, myOffersRes, contractRes, marketsRes] = await Promise.all([
         api.get('/farmer/stats/'),
         api.get(`/products/?farmer=${user.id}`),
         api.get('/orders/'),
         api.get('/orders/quotes/'),
         api.get('/orders/bulk-requirements/'),
         api.get('/orders/farmer-offers/'),
-        api.get('/orders/pre-harvest-contracts/')
+        api.get('/orders/pre-harvest-contracts/'),
+        api.get('/pricing/markets/')
       ]);
       setStats(statsRes.data);
       setListings(listingsRes.data);
@@ -84,6 +89,7 @@ const FarmerDashboard = () => {
       setBulkReqs(bulkRes.data);
       setMyOffers(myOffersRes.data);
       setPreHarvestContracts(contractRes.data);
+      setMarkets(marketsRes.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -401,6 +407,14 @@ const FarmerDashboard = () => {
           }`}
         >
           Pre-Harvest Contracts ({preHarvestContracts.length})
+        </button>
+        <button
+          onClick={() => setActiveSection('markets')}
+          className={`pb-4 text-sm font-bold border-b-2 transition-all ${
+            activeSection === 'markets' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Market Prices
         </button>
       </div>
 
@@ -837,6 +851,23 @@ const FarmerDashboard = () => {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {activeSection === 'markets' && (
+        <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-6 relative flex flex-col md:flex-row gap-6">
+          <div className="flex-1">
+            <div>
+              <h3 className="font-bold text-lg text-slate-800">AGMARKNET Live Market Prices</h3>
+              <p className="text-xs text-slate-500 mb-4">Discover nearby markets and government-reported commodity prices.</p>
+            </div>
+            <MarketMap markets={markets} onMarketSelect={setSelectedMarket} />
+          </div>
+          {selectedMarket && (
+            <div className="w-full md:w-1/3">
+              <MarketDetailPanel market={selectedMarket} onClose={() => setSelectedMarket(null)} />
+            </div>
+          )}
         </div>
       )}
 
