@@ -79,41 +79,77 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('API Connection Settings', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Backend API server URL:',
-              style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            TextField(
-              controller: urlController,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'http://10.0.2.2:8000/api',
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Backend API server URL:',
+                style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
               ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'B2B Subscription API URL:',
-              style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            TextField(
-              controller: subController,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'http://10.0.2.2:8001/api/v1/subscription',
+              const SizedBox(height: 6),
+              TextField(
+                controller: urlController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  hintText: 'http://10.0.2.2:8000/api',
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Use 10.0.2.2 for Android Emulator, or local machine IP for real devices.',
-              style: TextStyle(fontSize: 10, color: Colors.amber, fontWeight: FontWeight.w600),
-            ),
-          ],
+              const SizedBox(height: 12),
+              const Text(
+                'B2B Subscription API URL:',
+                style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: subController,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  hintText: 'http://10.0.2.2:8001/api/v1/subscription',
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Quick Presets:',
+                style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  ActionChip(
+                    label: const Text('Android Emulator', style: TextStyle(fontSize: 11)),
+                    onPressed: () {
+                      urlController.text = 'http://10.0.2.2:8000/api';
+                      subController.text = 'http://10.0.2.2:8001/api/v1/subscription';
+                    },
+                  ),
+                  ActionChip(
+                    label: const Text('Localhost (iOS/Web)', style: TextStyle(fontSize: 11)),
+                    onPressed: () {
+                      urlController.text = 'http://localhost:8000/api';
+                      subController.text = 'http://localhost:8001/api/v1/subscription';
+                    },
+                  ),
+                  ActionChip(
+                    backgroundColor: Colors.teal.shade900,
+                    label: const Text('Render Live', style: TextStyle(color: Colors.white, fontSize: 11)),
+                    onPressed: () {
+                      urlController.text = 'https://kishanconnect.onrender.com/api';
+                      subController.text = 'http://localhost:8001/api/v1/subscription';
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Use 10.0.2.2 for Android Emulator, or local machine IP for real devices.',
+                style: TextStyle(fontSize: 10, color: Colors.amber, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
