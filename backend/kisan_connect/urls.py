@@ -4,8 +4,16 @@ from drf_spectacular.views import (
     SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 )
 
+from django.http import JsonResponse
+
+def health_check(request):
+    return JsonResponse({'status': 'healthy'})
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    
+    # Health check endpoint
+    path('api/health/', health_check, name='health_check'),
     
     # API endpoints
     path('api/', include('users.urls')),
@@ -24,3 +32,4 @@ urlpatterns = [
     path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]
+
