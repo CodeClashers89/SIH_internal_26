@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import api from '../utils/api';
 
 const MarketDetailPanel = ({ market, onClose }) => {
   const [prices, setPrices] = useState([]);
@@ -13,9 +14,8 @@ const MarketDetailPanel = ({ market, onClose }) => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(`http://localhost:8000/api/market-prices/markets/${market.id}/prices/`);
-        if (!response.ok) throw new Error("Failed to fetch market data");
-        const data = await response.json();
+        const response = await api.get(`/market-prices/markets/${market.id}/prices/`);
+        const data = response.data;
         setPrices(data);
       } catch (err) {
         setError("Unable to retrieve latest government data.");

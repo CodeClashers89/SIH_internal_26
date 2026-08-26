@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../utils/api';
 import { 
     AlertTriangle, 
     XCircle, 
@@ -20,8 +20,8 @@ const ControlTower = () => {
 
     const fetchData = async () => {
         try {
-            const summaryRes = await axios.get('http://localhost:8000/api/control-tower/summary/');
-            const exceptionsRes = await axios.get('http://localhost:8000/api/control-tower/exceptions/');
+            const summaryRes = await api.get('/control-tower/summary/');
+            const exceptionsRes = await api.get('/control-tower/exceptions/');
             setSummary(summaryRes.data);
             setExceptions(exceptionsRes.data);
             setLoading(false);

@@ -6,6 +6,8 @@ import {
   Handshake, AlertCircle, PlusCircle, CheckCircle, RefreshCw, Calendar, MapPin, Award
 } from 'lucide-react';
 
+const B2B_API = import.meta.env.VITE_B2B_API_URL || 'http://localhost:8001/api/v1/subscription';
+
 const BulkBuyerPortal = () => {
   const { user } = useAuth();
   
@@ -54,7 +56,7 @@ const BulkBuyerPortal = () => {
 
   const fetchSubscriptions = async () => {
     try {
-      const res = await fetch(`http://localhost:8001/api/v1/subscription/list?buyer_id=${user.id}`);
+      const res = await fetch(`${B2B_API}/list?buyer_id=${user.id}`);
       if (res.ok) {
         const data = await res.json();
         setSubscriptions(data);
@@ -89,7 +91,7 @@ const BulkBuyerPortal = () => {
     };
 
     try {
-      const res = await fetch('http://localhost:8001/api/v1/subscription/create', {
+      const res = await fetch(`${B2B_API}/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -112,7 +114,7 @@ const BulkBuyerPortal = () => {
 
   const handleToggleSubscription = async (subId, currentStatus) => {
     try {
-      const res = await fetch('http://localhost:8001/api/v1/subscription/toggle-status', {
+      const res = await fetch(`${B2B_API}/toggle-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subscription_id: subId, active: !currentStatus })

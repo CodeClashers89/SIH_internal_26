@@ -3,7 +3,7 @@ import { Calendar, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 
-const B2B_API = 'http://localhost:8001/api/v1/subscription';
+const B2B_API = import.meta.env.VITE_B2B_API_URL || 'http://localhost:8001/api/v1/subscription';
 
 const STATUS_BADGE = {
   PENDING: { bg: 'bg-amber-100', text: 'text-amber-700', label: '⏳ Pending Approval' },
