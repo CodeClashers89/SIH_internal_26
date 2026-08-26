@@ -14,6 +14,9 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure--j%_dvds9lnk!cu!zx*9r
 DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 # Application definition
 
@@ -52,6 +55,7 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware', # Must be at the top
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware', # WhiteNoise static serving middleware
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
