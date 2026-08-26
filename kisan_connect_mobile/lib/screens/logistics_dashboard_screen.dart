@@ -90,7 +90,16 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
       // 2. Get active delivery for driver
       try {
         final activeRes = await client.get('/route-planning/driver/active-delivery/');
-        _activeDelivery = activeRes['shipment'] ?? activeRes;
+        final activeData = activeRes['active_delivery'] ?? activeRes['shipment'];
+        
+        if (activeData != null) {
+          _activeDelivery = Map<String, dynamic>.from(activeData);
+          if (!_activeDelivery!.containsKey('id') && _activeDelivery!.containsKey('shipment_id')) {
+            _activeDelivery!['id'] = _activeDelivery!['shipment_id'];
+          }
+        } else {
+          _activeDelivery = null;
+        }
         
         if (_activeDelivery != null && _activeDelivery!['id'] != null) {
           final shipmentId = _activeDelivery!['id'];
@@ -114,7 +123,7 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
             return LatLng(double.parse(pt[0].toString()), double.parse(pt[1].toString()));
           }).toList();
 
-          _weatherCheckpoints = routeMap['weather_checkpoints'] ?? [];
+          _weatherCheckpoints = routeMap['weather_checkpoints'] ?? routeMap['weather_snapshot'] ?? [];
         } else {
           _activeDelivery = null;
           _activeRoutePlan = null;
@@ -123,7 +132,8 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
           _destCoords = null;
           _weatherCheckpoints = [];
         }
-      } catch (_) {
+      } catch (err, stack) {
+        debugPrint('ACTIVE DELIVERY ERROR: $err\n$stack');
         // No active delivery
         _activeDelivery = null;
         _activeRoutePlan = null;
@@ -168,6 +178,17 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
       _fetchDashboardData();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update status: $e')));
+    }
+  }
+
+  Future<void> _confirmHandover(int shipmentId) async {
+    try {
+      final client = _getApiClient();
+      await client.post('/logistics/shipments/$shipmentId/confirm-handover/');
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Physical handover confirmed!')));
+      _fetchDashboardData();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Handover confirmation failed: $e')));
     }
   }
 
@@ -323,13 +344,22 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
                                     Text('Active Shipment #${_activeDelivery!['id']}', style: const TextStyle(fontWeight: FontWeight.bold)),
                                     Text('Delivery status: ${_activeDelivery!['status']?.toUpperCase()}', style: const TextStyle(color: Colors.blue, fontSize: 12)),
                                     const Divider(),
-                                    if (_activeDelivery!['status'] == 'confirmed' || _activeDelivery!['status'] == 'packed')
+                                    if (_activeDelivery!['status'] == 'assigned')
                                       SizedBox(
                                         width: double.infinity,
                                         child: ElevatedButton(
                                           style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).primaryColor),
+                                          onPressed: () => _confirmHandover(_activeDelivery!['id']),
+                                          child: const Text('Confirm Physical Handover', style: TextStyle(color: Colors.white)),
+                                        ),
+                                      )
+                                    else if (_activeDelivery!['status'] == 'handover_completed')
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: ElevatedButton(
+                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade600),
                                           onPressed: () => _updateStatusPickedUp(_activeDelivery!['id']),
-                                          child: const Text('Mark as Picked Up', style: TextStyle(color: Colors.white)),
+                                          child: const Text('Start Transit (Pick Up)', style: TextStyle(color: Colors.white)),
                                         ),
                                       )
                                     else if (_activeDelivery!['status'] == 'picked_up' || _activeDelivery!['status'] == 'in_transit')
@@ -379,7 +409,8 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
                                     ),
                                     children: [
                                       TileLayer(
-                                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                        urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                                        userAgentPackageName: 'com.kisanconnect.marketplace',
                                       ),
                                       if (_routePoints.isNotEmpty)
                                         PolylineLayer(
@@ -409,10 +440,21 @@ class _LogisticsDashboardScreenState extends State<LogisticsDashboardScreen> wit
                                             ),
                                           // Weather checkpoints
                                           ..._weatherCheckpoints.map((cp) {
-                                            final coords = cp['coordinates'] ?? [];
-                                            if (coords.length < 2) return const Marker(point: LatLng(0,0), child: SizedBox());
-                                            final lat = double.tryParse(coords[0].toString()) ?? 0.0;
-                                            final lng = double.tryParse(coords[1].toString()) ?? 0.0;
+                                            double? lat;
+                                            double? lng;
+                                            if (cp['coordinates'] != null) {
+                                              final coords = cp['coordinates'] as List;
+                                              if (coords.length >= 2) {
+                                                lat = double.tryParse(coords[0].toString());
+                                                lng = double.tryParse(coords[1].toString());
+                                              }
+                                            } else {
+                                              lat = double.tryParse(cp['latitude']?.toString() ?? '');
+                                              lng = double.tryParse(cp['longitude']?.toString() ?? '');
+                                            }
+                                            if (lat == null || lng == null) {
+                                              return const Marker(point: LatLng(0, 0), child: SizedBox());
+                                            }
                                             return Marker(
                                               point: LatLng(lat, lng),
                                               child: const CircleAvatar(

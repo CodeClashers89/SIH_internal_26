@@ -259,7 +259,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                             ),
                             children: [
                               TileLayer(
-                                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
                                 userAgentPackageName: 'com.kisanconnect.marketplace',
                               ),
                               if (_routePoints.isNotEmpty)

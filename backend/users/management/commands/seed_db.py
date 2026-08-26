@@ -177,7 +177,7 @@ class Command(BaseCommand):
             quantity=500.0,
             unit="kg",
             price_per_unit=25.00,
-            harvest_date=today - timedelta(days=2),
+            harvest_date=today - timedelta(days=1),
             expiry_date=today + timedelta(days=8),
             description="Freshly harvested organic vine tomatoes from Khed village.",
             image_url="https://images.unsplash.com/photo-1595855759920-86582396756a?auto=format&fit=crop&q=80&w=600"
@@ -189,7 +189,7 @@ class Command(BaseCommand):
             quantity=1500.0,
             unit="kg",
             price_per_unit=18.00,
-            harvest_date=today - timedelta(days=5),
+            harvest_date=today - timedelta(days=1),
             expiry_date=today + timedelta(days=30),
             description="Perfect grading potatoes, suitable for table use or chips processing.",
             image_url="https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&q=80&w=600"
@@ -213,7 +213,7 @@ class Command(BaseCommand):
             quantity=600.0,
             unit="kg",
             price_per_unit=15.00,
-            harvest_date=today - timedelta(days=2),
+            harvest_date=today,
             expiry_date=today + timedelta(days=10),
             description="Crisp green cabbage harvested early morning.",
             image_url="https://images.unsplash.com/photo-1581078426770-6d336e5de7bf?auto=format&fit=crop&q=80&w=600"
@@ -225,7 +225,7 @@ class Command(BaseCommand):
             quantity=400.0,
             unit="kg",
             price_per_unit=22.00,
-            harvest_date=today - timedelta(days=3),
+            harvest_date=today - timedelta(days=1),
             expiry_date=today + timedelta(days=8),
             description="Pesticide-free white cauliflower heads.",
             image_url="https://images.unsplash.com/photo-1568584711299-fd824941efc6?auto=format&fit=crop&q=80&w=600"
@@ -237,7 +237,7 @@ class Command(BaseCommand):
             quantity=800.0,
             unit="kg",
             price_per_unit=20.00,
-            harvest_date=today - timedelta(days=4),
+            harvest_date=today - timedelta(days=1),
             expiry_date=today + timedelta(days=15),
             description="Juicy native winter carrots direct from farms.",
             image_url="https://images.unsplash.com/photo-1590865507245-562a1628d097?auto=format&fit=crop&q=80&w=600"
@@ -251,7 +251,7 @@ class Command(BaseCommand):
             quantity=80.0,
             unit="quintal",
             price_per_unit=2200.00,
-            harvest_date=today - timedelta(days=15),
+            harvest_date=today - timedelta(days=5),
             expiry_date=today + timedelta(days=360),
             description="Sun-dried rich gold Sharbati wheat from Junnar valley.",
             image_url="https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?auto=format&fit=crop&q=80&w=600"
@@ -263,7 +263,7 @@ class Command(BaseCommand):
             quantity=1200.0,
             unit="kg",
             price_per_unit=22.00,
-            harvest_date=today - timedelta(days=3),
+            harvest_date=today - timedelta(days=1),
             expiry_date=today + timedelta(days=20),
             description="Medium size crisp onions direct from Junnar farms.",
             image_url="https://images.unsplash.com/photo-1618512496248-a07fe83766ac?auto=format&fit=crop&q=80&w=600"
@@ -275,7 +275,7 @@ class Command(BaseCommand):
             quantity=300.0,
             unit="kg",
             price_per_unit=110.00,
-            harvest_date=today - timedelta(days=10),
+            harvest_date=today - timedelta(days=1),
             expiry_date=today + timedelta(days=90),
             description="Premium pungent dry garlic bulbs.",
             image_url="https://images.unsplash.com/photo-1540148426945-6cf22a6b2383?auto=format&fit=crop&q=80&w=600"
@@ -287,7 +287,7 @@ class Command(BaseCommand):
             quantity=500.0,
             unit="kg",
             price_per_unit=75.00,
-            harvest_date=today - timedelta(days=6),
+            harvest_date=today - timedelta(days=1),
             expiry_date=today + timedelta(days=45),
             description="Fresh spicy native ginger roots.",
             image_url="https://images.unsplash.com/photo-1615485290382-441e4d049cb5?auto=format&fit=crop&q=80&w=600"
@@ -299,7 +299,7 @@ class Command(BaseCommand):
             quantity=100.0,
             unit="quintal",
             price_per_unit=3200.00,
-            harvest_date=today - timedelta(days=20),
+            harvest_date=today - timedelta(days=5),
             expiry_date=today + timedelta(days=270),
             description="Aromatic Basmati rice paddy grains.",
             image_url="https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&q=80&w=600"
@@ -311,7 +311,7 @@ class Command(BaseCommand):
             quantity=40.0,
             unit="quintal",
             price_per_unit=4800.00,
-            harvest_date=today - timedelta(days=12),
+            harvest_date=today - timedelta(days=5),
             expiry_date=today + timedelta(days=360),
             description="High oil content natural yellow mustard seeds.",
             image_url="https://images.unsplash.com/photo-1599940824399-b87987ceb72a?auto=format&fit=crop&q=80&w=600"

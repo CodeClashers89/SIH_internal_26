@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -202,7 +202,7 @@ class DriverActiveDeliveryView(APIView):
         shipment = DeliveryShipment.objects.filter(
             partner=partner,
             status__in=["assigned", "picked_up", "handover_completed"]
-        ).select_related("order", "order__buyer").first()
+        ).select_related("order", "order__buyer").order_by("-assigned_at").first()
 
         if not shipment:
             return Response({"active_delivery": None, "message": "No active delivery assigned."})
@@ -226,6 +226,7 @@ class DriverActiveDeliveryView(APIView):
 
         return Response({
             "active_delivery": {
+                "id": shipment.id,
                 "shipment_id": shipment.id,
                 "order_id": shipment.order_id,
                 "order_number": f"KB{10000 + shipment.order_id}",
