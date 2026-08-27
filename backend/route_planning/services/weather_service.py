@@ -1,4 +1,4 @@
-﻿"""
+"""
 Open-Meteo Weather Forecast Service.
 
 Retrieves weather forecasts for sampled route points at expected arrival times.
@@ -38,57 +38,9 @@ def _get_hour_index(arrival_dt: datetime, forecast_times: list[str]) -> Optional
     return 0
 
 
-def fetch_weather_for_points(sampled_points: list[dict]) -> list[dict]:
-    """
-    Fetch weather forecasts for a list of sampled route points.
-
-    Each point must have:
-      - latitude, longitude
-      - estimated_arrival (datetime or ISO string, optional)
-
-    Returns the same list with a `weather` dict added to each point.
-    """
-    if not sampled_points:
-        return sampled_points
-
-    enriched = []
-
-    for point in sampled_points:
-        lat = point.get("latitude")
-        lng = point.get("longitude")
-        arrival = point.get("estimated_arrival")
-
-        if lat is None or lng is None:
-            enriched.append({**point, "weather": None})
-            continue
-
-        weather_data = _fetch_single_point(lat, lng, arrival)
-        enriched.append({**point, "weather": weather_data})
-
-    return enriched
-
-
-def _fetch_single_point(lat: float, lng: float, arrival_dt=None) -> Optional[dict]:
-    """Fetch hourly weather for a single lat/lng point at the expected arrival time."""
-    params = {
-        "latitude": lat,
-        "longitude": lng,
-        "hourly": ",".join(HOURLY_VARS),
-        "forecast_days": 7,
-        "timezone": "Asia/Kolkata",
-    }
-
-    try:
-        resp = requests.get(OPEN_METEO_URL, params=params, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-    except requests.exceptions.Timeout:
-        logger.warning(f"[WEATHER] Timeout for ({lat}, {lng})")
+def _parse_weather_data(data: dict, arrival_dt=None) -> Optional[dict]:
+    if not data:
         return None
-    except Exception as e:
-        logger.warning(f"[WEATHER] Failed for ({lat}, {lng}): {e}")
-        return None
-
     hourly = data.get("hourly", {})
     times = hourly.get("time", [])
 
@@ -121,3 +73,102 @@ def _fetch_single_point(lat: float, lng: float, arrival_dt=None) -> Optional[dic
         "weather_code": safe_val("weathercode"),
         "forecast_time": times[idx] if idx < len(times) else None,
     }
+
+
+def fetch_weather_for_points(sampled_points: list[dict]) -> list[dict]:
+    """
+    Fetch weather forecasts for a list of sampled route points.
+
+    Each point must have:
+      - latitude, longitude
+      - estimated_arrival (datetime or ISO string, optional)
+
+    Returns the same list with a `weather` dict added to each point.
+    """
+    if not sampled_points:
+        return sampled_points
+
+    # Filter points that have coordinates
+    valid_points = []
+    for point in sampled_points:
+        lat = point.get("latitude")
+        lng = point.get("longitude")
+        if lat is not None and lng is not None:
+            valid_points.append(point)
+
+    if not valid_points:
+        return [{**pt, "weather": None} for pt in sampled_points]
+
+    latitudes = [str(pt["latitude"]) for pt in valid_points]
+    longitudes = [str(pt["longitude"]) for pt in valid_points]
+
+    params = {
+        "latitude": ",".join(latitudes),
+        "longitude": ",".join(longitudes),
+        "hourly": ",".join(HOURLY_VARS),
+        "forecast_days": 7,
+        "timezone": "Asia/Kolkata",
+    }
+
+    try:
+        logger.info(f"[WEATHER] Requesting weather forecast for {len(valid_points)} points in batch")
+        resp = requests.get(OPEN_METEO_URL, params=params, timeout=15)
+        resp.raise_for_status()
+        response_data = resp.json()
+    except requests.exceptions.Timeout:
+        logger.warning(f"[WEATHER] Timeout for batch weather request of {len(valid_points)} points")
+        return [{**pt, "weather": None} for pt in sampled_points]
+    except Exception as e:
+        logger.warning(f"[WEATHER] Failed batch request: {e}")
+        return [{**pt, "weather": None} for pt in sampled_points]
+
+    # Map response back
+    if isinstance(response_data, dict):
+        response_list = [response_data]
+    elif isinstance(response_data, list):
+        response_list = response_data
+    else:
+        logger.warning(f"[WEATHER] Unexpected Open-Meteo response format: {type(response_data)}")
+        return [{**pt, "weather": None} for pt in sampled_points]
+
+    # Create mapping by point index
+    valid_weather_map = {}
+    for idx, pt in enumerate(valid_points):
+        if idx < len(response_list):
+            arrival = pt.get("estimated_arrival")
+            valid_weather_map[id(pt)] = _parse_weather_data(response_list[idx], arrival)
+        else:
+            valid_weather_map[id(pt)] = None
+
+    enriched = []
+    for pt in sampled_points:
+        if id(pt) in valid_weather_map:
+            enriched.append({**pt, "weather": valid_weather_map[id(pt)]})
+        else:
+            enriched.append({**pt, "weather": None})
+
+    return enriched
+
+
+def _fetch_single_point(lat: float, lng: float, arrival_dt=None) -> Optional[dict]:
+    """Fetch hourly weather for a single lat/lng point at the expected arrival time."""
+    params = {
+        "latitude": lat,
+        "longitude": lng,
+        "hourly": ",".join(HOURLY_VARS),
+        "forecast_days": 7,
+        "timezone": "Asia/Kolkata",
+    }
+
+    try:
+        resp = requests.get(OPEN_METEO_URL, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+    except requests.exceptions.Timeout:
+        logger.warning(f"[WEATHER] Timeout for ({lat}, {lng})")
+        return None
+    except Exception as e:
+        logger.warning(f"[WEATHER] Failed for ({lat}, {lng}): {e}")
+        return None
+
+    return _parse_weather_data(data, arrival_dt)

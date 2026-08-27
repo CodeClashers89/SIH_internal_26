@@ -140,6 +140,15 @@ SPECTACULAR_SETTINGS = {
 # CORS Config
 CORS_ALLOW_ALL_ORIGINS = True
 
+# Speed up logins in development / testing mode by using MD5 (under 1ms computation)
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.MD5PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+]
+
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {

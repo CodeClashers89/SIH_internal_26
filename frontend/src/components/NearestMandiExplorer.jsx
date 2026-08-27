@@ -42,45 +42,68 @@ const NearestMandiExplorer = ({ markets, onSelectMarketOnMap }) => {
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        setUserLocation({ latitude, longitude });
+    const optionsHigh = { enableHighAccuracy: true, timeout: 8000 };
+    const optionsLow = { enableHighAccuracy: false, timeout: 8000 };
 
-        // Filter markets with valid coords
-        const validMarkets = markets.filter(m => m.latitude && m.longitude);
-        if (validMarkets.length === 0) {
-          setLocError('No markets with coordinates found in database.');
-          setLocLoading(false);
-          return;
-        }
+    const onSuccess = (position) => {
+      const { latitude, longitude } = position.coords;
+      setUserLocation({ latitude, longitude });
 
-        let closest = null;
-        let minDistance = Infinity;
-
-        validMarkets.forEach(m => {
-          const dist = calculateDistance(latitude, longitude, m.latitude, m.longitude);
-          if (dist < minDistance) {
-            minDistance = dist;
-            closest = m;
-          }
-        });
-
-        if (closest) {
-          setNearestMarket(closest);
-          setDistance(minDistance);
-          fetchMarketPrices(closest.id);
-        } else {
-          setLocError('Could not determine nearest market.');
-        }
+      // Filter markets with valid coords
+      const validMarkets = markets.filter(m => m.latitude && m.longitude);
+      if (validMarkets.length === 0) {
+        setLocError('No markets with coordinates found in database.');
         setLocLoading(false);
-      },
-      (error) => {
+        return;
+      }
+
+      let closest = null;
+      let minDistance = Infinity;
+
+      validMarkets.forEach(m => {
+        const dist = calculateDistance(latitude, longitude, m.latitude, m.longitude);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closest = m;
+        }
+      });
+
+      if (closest) {
+        setNearestMarket(closest);
+        setDistance(minDistance);
+        fetchMarketPrices(closest.id);
+      } else {
+        setLocError('Could not determine nearest market.');
+      }
+      setLocLoading(false);
+    };
+
+    const onError = (error) => {
+      if (error.code === error.PERMISSION_DENIED) {
         setLocError('Location permission denied. Please allow location access to find nearest mandis.');
         setLocLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
+      } else {
+        // Fallback: Retry with low accuracy (faster and works on PCs without GPS)
+        navigator.geolocation.getCurrentPosition(
+          onSuccess,
+          (err) => {
+            let msg = 'Failed to retrieve location.';
+            if (err.code === err.PERMISSION_DENIED) {
+              msg = 'Location permission denied. Please allow location access to find nearest mandis.';
+            } else if (err.code === err.POSITION_UNAVAILABLE) {
+              msg = 'Location unavailable. Please check your internet connection and try again.';
+            } else if (err.code === err.TIMEOUT) {
+              msg = 'Location request timed out. Please try again.';
+            }
+            setLocError(msg);
+            setLocLoading(false);
+          },
+          optionsLow
+        );
+      }
+    };
+
+    navigator.geolocation.getCurrentPosition(onSuccess, onError, optionsHigh);
   };
 
   const fetchMarketPrices = async (marketId) => {

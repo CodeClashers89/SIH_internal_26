@@ -85,6 +85,47 @@ const RouteSuggestion = ({ pickup, drop, distanceKm }) => (
   </div>
 );
 
+// ─── Skeletons ────────────────────────────────────────────────────────────────
+const StatsSkeleton = () => (
+  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 animate-pulse">
+    {[...Array(6)].map((_, i) => (
+      <div key={i} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-xs flex items-center gap-4">
+        <div className="h-10 w-10 bg-slate-200 rounded-xl" />
+        <div className="flex-1 space-y-2">
+          <div className="h-6 bg-slate-200 rounded w-3/4" />
+          <div className="h-3 bg-slate-200 rounded w-1/2" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+const ShipmentCardSkeleton = () => (
+  <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs space-y-4 animate-pulse">
+    <div className="flex justify-between items-start">
+      <div className="space-y-2 flex-1">
+        <div className="h-4 bg-slate-200 rounded w-1/4" />
+        <div className="h-6 bg-slate-200 rounded w-1/2" />
+        <div className="h-3 bg-slate-200 rounded w-1/3" />
+      </div>
+      <div className="w-20 space-y-2">
+        <div className="h-3 bg-slate-200 rounded" />
+        <div className="h-6 bg-slate-200 rounded" />
+      </div>
+    </div>
+    <div className="h-24 bg-slate-100 rounded-xl" />
+    <div className="h-12 bg-slate-200 rounded-2xl" />
+  </div>
+);
+
+const ShipmentsGridSkeleton = () => (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+    <ShipmentCardSkeleton />
+    <ShipmentCardSkeleton />
+  </div>
+);
+
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 const LogisticsDashboard = () => {
   const { user, setUser } = useAuth();
@@ -404,9 +445,7 @@ const LogisticsDashboard = () => {
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {statsLoading ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-              </div>
+              <StatsSkeleton />
             ) : stats ? (
               <>
                 {/* Stats Grid */}
@@ -513,9 +552,7 @@ const LogisticsDashboard = () => {
         {activeTab === 'available' && (
           <div>
             {loading ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-              </div>
+              <ShipmentsGridSkeleton />
             ) : availableJobs.length === 0 ? (
               <div className="text-center py-16 bg-white rounded-3xl border border-slate-100 shadow-xs">
                 <Truck className="h-14 w-14 text-slate-200 mx-auto mb-4" />
@@ -583,9 +620,7 @@ const LogisticsDashboard = () => {
         {activeTab === 'active' && (
           <div>
             {loading ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-              </div>
+              <ShipmentsGridSkeleton />
             ) : myActiveShipments.length === 0 ? (
               <div className="text-center py-16 bg-white rounded-3xl border border-slate-100 shadow-xs">
                 <Package className="h-14 w-14 text-slate-200 mx-auto mb-4" />

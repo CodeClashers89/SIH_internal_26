@@ -15,6 +15,56 @@ import {
 import DeliveryMap from '../components/DeliveryMap';
 import RouteInfoPanel from '../components/RouteInfoPanel';
 
+// ─── Skeleton Loaders ─────────────────────────────────────────────────────────
+const StatsSkeleton = () => (
+  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 animate-pulse">
+    {[...Array(3)].map((_, i) => (
+      <div key={i} className="bg-white border border-slate-100 p-6 rounded-3xl shadow-xs flex items-center gap-4">
+        <div className="h-12 w-12 bg-slate-200 rounded-2xl" />
+        <div className="flex-1 space-y-2">
+          <div className="h-6 bg-slate-200 rounded w-3/4" />
+          <div className="h-3 bg-slate-200 rounded w-1/2" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+const ChartSkeleton = () => (
+  <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-xs animate-pulse space-y-4">
+    <div className="h-6 bg-slate-200 rounded w-1/4" />
+    <div className="h-48 bg-slate-100 rounded-2xl" />
+  </div>
+);
+
+const TableSkeleton = () => (
+  <div className="animate-pulse space-y-3">
+    <div className="h-10 bg-slate-100 rounded-lg" />
+    {[...Array(5)].map((_, i) => (
+      <div key={i} className="h-12 bg-slate-50 rounded-lg" />
+    ))}
+  </div>
+);
+
+const OrdersListSkeleton = () => (
+  <div className="animate-pulse space-y-6">
+    {[...Array(3)].map((_, i) => (
+      <div key={i} className="border border-slate-100 rounded-3xl p-5 space-y-4">
+        <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+          <div className="h-4 bg-slate-200 rounded w-1/3" />
+          <div className="h-6 bg-slate-200 rounded w-20" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="h-16 bg-slate-100 rounded-xl" />
+          <div className="h-16 bg-slate-100 rounded-xl" />
+          <div className="h-16 bg-slate-100 rounded-xl" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+
 const FarmerDashboard = () => {
   const { user, submitKyc } = useAuth();
   const location = useLocation();
@@ -311,13 +361,7 @@ const FarmerDashboard = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[70vh] text-slate-400">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
+
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -377,7 +421,9 @@ const FarmerDashboard = () => {
       )}
 
       {/* Stats Summary Row */}
-      {stats && (
+      {loading ? (
+        <StatsSkeleton />
+      ) : stats ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-xs flex items-center gap-4">
             <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-600">
@@ -409,11 +455,15 @@ const FarmerDashboard = () => {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Charts Section */}
       <div className="w-full">
-        {stats && <DemandForecastingChart data={stats.demand_trends} />}
+        {loading ? (
+          <ChartSkeleton />
+        ) : stats ? (
+          <DemandForecastingChart data={stats.demand_trends} />
+        ) : null}
       </div>
 
       {/* Bottom Workspace Navigation Tabs */}
@@ -485,73 +535,77 @@ const FarmerDashboard = () => {
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase">
-                  <th className="py-3 px-2">Crop Name</th>
-                  <th className="py-3 px-2">Category</th>
-                  <th className="py-3 px-2">Stock Level</th>
-                  <th className="py-3 px-2">Price per Unit</th>
-                  <th className="py-3 px-2">Freshness Gauge</th>
-                  <th className="py-3 px-2">Harvest Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {listings.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="py-8 text-center text-slate-400">No products listed. Add your first crop!</td>
+          {loading ? (
+            <TableSkeleton />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase">
+                    <th className="py-3 px-2">Crop Name</th>
+                    <th className="py-3 px-2">Category</th>
+                    <th className="py-3 px-2">Stock Level</th>
+                    <th className="py-3 px-2">Price per Unit</th>
+                    <th className="py-3 px-2">Freshness Gauge</th>
+                    <th className="py-3 px-2">Harvest Date</th>
                   </tr>
-                ) : (
-                  listings.map((l) => (
-                    <tr key={l.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-3.5 px-2 font-semibold text-slate-800 flex items-center gap-2">
-                        {l.image_url ? (
-                          <img
-                            src={l.image_url}
-                            alt={l.name}
-                            className="h-8 w-8 rounded-lg object-cover bg-slate-100 shrink-0"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                              e.currentTarget.nextSibling.style.display = 'flex';
-                            }}
-                          />
-                        ) : null}
-                        <span
-                          className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 text-base flex items-center justify-center shrink-0 select-none"
-                          style={{ display: l.image_url ? 'none' : 'flex' }}
-                          title="No image"
-                        >
-                          🌿
-                        </span>
-                        {l.name}
-                      </td>
-                      <td className="py-3.5 px-2 capitalize text-slate-500">{l.category}</td>
-                      <td className="py-3.5 px-2 font-medium text-slate-700">{l.quantity} {l.unit}</td>
-                      <td className="py-3.5 px-2 font-extrabold text-slate-900">₹{parseFloat(l.price_per_unit).toFixed(2)}</td>
-                      <td className="py-3.5 px-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${
-                          l.freshness_percentage >= 90 ? 'bg-emerald-100 text-emerald-800' :
-                          l.freshness_percentage >= 70 ? 'bg-teal-100 text-teal-800' :
-                          l.freshness_percentage >= 40 ? 'bg-amber-100 text-amber-800' :
-                          'bg-rose-100 text-rose-800'
-                        }`}>
-                          {l.freshness_percentage}% | {
-                            l.freshness_percentage >= 90 ? 'Ultra Fresh' :
-                            l.freshness_percentage >= 70 ? 'Fresh' :
-                            l.freshness_percentage >= 40 ? 'Standard' : 'Processing Grade'
-                          }
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-2 text-slate-500 leading-relaxed">
-                        {new Date(l.harvest_date).toLocaleDateString('en-IN')}
-                      </td>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {listings.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="py-8 text-center text-slate-400">No products listed. Add your first crop!</td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : (
+                    listings.map((l) => (
+                      <tr key={l.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="py-3.5 px-2 font-semibold text-slate-800 flex items-center gap-2">
+                          {l.image_url ? (
+                            <img
+                              src={l.image_url}
+                              alt={l.name}
+                              className="h-8 w-8 rounded-lg object-cover bg-slate-100 shrink-0"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                e.currentTarget.nextSibling.style.display = 'flex';
+                              }}
+                            />
+                          ) : null}
+                          <span
+                            className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 text-base flex items-center justify-center shrink-0 select-none"
+                            style={{ display: l.image_url ? 'none' : 'flex' }}
+                            title="No image"
+                          >
+                            🌿
+                          </span>
+                          {l.name}
+                        </td>
+                        <td className="py-3.5 px-2 capitalize text-slate-500">{l.category}</td>
+                        <td className="py-3.5 px-2 font-medium text-slate-700">{l.quantity} {l.unit}</td>
+                        <td className="py-3.5 px-2 font-extrabold text-slate-900">₹{parseFloat(l.price_per_unit).toFixed(2)}</td>
+                        <td className="py-3.5 px-2">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${
+                            l.freshness_percentage >= 90 ? 'bg-emerald-100 text-emerald-800' :
+                            l.freshness_percentage >= 70 ? 'bg-teal-100 text-teal-800' :
+                            l.freshness_percentage >= 40 ? 'bg-amber-100 text-amber-800' :
+                            'bg-rose-100 text-rose-800'
+                          }`}>
+                            {l.freshness_percentage}% | {
+                              l.freshness_percentage >= 90 ? 'Ultra Fresh' :
+                              l.freshness_percentage >= 70 ? 'Fresh' :
+                              l.freshness_percentage >= 40 ? 'Standard' : 'Processing Grade'
+                            }
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-2 text-slate-500 leading-relaxed">
+                          {new Date(l.harvest_date).toLocaleDateString('en-IN')}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -563,168 +617,172 @@ const FarmerDashboard = () => {
             <p className="text-xs text-slate-500">Track shipping schedules and trigger logistics partner operations.</p>
           </div>
 
-          <div className="space-y-6">
-            {orders.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-6">No orders received yet.</p>
-            ) : (
-              orders.map((o) => (
-                <div key={o.id} className="border border-slate-100 rounded-3xl p-5 space-y-4">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-3 gap-2">
-                    <div>
-                      <span className="text-xs font-bold text-slate-800">Order Reference #{o.id}</span>
-                      <span className="text-[10px] text-slate-400 ml-2 font-medium">Placed: {new Date(o.created_at).toLocaleDateString('en-IN')}</span>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase ${
-                        o.status === 'placed' ? 'bg-blue-50 border-blue-200 text-blue-800' :
-                        o.status === 'confirmed' ? 'bg-amber-50 border-amber-200 text-amber-800' :
-                        o.status === 'packed' ? 'bg-indigo-50 border-indigo-200 text-indigo-800' :
-                        o.status === 'in_transit' ? 'bg-purple-50 border-purple-200 text-purple-800' :
-                        o.status === 'delivered' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
-                        'bg-rose-50 border-rose-200 text-rose-800'
-                      }`}>
-                        Status: {o.status}
-                      </span>
-                      {o.status === 'placed' && (
-                        <button
-                          onClick={() => handleUpdateOrderStatus(o.id, 'confirmed')}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] px-3 py-1.5 rounded-xl transition-all"
-                        >
-                          Confirm Order
-                        </button>
-                      )}
-                      {o.status === 'confirmed' && (
-                        <button
-                          onClick={() => handleUpdateOrderStatus(o.id, 'packed')}
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] px-3 py-1.5 rounded-xl transition-all"
-                        >
-                          Mark Packed
-                        </button>
-                      )}
-                      {o.status === 'packed' && (
-                        <span className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 font-bold text-[10px] px-3 py-1.5 rounded-xl">
-                          🚚 Awaiting Logistics Pickup
-                        </span>
-                      )}
-                      {o.status === 'in_transit' && (
-                        <span className="flex items-center gap-1.5 bg-purple-50 border border-purple-200 text-purple-700 font-bold text-[10px] px-3 py-1.5 rounded-xl">
-                          📦 In Transit — Logistics Handling
-                        </span>
-                      )}
-                      {o.status === 'delivered' && (
-                        <span className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[10px] px-3 py-1.5 rounded-xl">
-                          ✅ Delivered via OTP
-                        </span>
-                      )}
-                      {(o.status === 'placed' || o.status === 'confirmed') && (
-                        <button
-                          onClick={() => handleUpdateOrderStatus(o.id, 'cancelled')}
-                          className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[10px] px-2.5 py-1.5 rounded-xl border border-rose-100 transition-all"
-                        >
-                          Cancel
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                    <div className="space-y-1 col-span-1">
-                      <span className="font-bold text-slate-400 uppercase text-[10px]">Shipping Details</span>
-                      <p className="font-semibold text-slate-700">Buyer: {o.buyer_username}</p>
-                      <p className="text-slate-500 leading-relaxed">{o.shipping_address}</p>
-                      <p className="text-slate-500">PIN: {o.shipping_pincode}</p>
-                    </div>
-
-                    <div className="space-y-1 col-span-1">
-                      <span className="font-bold text-slate-400 uppercase text-[10px]">Crops Ordered</span>
-                      {o.items?.map((item) => (
-                        <p key={item.id} className="font-medium text-slate-700">
-                          • {item.product_details?.name} (Qty: {item.quantity} {item.product_details?.unit})
-                        </p>
-                      ))}
-                      <p className="font-extrabold text-slate-900 mt-2">Total Value: ₹{parseFloat(o.total_amount).toFixed(2)}</p>
-                    </div>
-
-                    {/* Order Status Stepper */}
-                    <div className="col-span-1 flex flex-col justify-center">
-                      <span className="font-bold text-slate-400 uppercase text-[10px] mb-2 text-center">Tracking Progression</span>
-                      <Stepper currentStatus={o.status} />
-                    </div>
-                  </div>
-
-                  {/* Transportation & Route Visualization toggle */}
-                  <div className="border-t border-slate-100 pt-3">
-                    <button
-                      onClick={() => toggleOrderRoute(o.id)}
-                      className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors"
-                    >
-                      <Route className="h-4 w-4" />
-                      <span>{expandedRoutes[o.id] ? 'Hide Delivery Route Map' : 'View Transportation Route & Weather Map'}</span>
-                      {expandedRoutes[o.id] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    </button>
-
-                    {expandedRoutes[o.id] && (
-                      <div className="mt-4 space-y-4 animate-fade-in border-t border-slate-100 pt-3">
-                        {routeLoadingOrder[o.id] ? (
-                          <div className="flex items-center justify-center p-6 text-xs text-slate-500 gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                            Loading authoritative transportation route...
-                          </div>
-                        ) : orderRoutes[o.id]?.error ? (
-                          <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl text-xs">
-                            ⚠️ {orderRoutes[o.id].error}
-                          </div>
-                        ) : orderRoutes[o.id]?.route ? (
-                          <div className="space-y-4">
-                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border">
-                              <div>
-                                <span className="font-bold text-slate-800">Transport Partner: </span>
-                                <span>{orderRoutes[o.id].partner_name}</span>
-                              </div>
-                              <div>
-                                <span className="font-bold text-slate-800">Vehicle Number: </span>
-                                <span>{orderRoutes[o.id].vehicle_number}</span>
-                              </div>
-                              <div>
-                                <span className="font-bold text-slate-800">Shipment Status: </span>
-                                <span className="uppercase text-blue-600 font-extrabold">{orderRoutes[o.id].status}</span>
-                              </div>
-                            </div>
-
-                            <DeliveryMap
-                              pickupAddress={orderRoutes[o.id].pickup_address}
-                              deliveryAddress={orderRoutes[o.id].delivery_address}
-                              pickupCoordinates={orderRoutes[o.id].route?.route_geometry?.[0]}
-                              destinationCoordinates={orderRoutes[o.id].route?.route_geometry?.[orderRoutes[o.id].route.route_geometry.length - 1]}
-                              routeGeometry={
-                                orderRoutes[o.id].route?.candidate_routes?.find(c => c.route_id === selectedCandidatePerOrder[o.id])?.geometry ||
-                                orderRoutes[o.id].route?.route_geometry || []
-                              }
-                              weatherCheckpoints={
-                                orderRoutes[o.id].route?.candidate_routes?.find(c => c.route_id === selectedCandidatePerOrder[o.id])?.weather_checkpoints ||
-                                orderRoutes[o.id].route?.weather_snapshot || []
-                              }
-                              candidateRoutes={orderRoutes[o.id].route?.candidate_routes || []}
-                              selectedRouteId={selectedCandidatePerOrder[o.id] || orderRoutes[o.id].route?.route_id || 'R1'}
-                              onSelectCandidate={(candId) => setSelectedCandidatePerOrder(prev => ({ ...prev, [o.id]: candId }))}
-                              height="380px"
-                            />
-
-                            <RouteInfoPanel
-                              route={orderRoutes[o.id].route}
-                              selectedCandidateId={selectedCandidatePerOrder[o.id] || orderRoutes[o.id].route?.route_id || 'R1'}
-                              onSelectCandidate={(candId) => setSelectedCandidatePerOrder(prev => ({ ...prev, [o.id]: candId }))}
-                              isDriver={false}
-                            />
-                          </div>
-                        ) : null}
+          {loading ? (
+            <OrdersListSkeleton />
+          ) : (
+            <div className="space-y-6">
+              {orders.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-6">No orders received yet.</p>
+              ) : (
+                orders.map((o) => (
+                  <div key={o.id} className="border border-slate-100 rounded-3xl p-5 space-y-4">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-3 gap-2">
+                      <div>
+                        <span className="text-xs font-bold text-slate-800">Order Reference #{o.id}</span>
+                        <span className="text-[10px] text-slate-400 ml-2 font-medium">Placed: {new Date(o.created_at).toLocaleDateString('en-IN')}</span>
                       </div>
-                    )}
+                      <div className="flex gap-2 items-center">
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border uppercase ${
+                          o.status === 'placed' ? 'bg-blue-50 border-blue-200 text-blue-800' :
+                          o.status === 'confirmed' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+                          o.status === 'packed' ? 'bg-indigo-50 border-indigo-200 text-indigo-800' :
+                          o.status === 'in_transit' ? 'bg-purple-50 border-purple-200 text-purple-800' :
+                          o.status === 'delivered' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                          'bg-rose-50 border-rose-200 text-rose-800'
+                        }`}>
+                          Status: {o.status}
+                        </span>
+                        {o.status === 'placed' && (
+                          <button
+                            onClick={() => handleUpdateOrderStatus(o.id, 'confirmed')}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[10px] px-3 py-1.5 rounded-xl transition-all"
+                          >
+                            Confirm Order
+                          </button>
+                        )}
+                        {o.status === 'confirmed' && (
+                          <button
+                            onClick={() => handleUpdateOrderStatus(o.id, 'packed')}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[10px] px-3 py-1.5 rounded-xl transition-all"
+                          >
+                            Mark Packed
+                          </button>
+                        )}
+                        {o.status === 'packed' && (
+                          <span className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 font-bold text-[10px] px-3 py-1.5 rounded-xl">
+                            🚚 Awaiting Logistics Pickup
+                          </span>
+                        )}
+                        {o.status === 'in_transit' && (
+                          <span className="flex items-center gap-1.5 bg-purple-50 border border-purple-200 text-purple-700 font-bold text-[10px] px-3 py-1.5 rounded-xl">
+                            📦 In Transit — Logistics Handling
+                          </span>
+                        )}
+                        {o.status === 'delivered' && (
+                          <span className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[10px] px-3 py-1.5 rounded-xl">
+                            ✅ Delivered via OTP
+                          </span>
+                        )}
+                        {(o.status === 'placed' || o.status === 'confirmed') && (
+                          <button
+                            onClick={() => handleUpdateOrderStatus(o.id, 'cancelled')}
+                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[10px] px-2.5 py-1.5 rounded-xl border border-rose-100 transition-all"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                      <div className="space-y-1 col-span-1">
+                        <span className="font-bold text-slate-400 uppercase text-[10px]">Shipping Details</span>
+                        <p className="font-semibold text-slate-700">Buyer: {o.buyer_username}</p>
+                        <p className="text-slate-500 leading-relaxed">{o.shipping_address}</p>
+                        <p className="text-slate-500">PIN: {o.shipping_pincode}</p>
+                      </div>
+
+                      <div className="space-y-1 col-span-1">
+                        <span className="font-bold text-slate-400 uppercase text-[10px]">Crops Ordered</span>
+                        {o.items?.map((item) => (
+                          <p key={item.id} className="font-medium text-slate-700">
+                            • {item.product_details?.name} (Qty: {item.quantity} {item.product_details?.unit})
+                          </p>
+                        ))}
+                        <p className="font-extrabold text-slate-900 mt-2">Total Value: ₹{parseFloat(o.total_amount).toFixed(2)}</p>
+                      </div>
+
+                      {/* Order Status Stepper */}
+                      <div className="col-span-1 flex flex-col justify-center">
+                        <span className="font-bold text-slate-400 uppercase text-[10px] mb-2 text-center">Tracking Progression</span>
+                        <Stepper currentStatus={o.status} />
+                      </div>
+                    </div>
+
+                    {/* Transportation & Route Visualization toggle */}
+                    <div className="border-t border-slate-100 pt-3">
+                      <button
+                        onClick={() => toggleOrderRoute(o.id)}
+                        className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors"
+                      >
+                        <Route className="h-4 w-4" />
+                        <span>{expandedRoutes[o.id] ? 'Hide Delivery Route Map' : 'View Transportation Route & Weather Map'}</span>
+                        {expandedRoutes[o.id] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </button>
+
+                      {expandedRoutes[o.id] && (
+                        <div className="mt-4 space-y-4 animate-fade-in border-t border-slate-100 pt-3">
+                          {routeLoadingOrder[o.id] ? (
+                            <div className="flex items-center justify-center p-6 text-xs text-slate-500 gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                              Loading authoritative transportation route...
+                            </div>
+                          ) : orderRoutes[o.id]?.error ? (
+                            <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl text-xs">
+                              ⚠️ {orderRoutes[o.id].error}
+                            </div>
+                          ) : orderRoutes[o.id]?.route ? (
+                            <div className="space-y-4">
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border">
+                                <div>
+                                  <span className="font-bold text-slate-800">Transport Partner: </span>
+                                  <span>{orderRoutes[o.id].partner_name}</span>
+                                </div>
+                                <div>
+                                  <span className="font-bold text-slate-800">Vehicle Number: </span>
+                                  <span>{orderRoutes[o.id].vehicle_number}</span>
+                                </div>
+                                <div>
+                                  <span className="font-bold text-slate-800">Shipment Status: </span>
+                                  <span className="uppercase text-blue-600 font-extrabold">{orderRoutes[o.id].status}</span>
+                                </div>
+                              </div>
+
+                              <DeliveryMap
+                                pickupAddress={orderRoutes[o.id].pickup_address}
+                                deliveryAddress={orderRoutes[o.id].delivery_address}
+                                pickupCoordinates={orderRoutes[o.id].route?.route_geometry?.[0]}
+                                destinationCoordinates={orderRoutes[o.id].route?.route_geometry?.[orderRoutes[o.id].route.route_geometry.length - 1]}
+                                routeGeometry={
+                                  orderRoutes[o.id].route?.candidate_routes?.find(c => c.route_id === selectedCandidatePerOrder[o.id])?.geometry ||
+                                  orderRoutes[o.id].route?.route_geometry || []
+                                }
+                                weatherCheckpoints={
+                                  orderRoutes[o.id].route?.candidate_routes?.find(c => c.route_id === selectedCandidatePerOrder[o.id])?.weather_checkpoints ||
+                                  orderRoutes[o.id].route?.weather_snapshot || []
+                                }
+                                candidateRoutes={orderRoutes[o.id].route?.candidate_routes || []}
+                                selectedRouteId={selectedCandidatePerOrder[o.id] || orderRoutes[o.id].route?.route_id || 'R1'}
+                                onSelectCandidate={(candId) => setSelectedCandidatePerOrder(prev => ({ ...prev, [o.id]: candId }))}
+                                height="380px"
+                              />
+
+                              <RouteInfoPanel
+                                route={orderRoutes[o.id].route}
+                                selectedCandidateId={selectedCandidatePerOrder[o.id] || orderRoutes[o.id].route?.route_id || 'R1'}
+                                onSelectCandidate={(candId) => setSelectedCandidatePerOrder(prev => ({ ...prev, [o.id]: candId }))}
+                                isDriver={false}
+                              />
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
-            )}
-          </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1382,11 +1440,7 @@ const FarmerDashboard = () => {
           </div>
         </div>
       )}
-      {activeSection === 'markets' && (
-        <div className="space-y-6">
-          <NearestMandiExplorer />
-        </div>
-      )}
+
 
     </div>
   );
