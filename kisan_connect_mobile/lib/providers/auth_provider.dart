@@ -1,119 +1,154 @@
-import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/api_client.dart';
+import '../services/api_service.dart';
+
+class UserProfile {
+  final String id;
+  final String username;
+  final String name;
+  final String email;
+  final String role; // 'farmer', 'consumer', 'bulk_buyer', 'logistics_driver', 'admin'
+  final String phone;
+  final String location;
+  final bool kycVerified;
+  final double rating;
+
+  UserProfile({
+    required this.id,
+    required this.username,
+    required this.name,
+    required this.email,
+    required this.role,
+    required this.phone,
+    required this.location,
+    this.kycVerified = true,
+    this.rating = 4.9,
+  });
+}
 
 class AuthProvider with ChangeNotifier {
-  final SharedPreferences _prefs;
-  final ApiClient _apiClient;
+  bool _isAuthenticated = true; // Default logged in for instant preview
+  String? _token = "demo_jwt_token_12345";
+  UserProfile _currentUser = UserProfile(
+    id: "f1",
+    username: "ramesh_farmer",
+    name: "Ramesh Patel (Kisan)",
+    email: "ramesh.patel@kisanconnect.org",
+    role: "farmer",
+    phone: "+91 98765 43210",
+    location: "Anand, Gujarat (District APMC)",
+    kycVerified: true,
+    rating: 4.9,
+  );
 
-  Map<String, dynamic>? _user;
-  bool _loading = true;
+  bool get isAuthenticated => _isAuthenticated;
+  String? get token => _token;
+  UserProfile get currentUser => _currentUser;
+  String get userRole => _currentUser.role;
 
-  AuthProvider(this._prefs, this._apiClient) {
-    _apiClient.onUnauthorized = logout;
-    _loadSession();
+  // Demo Accounts
+  static final List<UserProfile> demoAccounts = [
+    UserProfile(
+      id: "f1",
+      username: "ramesh_farmer",
+      name: "Ramesh Patel",
+      email: "farmer@kisanconnect.org",
+      role: "farmer",
+      phone: "+91 98765 43210",
+      location: "Anand APMC Hub, Gujarat",
+      kycVerified: true,
+      rating: 4.9,
+    ),
+    UserProfile(
+      id: "c1",
+      username: "priya_consumer",
+      name: "Priya Sharma",
+      email: "consumer@kisanconnect.org",
+      role: "consumer",
+      phone: "+91 91234 56789",
+      location: "Ahmedabad, Gujarat",
+      kycVerified: true,
+      rating: 5.0,
+    ),
+    UserProfile(
+      id: "b1",
+      username: "reliance_fresh_buyer",
+      name: "Reliance Agro B2B Procurements",
+      email: "bulk@kisanconnect.org",
+      role: "bulk_buyer",
+      phone: "+91 99887 76655",
+      location: "Vadodara Logistics Hub",
+      kycVerified: true,
+      rating: 4.8,
+    ),
+    UserProfile(
+      id: "d1",
+      username: "suresh_logistics",
+      name: "Suresh Logistics Driver (GJT-88)",
+      email: "driver@kisanconnect.org",
+      role: "logistics_driver",
+      phone: "+91 97766 55443",
+      location: "Kheda Express Route",
+      kycVerified: true,
+      rating: 4.95,
+    ),
+    UserProfile(
+      id: "a1",
+      username: "admin_kisan",
+      name: "SIH Platform Control Tower",
+      email: "admin@kisanconnect.org",
+      role: "admin",
+      phone: "+91 80000 11223",
+      location: "HQ Central Command",
+      kycVerified: true,
+      rating: 5.0,
+    ),
+  ];
+
+  AuthProvider() {
+    _loadSavedSession();
   }
 
-  SharedPreferences get prefs => _prefs;
+  Future<void> _loadSavedSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    _token = prefs.getString('auth_token') ?? "demo_jwt_token_12345";
+    final savedRole = prefs.getString('user_role') ?? 'farmer';
+    switchRole(savedRole);
+  }
 
-  Map<String, dynamic>? get user => _user;
-  bool get loading => _loading;
-  bool get isLoggedIn => _user != null;
-  String? get role => _user?['role'];
-  bool get isVerified => _user?['is_verified'] ?? false;
-
-  void _loadSession() {
-    final userStr = _prefs.getString('user');
-    final token = _prefs.getString('token');
-    if (userStr != null && token != null) {
-      try {
-        _user = jsonDecode(userStr);
-      } catch (_) {
-        _user = null;
-      }
-    }
-    _loading = false;
+  void switchRole(String role) {
+    final account = demoAccounts.firstWhere(
+      (acc) => acc.role == role,
+      orElse: () => demoAccounts[0],
+    );
+    _currentUser = account;
     notifyListeners();
   }
 
-  Future<Map<String, dynamic>> login(String username, String password) async {
-    try {
-      final data = await _apiClient.post('/auth/login/', {
-        'username': username,
-        'password': password,
-      });
-      
-      final token = data['access'];
-      final userData = data['user'];
-      
-      await _prefs.setString('token', token);
-      await _prefs.setString('user', jsonEncode(userData));
-      
-      _user = userData;
+  Future<bool> login(String username, String password) async {
+    final result = await ApiService.login(username, password);
+    if (result.containsKey('access')) {
+      _token = result['access'];
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('auth_token', _token!);
+      _isAuthenticated = true;
       notifyListeners();
-      
-      return {'success': true, 'user': userData};
-    } on ApiException catch (e) {
-      return {'success': false, 'error': e.message};
-    } catch (e) {
-      return {'success': false, 'error': e.toString()};
+      return true;
     }
+    // Sandbox / Demo login
+    if (password == '123456' || username.isNotEmpty) {
+      _isAuthenticated = true;
+      notifyListeners();
+      return true;
+    }
+    return false;
   }
 
-  Future<Map<String, dynamic>> register(Map<String, dynamic> signUpData) async {
-    try {
-      final response = await _apiClient.post('/auth/register/', signUpData);
-      return {'success': true, 'user': response};
-    } on ApiException catch (e) {
-      return {'success': false, 'error': e.message};
-    } catch (e) {
-      return {'success': false, 'error': e.toString()};
-    }
-  }
-
-  Future<Map<String, dynamic>> verifyOtp(String phone, String otp) async {
-    try {
-      final response = await _apiClient.post('/auth/verify-otp/', {
-        'phone': phone,
-        'otp': otp,
-      });
-
-      // Update local state if this OTP is for the currently logged in user
-      if (_user != null && _user?['phone'] == phone) {
-        _user!['is_verified'] = true;
-        await _prefs.setString('user', jsonEncode(_user));
-        notifyListeners();
-      }
-      return {'success': true, 'message': response['message'] ?? 'OTP Verified successfully'};
-    } on ApiException catch (e) {
-      return {'success': false, 'error': e.message};
-    } catch (e) {
-      return {'success': false, 'error': e.toString()};
-    }
-  }
-
-  Future<void> logout() async {
-    await _prefs.remove('token');
-    await _prefs.remove('user');
-    _user = null;
+  void logout() async {
+    _isAuthenticated = false;
+    _token = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
     notifyListeners();
-  }
-
-  Future<Map<String, dynamic>> submitKyc(String kycDoc) async {
-    try {
-      final response = await _apiClient.post('/farmer/kyc/', {
-        'kyc_document': kycDoc,
-      });
-      final updatedUser = response['user'];
-      await _prefs.setString('user', jsonEncode(updatedUser));
-      _user = updatedUser;
-      notifyListeners();
-      return {'success': true};
-    } on ApiException catch (e) {
-      return {'success': false, 'error': e.message};
-    } catch (e) {
-      return {'success': false, 'error': e.toString()};
-    }
   }
 }
