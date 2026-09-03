@@ -87,16 +87,15 @@ WSGI_APPLICATION = 'kisan_connect.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-# Reads DATABASE_URL from .env — falls back to SQLite for local dev without Postgres
+# Reads DATABASE_URL from .env to store all application data in Supabase PostgreSQL
 # NOTE: 'default' is the main KisanConnect business database
 # 'chatbot' is the SEPARATE database for chatbot conversation data
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
 DATABASES = {
     'default': dj_database_url.config(
-        default=os.environ.get(
-            'DATABASE_URL',
-            f'sqlite:///{BASE_DIR / "db.sqlite3"}'
-        ),
-        conn_max_age=600,          # Reuse connections for 10 minutes to avoid TCP/TLS handshake overhead
+        default=DATABASE_URL or f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        conn_max_age=0,            # Close connection after each request for Supabase session pooler
         conn_health_checks=True,   # Validate connections before reuse
     ),
     'chatbot': dj_database_url.config(
