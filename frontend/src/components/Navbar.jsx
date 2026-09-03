@@ -186,10 +186,16 @@ const Navbar = ({ onCartToggle }) => {
                   Dashboard
                 </Link>
                 {user.role === 'farmer' && (
-                  <Link to="/farmer-profile" className="text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 font-semibold transition-colors text-sm flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-800 pl-6">
-                    <User className="h-4 w-4 text-emerald-500" />
-                    My Profile
-                  </Link>
+                  <>
+                    <Link to="/farmer-profile" className="text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 font-semibold transition-colors text-sm flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-800 pl-6">
+                      <User className="h-4 w-4 text-emerald-500" />
+                      My Profile
+                    </Link>
+                    <Link to="/farmer-ai-assistant" className="text-slate-600 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400 font-semibold transition-colors text-sm flex items-center gap-1.5 pl-6">
+                      <span className="text-lg">🤖</span>
+                      AI Assistant
+                    </Link>
+                  </>
                 )}
               </div>
             )}

@@ -489,8 +489,32 @@ class FarmerOfferViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         return [permissions.IsAuthenticated()]
 
+    @transaction.atomic
     def perform_create(self, serializer):
-        serializer.save(farmer=self.request.user)
+        from rest_framework.exceptions import ValidationError
+        
+        requirement = serializer.validated_data.get('requirement')
+        quantity = serializer.validated_data.get('quantity')
+        farmer = self.request.user
+        
+        if requirement and quantity:
+            # Lock the matching product for this farmer to prevent race conditions
+            prod = Product.objects.select_for_update().filter(
+                farmer=farmer, 
+                name__icontains=requirement.crop_name
+            ).first()
+            
+            if not prod:
+                raise ValidationError({"error": f"You do not have any inventory matching '{requirement.crop_name}' to contribute."})
+                
+            if prod.quantity < quantity:
+                raise ValidationError({"error": f"Insufficient inventory. You have {prod.quantity} {prod.unit} of {prod.name}, but tried to contribute {quantity}."})
+                
+            # Deduct inventory
+            prod.quantity -= quantity
+            prod.save(update_fields=['quantity'])
+            
+        serializer.save(farmer=farmer)
 
     def get_queryset(self):
         user = self.request.user

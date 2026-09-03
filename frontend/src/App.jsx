@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
+import { ChatProvider } from './context/ChatContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CartDrawer from './components/CartDrawer';
@@ -10,6 +11,7 @@ import Landing from './pages/Landing';
 import LoginSignup from './pages/LoginSignup';
 import FarmerDashboard from './pages/FarmerDashboard';
 import FarmerProfilePage from './pages/FarmerProfilePage';
+import FarmerAIAssistant from './pages/FarmerAIAssistant';
 import ConsumerMarketplace from './pages/ConsumerMarketplace';
 import ConsumerDashboard from './pages/ConsumerDashboard';
 import BulkBuyerPortal from './pages/BulkBuyerPortal';
@@ -48,10 +50,13 @@ const NonFarmerRoute = ({ children }) => {
 function MainLayout() {
   const [cartOpen, setCartOpen] = useState(false);
   const { loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return <Preloader />;
   }
+
+  const isChatbotPage = location.pathname === '/farmer-ai-assistant';
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -94,6 +99,14 @@ function MainLayout() {
             } 
           />
           <Route 
+            path="/farmer-ai-assistant" 
+            element={
+              <ProtectedRoute allowedRoles={['farmer']}>
+                <FarmerAIAssistant />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
             path="/bulk-portal" 
             element={
               <ProtectedRoute allowedRoles={['bulk_buyer']}>
@@ -130,7 +143,7 @@ function MainLayout() {
         </Routes>
       </main>
 
-      <Footer />
+      {!isChatbotPage && <Footer />}
 
       {/* Cart Drawer for Consumers/Bulk Buyers */}
       <CartDrawer isOpen={cartOpen} onClose={() => setCartOpen(false)} />
@@ -151,10 +164,12 @@ function App() {
   return (
     <AuthProvider>
       <CartProvider>
-        {initialLoading && <Preloader />}
-        <Router>
-          <MainLayout />
-        </Router>
+        <ChatProvider>
+          {initialLoading && <Preloader />}
+          <Router>
+            <MainLayout />
+          </Router>
+        </ChatProvider>
       </CartProvider>
     </AuthProvider>
   );

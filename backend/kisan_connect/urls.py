@@ -27,6 +27,9 @@ urlpatterns = [
     path('api/control-tower/', include('control_tower.urls')),
     path('api/route-planning/', include('route_planning.urls')),
     
+    # Chatbot API (Farmer AI Assistant)
+    path('api/chat/', include('chatbot.urls')),
+    
     # API documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

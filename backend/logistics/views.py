@@ -179,6 +179,7 @@ class DeliveryShipmentViewSet(viewsets.ModelViewSet):
         shipment.save()
         
         order = shipment.order
+        order.status = 'in_transit'
         order.cancellation_locked = True
         order.cancellation_locked_at = timezone.now()
         order.save()

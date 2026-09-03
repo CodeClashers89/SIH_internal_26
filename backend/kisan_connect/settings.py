@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'control_tower',
     'route_planning',
     'farmer_profile',
+    'chatbot',
 ]
 
 # Route Planning Settings
@@ -87,6 +88,8 @@ WSGI_APPLICATION = 'kisan_connect.wsgi.application'
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
 # Reads DATABASE_URL from .env — falls back to SQLite for local dev without Postgres
+# NOTE: 'default' is the main KisanConnect business database
+# 'chatbot' is the SEPARATE database for chatbot conversation data
 DATABASES = {
     'default': dj_database_url.config(
         default=os.environ.get(
@@ -95,8 +98,20 @@ DATABASES = {
         ),
         conn_max_age=600,          # Reuse connections for 10 minutes to avoid TCP/TLS handshake overhead
         conn_health_checks=True,   # Validate connections before reuse
+    ),
+    'chatbot': dj_database_url.config(
+        env='CHAT_DATABASE_URL',
+        default=os.environ.get(
+            'CHAT_DATABASE_URL',
+            f'sqlite:///{BASE_DIR / "chatbot.sqlite3"}'
+        ),
+        conn_max_age=600,
+        conn_health_checks=True,
     )
 }
+
+# Database router for chatbot app
+DATABASE_ROUTERS = ['chatbot.routers.ChatbotRouter']
 
 # Custom User Model
 AUTH_USER_MODEL = 'users.User'
@@ -196,3 +211,12 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 # Sandbox Razorpay Config
 RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', 'rzp_test_KisanConnectKey123')
 RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', 'KisanConnectSecretKeyValue')
+
+# Groq LLM Configuration (for Farmer AI Assistant)
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
+GROQ_MODEL = os.environ.get('GROQ_MODEL', 'mixtral-8x7b-32768')
+
+# Chatbot Configuration
+CHATBOT_RECENT_MESSAGE_LIMIT = int(os.environ.get('CHAT_RECENT_MESSAGE_LIMIT', 15))
+CHATBOT_SUMMARY_THRESHOLD = int(os.environ.get('CHAT_SUMMARY_THRESHOLD', 30))
+CHATBOT_MAX_TOOL_CALLS_PER_TURN = int(os.environ.get('CHAT_MAX_TOOL_CALLS_PER_TURN', 5))

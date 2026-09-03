@@ -12,7 +12,10 @@ __pycache__/
 *$py.class
 *.sqlite3
 db.sqlite3
+chatbot_migrations.sql
+chatbot.sqlite3
 media/
+build.sh
 staticfiles/
 
 # Node & Frontend
