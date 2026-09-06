@@ -1,18 +1,35 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { 
   ShoppingBag, Loader2, ArrowUpRight, DollarSign, 
-  Handshake, AlertCircle, PlusCircle, CheckCircle, RefreshCw, Calendar, MapPin, Award
+  Handshake, AlertCircle, PlusCircle, CheckCircle, RefreshCw, Calendar, MapPin, Award,
+  Layers, FileText
 } from 'lucide-react';
 
 const B2B_API = import.meta.env.VITE_B2B_API_URL || 'http://localhost:8001/api/v1/subscription';
 
 const BulkBuyerPortal = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTab = searchParams.get('tab');
   
   // Tab control
-  const [activeTab, setActiveTab] = useState('quotes');
+  const [activeTab, setActiveTab] = useState(urlTab || 'dashboard');
+
+  useEffect(() => {
+    if (urlTab && ['dashboard', 'quotes', 'reverse', 'contracts', 'subscriptions'].includes(urlTab)) {
+      setActiveTab(urlTab);
+    } else if (!urlTab) {
+      setActiveTab('dashboard');
+    }
+  }, [urlTab]);
+
+  const handleTabChange = (tabKey) => {
+    setActiveTab(tabKey);
+    setSearchParams({ tab: tabKey });
+  };
 
   // Lists
   const [products, setProducts] = useState([]);
@@ -320,70 +337,231 @@ const BulkBuyerPortal = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       
-      {/* Page Title */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">Bulk Buyer & Wholesaler Portal</h1>
-          <p className="text-sm text-slate-500">Post sourcing requirements, negotiate custom pricing, and secure pre-harvest contracts.</p>
-        </div>
-        <button 
-          onClick={fetchPortalData}
-          className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 rounded-xl text-slate-600 font-semibold text-xs bg-white hover:bg-slate-50 active:scale-95 transition-all"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-          Refresh Portal
-        </button>
-      </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200 gap-6">
-        <button
-          onClick={() => setActiveTab('quotes')}
-          className={`pb-4 text-sm font-bold border-b-2 transition-all ${
-            activeTab === 'quotes'
-              ? 'border-emerald-600 text-emerald-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Single Crop Negotiations ({quotes.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('reverse')}
-          className={`pb-4 text-sm font-bold border-b-2 transition-all ${
-            activeTab === 'reverse'
-              ? 'border-emerald-600 text-emerald-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Reverse Sourcing Marketplace ({requirements.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('contracts')}
-          className={`pb-4 text-sm font-bold border-b-2 transition-all ${
-            activeTab === 'contracts'
-              ? 'border-emerald-600 text-emerald-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Pre-Harvest Contracts ({preHarvestContracts.filter(c => c.status === 'proposed' || c.buyer === user.id).length})
-        </button>
-        <button
-          onClick={() => setActiveTab('subscriptions')}
-          className={`pb-4 text-sm font-bold border-b-2 transition-all ${
-            activeTab === 'subscriptions'
-              ? 'border-emerald-600 text-emerald-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Recurring Subscriptions ({subscriptions.length})
-        </button>
-      </div>
+
+
+
+      {/* Tab: Dashboard Overview */}
+      {activeTab === 'dashboard' && (
+        <div className="space-y-8">
+          
+          {/* Welcome Banner */}
+          <div className="bg-gradient-to-r from-[#064e3b] via-emerald-800 to-teal-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="space-y-2">
+              <span className="text-xs font-black uppercase tracking-widest text-emerald-300 bg-emerald-950/60 px-3 py-1 rounded-full border border-emerald-700/50">
+                B2B Procurement Hub
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-black">Welcome back, {user?.username || 'Wholesaler'} 👋</h2>
+              <p className="text-emerald-100/90 text-xs sm:text-sm max-w-xl">
+                Manage your active single-crop bids, post custom reverse sourcing requirements, lock pre-harvest forward contracts, and automate recurring deliveries.
+              </p>
+            </div>
+            <button
+              onClick={() => handleTabChange('reverse')}
+              className="bg-[#059669] hover:bg-emerald-500 text-white font-extrabold text-xs px-5 py-3 rounded-2xl shadow-lg shadow-emerald-950/40 transition-all cursor-pointer shrink-0 active:scale-95 flex items-center gap-2"
+            >
+              <PlusCircle className="h-4 w-4" /> Post New Requirement
+            </button>
+          </div>
+
+          {/* 4 Feature Overview Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            
+            {/* Card 1: Single Crop Bids */}
+            <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs hover:shadow-md transition-all space-y-4 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="h-10 w-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                    <Handshake className="h-5 w-5" />
+                  </div>
+                  <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
+                    {quotes.length} Active
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-base">Single Crop Bids</h3>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Submit wholesale bids directly to independent farmers & FPOs with custom quantity & target prices.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleTabChange('quotes')}
+                className="w-full text-center py-2.5 bg-slate-50 hover:bg-emerald-50 text-emerald-700 font-extrabold text-xs rounded-xl border border-slate-200/80 transition-all flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <span>Manage Bids</span>
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {/* Card 2: Reverse Sourcing */}
+            <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs hover:shadow-md transition-all space-y-4 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="h-10 w-10 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center font-bold">
+                    <Layers className="h-5 w-5" />
+                  </div>
+                  <span className="text-xs font-black text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full">
+                    {requirements.length} Requirements
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-base">Reverse Sourcing</h3>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Post your exact crop, grade, and volume specifications so verified regional farmers can offer quotes.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleTabChange('reverse')}
+                className="w-full text-center py-2.5 bg-slate-50 hover:bg-teal-50 text-teal-700 font-extrabold text-xs rounded-xl border border-slate-200/80 transition-all flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <span>View Requirements</span>
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {/* Card 3: Pre-Harvest Contracts */}
+            <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs hover:shadow-md transition-all space-y-4 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="h-10 w-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <span className="text-xs font-black text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full">
+                    {preHarvestContracts.filter(c => c.status === 'proposed' || c.buyer === user?.id).length} Contracts
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-base">Pre-Harvest Contracts</h3>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Book upcoming crop yields before harvest with locked pricing & guaranteed quality standards.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleTabChange('contracts')}
+                className="w-full text-center py-2.5 bg-slate-50 hover:bg-purple-50 text-purple-700 font-extrabold text-xs rounded-xl border border-slate-200/80 transition-all flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <span>Explore Contracts</span>
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {/* Card 4: Recurring Subscriptions */}
+            <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs hover:shadow-md transition-all space-y-4 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="h-10 w-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                    <RefreshCw className="h-5 w-5" />
+                  </div>
+                  <span className="text-xs font-black text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full">
+                    {subscriptions.length} Active
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-base">Recurring Subscriptions</h3>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Set up automated daily or weekly recurring produce deliveries with volume discounts.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => handleTabChange('subscriptions')}
+                className="w-full text-center py-2.5 bg-slate-50 hover:bg-amber-50 text-amber-700 font-extrabold text-xs rounded-xl border border-slate-200/80 transition-all flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <span>Manage Subscriptions</span>
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+          </div>
+
+          {/* Quick Shortcuts Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Recent Bids Summary */}
+            <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-4">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h4 className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
+                  <Handshake className="h-4 w-4 text-emerald-600" />
+                  Recent Active Bids
+                </h4>
+                <button
+                  onClick={() => handleTabChange('quotes')}
+                  className="text-xs font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                >
+                  View All ({quotes.length}) →
+                </button>
+              </div>
+
+              {quotes.length === 0 ? (
+                <p className="text-xs text-slate-400 py-4 text-center">No active single-crop bids placed yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {quotes.slice(0, 3).map(q => (
+                    <div key={q.id} className="p-3 bg-slate-50 rounded-2xl flex justify-between items-center text-xs">
+                      <div>
+                        <span className="font-bold text-slate-800 block">{q.product_details?.name || 'Crop Listing'}</span>
+                        <span className="text-slate-500 text-[11px]">{q.quantity} Quintals • Target: ₹{q.target_price}</span>
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold capitalize ${
+                        q.status === 'accepted' ? 'bg-emerald-100 text-emerald-800' :
+                        q.status === 'rejected' ? 'bg-rose-100 text-rose-800' :
+                        'bg-amber-100 text-amber-800'
+                      }`}>
+                        {q.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Recent Requirements Summary */}
+            <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-4">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h4 className="font-extrabold text-sm text-slate-800 flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-teal-600" />
+                  Active Sourcing Requirements
+                </h4>
+                <button
+                  onClick={() => handleTabChange('reverse')}
+                  className="text-xs font-bold text-teal-600 hover:text-teal-700 cursor-pointer"
+                >
+                  View All ({requirements.length}) →
+                </button>
+              </div>
+
+              {requirements.length === 0 ? (
+                <p className="text-xs text-slate-400 py-4 text-center">No active sourcing requirements posted yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {requirements.slice(0, 3).map(r => (
+                    <div key={r.id} className="p-3 bg-slate-50 rounded-2xl flex justify-between items-center text-xs">
+                      <div>
+                        <span className="font-bold text-slate-800 block">{r.crop_name} ({r.variety || 'Standard'})</span>
+                        <span className="text-slate-500 text-[11px]">{r.target_quantity} {r.unit} • Grade {r.grade}</span>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-teal-100 text-teal-800 capitalize">
+                        {r.status || 'Active'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+
+        </div>
+      )}
 
       {/* Tab: Quote Negotiations */}
       {activeTab === 'quotes' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="space-y-6">
           {/* Quote Request Form */}
-          <div className="lg:col-span-1 bg-white border border-slate-100 rounded-3xl p-6 shadow-xs h-fit space-y-6">
+          <div className="w-full bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-6">
             <div>
               <h3 className="font-bold text-base text-slate-800">Negotiate Specific Listing</h3>
               <p className="text-[10px] text-slate-500 mt-1">Submit wholesale bids directly to FPOs and independent farmers.</p>
@@ -396,62 +574,68 @@ const BulkBuyerPortal = () => {
             )}
 
             <form onSubmit={handleSubmitQuote} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-600 font-bold mb-1 uppercase">Select Crop Yield</label>
-                <select
-                  value={selectedProdId}
-                  onChange={(e) => setSelectedProdId(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                >
-                  {products.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} (Stock: {p.quantity} {p.unit})
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1 uppercase">Select Crop Yield</label>
+                  <select
+                    value={selectedProdId}
+                    onChange={(e) => setSelectedProdId(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    {products.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} (Stock: {p.quantity} {p.unit})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1 uppercase">Target Quantity</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      placeholder="e.g. 500"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                    <span className="bg-slate-100 border border-slate-200 text-slate-600 font-semibold px-4 py-2 rounded-xl flex items-center justify-center uppercase">
+                      {getSelectedProductDetails()?.unit || 'Units'}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1 uppercase">Target Bid Price (per unit)</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 font-semibold">₹</div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      placeholder="e.g. 20.00"
+                      value={targetPrice}
+                      onChange={(e) => setTargetPrice(e.target.value)}
+                      className="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
               </div>
 
               {selectedProdId && getSelectedProductDetails() && (
-                <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100 space-y-1">
-                  <span className="font-bold text-[9px] uppercase tracking-wider text-emerald-800">Listing Price Reference</span>
-                  <p className="font-semibold text-slate-700">₹{parseFloat(getSelectedProductDetails().price_per_unit).toFixed(2)} per {getSelectedProductDetails().unit}</p>
-                  <p className="text-[10px] text-slate-500">Farmer: {getSelectedProductDetails().farmer_details?.username} ({getSelectedProductDetails().farmer_details?.district})</p>
+                <div className="bg-emerald-50 rounded-2xl p-3 border border-emerald-100 flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs gap-2">
+                  <div>
+                    <span className="font-bold text-[9px] uppercase tracking-wider text-emerald-800">Listing Price Reference</span>
+                    <p className="font-semibold text-slate-700">₹{parseFloat(getSelectedProductDetails().price_per_unit).toFixed(2)} per {getSelectedProductDetails().unit}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-500 font-medium">Farmer: {getSelectedProductDetails().farmer_details?.username} ({getSelectedProductDetails().farmer_details?.district})</p>
+                  </div>
                 </div>
               )}
-
-              <div>
-                <label className="block text-slate-600 font-bold mb-1 uppercase">Target Quantity</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="e.g. 500"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
-                  <span className="bg-slate-100 border border-slate-200 text-slate-600 font-semibold px-4 py-2 rounded-xl flex items-center justify-center uppercase">
-                    {getSelectedProductDetails()?.unit || 'Units'}
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-600 font-bold mb-1 uppercase">Target Bid Price (per unit)</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 font-semibold">₹</div>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="e.g. 20.00"
-                    value={targetPrice}
-                    onChange={(e) => setTargetPrice(e.target.value)}
-                    className="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
 
               <button
                 type="submit"
@@ -469,7 +653,7 @@ const BulkBuyerPortal = () => {
           </div>
 
           {/* Negotiation Log Table */}
-          <div className="lg:col-span-2 bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-6">
+          <div className="w-full bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-6">
             <div>
               <h3 className="font-bold text-base text-slate-800">Negotiation Log</h3>
               <p className="text-[10px] text-slate-500 mt-1">Review active, countered, or completed negotiations.</p>
@@ -564,10 +748,10 @@ const BulkBuyerPortal = () => {
 
       {/* Tab: Reverse Sourcing Marketplace */}
       {activeTab === 'reverse' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="space-y-6">
           
           {/* Post Bulk Requirement Form */}
-          <div className="lg:col-span-1 bg-white border border-slate-100 rounded-3xl p-6 shadow-xs h-fit space-y-6">
+          <div className="w-full bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-6">
             <div>
               <h3 className="font-bold text-base text-slate-800">Post Bulk Sourcing Order</h3>
               <p className="text-[10px] text-slate-500 mt-1">Submit large buying requirements. Multiple farmers can contribute to fulfill the pool.</p>
@@ -580,7 +764,7 @@ const BulkBuyerPortal = () => {
             )}
 
             <form onSubmit={handleSubmitRequirement} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-slate-600 font-bold mb-1 uppercase">Crop Name</label>
                   <input
@@ -602,9 +786,6 @@ const BulkBuyerPortal = () => {
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-slate-600 font-bold mb-1 uppercase">Req. Quantity</label>
                   <input
@@ -630,7 +811,7 @@ const BulkBuyerPortal = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-slate-600 font-bold mb-1 uppercase">Min Price (₹/unit)</label>
                   <input
@@ -653,9 +834,6 @@ const BulkBuyerPortal = () => {
                     className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-slate-600 font-bold mb-1 uppercase">Required Date</label>
                   <input
@@ -695,7 +873,7 @@ const BulkBuyerPortal = () => {
           </div>
 
           {/* Active Sourcing Requirements & Submissions */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="w-full space-y-6">
             <div>
               <h3 className="font-bold text-base text-slate-800">Your Active Buying Pools</h3>
               <p className="text-xs text-slate-500">Track farmer contributions and offers submitted to fulfill your listings.</p>
@@ -898,7 +1076,7 @@ const BulkBuyerPortal = () => {
                         Reserve Contract
                       </button>
                     ) : (
-                      contract.buyer === user.id && (
+                      contract.buyer === user?.id && (
                         <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
                           <CheckCircle className="h-4 w-4" />
                           Reserved by You

@@ -51,18 +51,22 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
   const { user } = useAuth();
   
   // Checkout & Subscription Configuration State
-  const [orderType, setOrderType] = useState('onetime'); // 'onetime' | 'subscription'
-  const [deliveryDay, setDeliveryDay] = useState('Monday');
-  const [deliveryTimeSlot, setDeliveryTimeSlot] = useState('morning');
-  const [durationMonths, setDurationMonths] = useState(2);
+  // Initialize directly from subscriptionConfig so the correct values are
+  // present on the very first render (CartDrawer remounts each open due to
+  // the `if (!isOpen) return null` guard, which resets useState defaults).
+  const [orderType, setOrderType] = useState(() => subscriptionConfig?.orderType || 'onetime');
+  const [deliveryDay, setDeliveryDay] = useState(() => subscriptionConfig?.deliveryDay || 'Monday');
+  const [deliveryTimeSlot, setDeliveryTimeSlot] = useState(() => subscriptionConfig?.deliveryTimeSlot || 'morning');
+  const [durationMonths, setDurationMonths] = useState(() => subscriptionConfig?.durationMonths || 2);
 
-  // Sync settings when drawer opens
+  // Re-sync local state from CartContext every time the drawer opens OR
+  // whenever subscriptionConfig itself changes (e.g., right after OrderTypeModal confirm).
   useEffect(() => {
     if (isOpen && subscriptionConfig) {
-      if (subscriptionConfig.orderType) setOrderType(subscriptionConfig.orderType);
-      if (subscriptionConfig.deliveryDay) setDeliveryDay(subscriptionConfig.deliveryDay);
-      if (subscriptionConfig.deliveryTimeSlot) setDeliveryTimeSlot(subscriptionConfig.deliveryTimeSlot);
-      if (subscriptionConfig.durationMonths) setDurationMonths(subscriptionConfig.durationMonths);
+      setOrderType(subscriptionConfig.orderType || 'onetime');
+      setDeliveryDay(subscriptionConfig.deliveryDay || 'Monday');
+      setDeliveryTimeSlot(subscriptionConfig.deliveryTimeSlot || 'morning');
+      setDurationMonths(subscriptionConfig.durationMonths || 2);
     }
   }, [isOpen, subscriptionConfig]);
 

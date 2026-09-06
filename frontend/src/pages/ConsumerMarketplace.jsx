@@ -7,10 +7,11 @@ import ReviewWidget from '../components/ReviewWidget';
 import Stepper from '../components/Stepper';
 import CartDrawer from '../components/CartDrawer';
 import OrderTypeModal from '../components/OrderTypeModal';
+import SubscriptionWidget from '../components/SubscriptionWidget';
 import {
   Search, MapPin, X, Loader2, ArrowRight, ShoppingBag,
   Truck, CheckCircle, CreditCard, Key, RefreshCw, Package,
-  AlertCircle, IndianRupee
+  AlertCircle, IndianRupee, Calendar
 } from 'lucide-react';
 
 // Loads Razorpay SDK for retry-pay flow
@@ -58,6 +59,11 @@ const ConsumerMarketplace = () => {
   // Cart drawer
   const [cartOpen, setCartOpen] = useState(false);
 
+  // Subscriptions
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [subLoading, setSubLoading] = useState(false);
+  const [showWidget, setShowWidget] = useState(false);
+
   // Retry payment sandbox modal
   const [retryOrder, setRetryOrder] = useState(null);
   const [retryLoading, setRetryLoading] = useState(false);
@@ -91,8 +97,181 @@ const ConsumerMarketplace = () => {
     } catch (err) { console.error(err); }
   }, [user]);
 
+  const fetchSubscriptions = useCallback(async () => {
+    if (!user) return;
+    setSubLoading(true);
+    try {
+      const response = await api.get('/orders/subscriptions/');
+      setSubscriptions(response.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubLoading(false);
+    }
+  }, [user]);
+
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
   useEffect(() => { if (user && activeTab === 'tracking') fetchOrders(); }, [user, activeTab, fetchOrders]);
+  useEffect(() => { if (user && activeTab === 'recurring') fetchSubscriptions(); }, [user, activeTab, fetchSubscriptions]);
+
+  const handlePauseSub = async (subId) => {
+    try {
+      await api.post(`/orders/subscriptions/${subId}/pause/`);
+      fetchSubscriptions();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to pause subscription.');
+    }
+  };
+
+  const handleResumeSub = async (subId) => {
+    try {
+      await api.post(`/orders/subscriptions/${subId}/resume/`);
+      fetchSubscriptions();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to resume subscription.');
+    }
+  };
+
+  const handleCancelSub = async (subId) => {
+    if (!window.confirm('Are you sure you want to cancel this recurring subscription?')) return;
+    try {
+      await api.post(`/orders/subscriptions/${subId}/cancel/`);
+      fetchSubscriptions();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to cancel subscription.');
+    }
+  };
+
+  const renderWeekTracker = (sub) => {
+    const durationMonths = sub.duration_months || 1;
+    const totalDeliveries = sub.total_deliveries || durationMonths * 4;
+    const completedCount = sub.completed_deliveries || 0;
+    const startDate = sub.start_date ? new Date(sub.start_date) : new Date();
+
+    const months = [];
+    for (let m = 0; m < durationMonths; m++) {
+      const weeksInMonth = [];
+      for (let w = 1; w <= 4; w++) {
+        const weekIndex = m * 4 + w;
+        if (weekIndex > totalDeliveries) break;
+
+        const dropDate = new Date(startDate);
+        dropDate.setDate(dropDate.getDate() + (weekIndex - 1) * 7);
+
+        let weekStatus = 'scheduled';
+        if (weekIndex <= completedCount) {
+          weekStatus = 'delivered';
+        } else if (weekIndex === completedCount + 1 && sub.status === 'active') {
+          weekStatus = 'current';
+        } else if (sub.status === 'paused' || sub.status === 'cancelled') {
+          weekStatus = 'paused';
+        }
+
+        weeksInMonth.push({
+          weekNumber: weekIndex,
+          weekInMonth: w,
+          dropDate: dropDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+          status: weekStatus,
+        });
+      }
+      months.push({
+        monthNumber: m + 1,
+        weeks: weeksInMonth,
+      });
+    }
+
+    return (
+      <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-200/60 pb-3">
+          <div>
+            <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              📅 Week-Wise Delivery Tracker ({durationMonths} Month{durationMonths > 1 ? 's' : ''} · {totalDeliveries} Drops)
+            </h4>
+            <p className="text-[10px] text-slate-500 mt-0.5">
+              Deliveries recurring every <strong>{sub.delivery_day}</strong> ({sub.delivery_time_slot} slot)
+            </p>
+          </div>
+          <div className="flex items-center gap-3 text-[10px] font-bold">
+            <span className="flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> Delivered ({completedCount})
+            </span>
+            <span className="flex items-center gap-1 text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping"></span> Next Drop
+            </span>
+            <span className="flex items-center gap-1 text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-slate-400"></span> Scheduled
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {months.map((m) => (
+            <div key={m.monthNumber} className="bg-white border border-slate-200/70 rounded-xl p-3 shadow-xs">
+              <div className="flex justify-between items-center mb-2.5">
+                <span className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                  🗓️ Month {m.monthNumber} of {durationMonths}
+                </span>
+                <span className="text-[10px] text-slate-400 font-semibold">
+                  Weeks {(m.monthNumber - 1) * 4 + 1} – {Math.min(m.monthNumber * 4, totalDeliveries)}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {m.weeks.map((w) => {
+                  const isDelivered = w.status === 'delivered';
+                  const isCurrent = w.status === 'current';
+
+                  return (
+                    <div
+                      key={w.weekNumber}
+                      className={`rounded-xl p-2.5 border text-center transition-all ${
+                        isDelivered
+                          ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                          : isCurrent
+                          ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-400/50 text-amber-900 shadow-xs'
+                          : 'bg-slate-50/80 border-slate-200/80 text-slate-500'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-[9px] font-black uppercase tracking-wider">
+                          Week {w.weekNumber}
+                        </span>
+                        {isDelivered && <span className="text-xs">✅</span>}
+                        {isCurrent && <span className="text-xs animate-bounce">🚚</span>}
+                        {!isDelivered && !isCurrent && <span className="text-xs">📅</span>}
+                      </div>
+
+                      <p className="text-[11px] font-bold mt-0.5">
+                        {w.dropDate}
+                      </p>
+
+                      <span
+                        className={`inline-block text-[9px] font-extrabold px-1.5 py-0.5 rounded-md mt-1.5 uppercase ${
+                          isDelivered
+                            ? 'bg-emerald-200/70 text-emerald-800'
+                            : isCurrent
+                            ? 'bg-amber-200 text-amber-800 font-black'
+                            : 'bg-slate-200/70 text-slate-600'
+                        }`}
+                      >
+                        {isDelivered
+                          ? 'Delivered'
+                          : isCurrent
+                          ? 'Next Drop'
+                          : sub.status === 'paused'
+                          ? 'Paused'
+                          : 'Scheduled'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   const handleOrderPlaced = () => {
     fetchOrders();
@@ -190,7 +369,15 @@ const ConsumerMarketplace = () => {
                 activeTab === 'tracking' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
               }`}
             >
-              📦 My Orders
+              📦 One Time Orders
+            </button>
+            <button
+              onClick={() => setActiveTab('recurring')}
+              className={`pb-4 px-6 text-sm font-extrabold border-b-2 transition-all ${
+                activeTab === 'recurring' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              🔁 Recurring Orders
             </button>
             <button
               onClick={() => setCartOpen(true)}
@@ -205,7 +392,7 @@ const ConsumerMarketplace = () => {
 
       {/* ── Browse Tab ── */}
       {activeTab === 'browse' && (
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Sidebar */}
           <div className="lg:col-span-1 bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-6 h-fit">
             <h3 className="font-bold text-base text-slate-800 uppercase tracking-wider">Filters</h3>
@@ -256,8 +443,8 @@ const ConsumerMarketplace = () => {
             </div>
           </div>
 
-          {/* Products */}
-          <div className="lg:col-span-3">
+          {/* Products (2 products per row) */}
+          <div className="lg:col-span-2">
             {loading ? (
               <div className="flex justify-center items-center py-24 text-slate-400">
                 <Loader2 className="h-8 w-8 animate-spin" />
@@ -267,13 +454,13 @@ const ConsumerMarketplace = () => {
                 No matching produce for these filters.
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {products.map((p) => (
                   <div key={p.id} onClick={() => setSelectedProduct(p)} className="cursor-pointer">
                     <ProductCard
                       product={p}
-                      onAddToCart={(prod, qty) => {
-                        addToCart(prod, qty);
+                      onAddToCart={(prod, qty, config) => {
+                        addToCart(prod, qty, config);
                         setCartOpen(true);
                       }}
                     />
@@ -285,11 +472,11 @@ const ConsumerMarketplace = () => {
         </div>
       )}
 
-      {/* ── My Orders Tab ── */}
+      {/* ── One Time Orders Tab ── */}
       {activeTab === 'tracking' && (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-black text-slate-800">My Orders</h2>
+            <h2 className="text-xl font-black text-slate-800">One Time Orders</h2>
             <button onClick={fetchOrders}
               className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-emerald-600 transition-colors">
               <RefreshCw className="h-3.5 w-3.5" /> Refresh
@@ -483,6 +670,206 @@ const ConsumerMarketplace = () => {
                 </div>
               </div>
             ))
+          )}
+        </div>
+      )}
+
+      {/* ── Recurring Orders Tab ── */}
+      {activeTab === 'recurring' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h2 className="text-xl font-black text-slate-800">Recurring Orders & Contracts</h2>
+              <p className="text-xs text-slate-500 mt-1">Track week-by-week deliveries and manage automated produce subscriptions.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowWidget(!showWidget)}
+                className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs px-3 py-2 rounded-xl transition-all border border-emerald-200"
+              >
+                {showWidget ? '📋 View Active Subscriptions' : '➕ Custom Request Form'}
+              </button>
+              <button
+                onClick={fetchSubscriptions}
+                className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-emerald-600 transition-colors px-2 py-2"
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Refresh
+              </button>
+            </div>
+          </div>
+
+          {showWidget ? (
+            <SubscriptionWidget role="buyer" />
+          ) : subLoading ? (
+            <div className="flex justify-center items-center py-24 text-slate-400">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : subscriptions.length === 0 ? (
+            <div className="text-center py-16 bg-white border border-slate-100 rounded-3xl p-8 text-slate-400">
+              <Calendar className="h-12 w-12 mx-auto mb-3 text-slate-200" />
+              <p className="font-semibold">No recurring orders active.</p>
+              <p className="text-xs mt-1">Select "Recurring Order" on any product in the marketplace or use the Custom Request Form to get started!</p>
+            </div>
+          ) : (
+            subscriptions.map((sub) => {
+              const statusBg =
+                sub.status === 'active'
+                  ? 'bg-emerald-500'
+                  : sub.status === 'paused'
+                  ? 'bg-amber-400'
+                  : sub.status === 'cancelled'
+                  ? 'bg-rose-500'
+                  : 'bg-teal-500';
+
+              const statusBadge =
+                sub.status === 'active'
+                  ? '🟢 Active'
+                  : sub.status === 'paused'
+                  ? '⏸️ Paused'
+                  : sub.status === 'cancelled'
+                  ? '❌ Cancelled'
+                  : '✅ Completed';
+
+              return (
+                <div key={sub.id} className="bg-white border border-slate-100 rounded-3xl shadow-xs overflow-hidden">
+                  {/* Status accent bar */}
+                  <div className={`h-1.5 w-full ${statusBg}`} />
+
+                  <div className="p-5 space-y-5">
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-base text-slate-800">Recurring Contract #{sub.id}</span>
+                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase">
+                            {statusBadge}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Every {sub.delivery_day} · {sub.delivery_time_slot} slot · Created {new Date(sub.created_at).toLocaleDateString('en-IN')}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-bold px-3 py-1 rounded-full">
+                          🗓️ {sub.duration_months} Month{sub.duration_months > 1 ? 's' : ''} Plan ({sub.completed_deliveries || 0}/{sub.total_deliveries} Drops)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Breakdown & Schedule details */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 text-xs">
+                      {/* Items & Billing */}
+                      <div className="space-y-2 bg-slate-50/60 border border-slate-100 p-4 rounded-2xl">
+                        <span className="font-bold text-slate-400 uppercase text-[9px]">Contract Items & Billing</span>
+                        {sub.items?.map((item) => (
+                          <div key={item.id} className="flex justify-between font-semibold text-slate-700">
+                            <span>• {item.product_details?.name || 'Produce'} × {item.quantity} {item.product_details?.unit || 'kg'}</span>
+                            <span>₹{(item.quantity * item.price).toFixed(2)}</span>
+                          </div>
+                        ))}
+
+                        <div className="border-t border-slate-200/80 pt-2 space-y-1 text-[11px]">
+                          <div className="flex justify-between text-slate-500">
+                            <span>Subtotal per drop</span>
+                            <span>₹{parseFloat(sub.per_delivery_subtotal).toFixed(2)}</span>
+                          </div>
+                          {parseFloat(sub.discount_percentage) > 0 && (
+                            <div className="flex justify-between text-emerald-600 font-bold">
+                              <span>Volume Discount ({parseFloat(sub.discount_percentage)}%)</span>
+                              <span>- ₹{((parseFloat(sub.per_delivery_subtotal) * parseFloat(sub.discount_percentage)) / 100).toFixed(2)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-emerald-600 font-medium">
+                            <span>🚚 Delivery Fee per drop</span>
+                            <span>+ ₹{parseFloat(sub.shipping_charge).toFixed(2)}</span>
+                          </div>
+                        </div>
+
+                        <div className="border-t border-slate-200 pt-2 space-y-1">
+                          <div className="flex justify-between font-black text-slate-800 text-xs">
+                            <span>Per Delivery Total</span>
+                            <span className="text-emerald-700">₹{parseFloat(sub.per_delivery_total).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between text-[11px] font-extrabold text-slate-500">
+                            <span>Total Plan Contract</span>
+                            <span className="text-slate-800">₹{parseFloat(sub.total_plan_amount).toFixed(2)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Delivery & Farmer Details */}
+                      <div className="bg-slate-50/60 border border-slate-100 p-4 rounded-2xl space-y-2">
+                        <span className="font-bold text-slate-400 uppercase text-[9px] flex items-center gap-1">
+                          <Truck className="h-3 w-3 text-emerald-600" /> Schedule Details
+                        </span>
+                        <div className="space-y-1.5 leading-relaxed text-[11px] text-slate-600">
+                          <p><strong className="text-slate-800">Farmers:</strong> {sub.farmer_names?.join(', ') || 'Local Farmer'}</p>
+                          <p><strong className="text-slate-800">Delivery Window:</strong> Every {sub.delivery_day} ({sub.delivery_time_slot})</p>
+                          <p><strong className="text-slate-800">Next Scheduled Drop:</strong> <span className="text-emerald-700 font-bold">{sub.next_delivery_date ? new Date(sub.next_delivery_date).toLocaleDateString('en-IN') : 'Scheduled'}</span></p>
+                          <p><strong className="text-slate-800">Delivery Address:</strong> {sub.shipping_address} ({sub.shipping_pincode})</p>
+                        </div>
+                      </div>
+
+                      {/* Summary Contract Progress */}
+                      <div className="bg-slate-50/60 border border-slate-100 p-4 rounded-2xl flex flex-col justify-center items-center text-center space-y-2">
+                        <span className="font-bold text-slate-400 uppercase text-[9px]">Contract Completion</span>
+                        <div className="text-2xl font-black text-emerald-700">
+                          {Math.round(((sub.completed_deliveries || 0) / (sub.total_deliveries || 1)) * 100)}%
+                        </div>
+                        <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                          <div
+                            className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                            style={{ width: `${Math.min(100, Math.round(((sub.completed_deliveries || 0) / (sub.total_deliveries || 1)) * 100))}%` }}
+                          />
+                        </div>
+                        <p className="text-[10px] font-semibold text-slate-500">
+                          {sub.completed_deliveries || 0} of {sub.total_deliveries} drops completed
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* WEEK-WISE DELIVERY TRACKER */}
+                    {renderWeekTracker(sub)}
+
+                    {/* Action Controls */}
+                    <div className="pt-2 border-t border-slate-100 flex justify-end gap-2">
+                      {sub.status === 'active' && (
+                        <>
+                          <button
+                            onClick={() => handlePauseSub(sub.id)}
+                            className="px-4 py-2 bg-amber-50 text-amber-700 font-bold text-xs rounded-xl hover:bg-amber-100 transition-colors flex items-center gap-1"
+                          >
+                            Pause Contract
+                          </button>
+                          <button
+                            onClick={() => handleCancelSub(sub.id)}
+                            className="px-4 py-2 bg-rose-50 text-rose-600 font-bold text-xs rounded-xl hover:bg-rose-100 transition-colors"
+                          >
+                            Cancel Subscription
+                          </button>
+                        </>
+                      )}
+                      {sub.status === 'paused' && (
+                        <>
+                          <button
+                            onClick={() => handleResumeSub(sub.id)}
+                            className="px-4 py-2 bg-emerald-600 text-white font-bold text-xs rounded-xl hover:bg-emerald-700 transition-colors flex items-center gap-1"
+                          >
+                            Resume Contract
+                          </button>
+                          <button
+                            onClick={() => handleCancelSub(sub.id)}
+                            className="px-4 py-2 bg-rose-50 text-rose-600 font-bold text-xs rounded-xl hover:bg-rose-100 transition-colors"
+                          >
+                            Cancel Subscription
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       )}

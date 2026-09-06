@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { Sprout, ShoppingCart, LogOut, User, Menu, X, BarChart3, ShieldAlert, Award, Globe, ChevronDown } from 'lucide-react';
+import { 
+  Sprout, ShoppingCart, LogOut, User, Menu, X, BarChart3, ShieldAlert, 
+  Award, Globe, ChevronDown, ShoppingBag, Search, Bell 
+} from 'lucide-react';
 
 const LANGUAGES = [
   { code: 'en', name: 'English', flag: '🇺🇸' },
   { code: 'hi', name: 'हिन्दी', flag: '🇮🇳' },
   { code: 'gu', name: 'ગુજરાતી', flag: '🇮🇳' },
-  { code: 'mr', name: 'मराठी', flag: '🇮🇳' },
+  { code: 'mr', name: 'મરાઠી', flag: '🇮🇳' },
   { code: 'bn', name: 'বাংলা', flag: '🇮🇳' },
   { code: 'ta', name: 'தமிழ்', flag: '🇮🇳' },
   { code: 'te', name: 'తెలుగు', flag: '🇮🇳' },
@@ -32,18 +35,8 @@ const getActiveLanguage = () => {
 
 const clearAllGoogtransCookies = () => {
   const hostname = window.location.hostname;
-  
-  // Try clearing cookies on common paths and domains
   const paths = ['/', '/app', ''];
-  const domains = [
-    hostname,
-    `.${hostname}`,
-    `www.${hostname}`,
-    'localhost',
-    '.localhost',
-    ''
-  ];
-  
+  const domains = [hostname, `.${hostname}`, `www.${hostname}`, 'localhost', '.localhost', ''];
   for (const path of paths) {
     for (const domain of domains) {
       let baseString = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=${path}`;
@@ -57,17 +50,12 @@ const clearAllGoogtransCookies = () => {
 };
 
 const changeLanguage = (langCode) => {
-  // Clear any existing cookies to avoid conflicts or duplicate domains
   clearAllGoogtransCookies();
-  
   if (langCode !== 'en') {
-    // Set the cookie only for the path `/` on the current domain natively (omit domain entirely)
     document.cookie = `googtrans=/en/${langCode}; path=/; SameSite=Lax`;
   }
-  
   window.location.reload();
 };
-
 
 const LanguageSelector = ({ activeLang }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -89,9 +77,9 @@ const LanguageSelector = ({ activeLang }) => {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-emerald-100 bg-white/50 hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 font-medium transition-all focus:outline-none text-sm cursor-pointer shadow-sm animate-fade-in"
+        className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-emerald-100 bg-white/70 hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 font-medium transition-all focus:outline-none text-xs cursor-pointer shadow-2xs"
       >
-        <Globe className="h-4 w-4 text-emerald-600 animate-pulse-soft" />
+        <Globe className="h-4 w-4 text-emerald-600" />
         <span className="mr-0.5">{activeLangObj.flag}</span>
         <span>{activeLangObj.name}</span>
         <ChevronDown className={`h-3 w-3 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
@@ -109,7 +97,7 @@ const LanguageSelector = ({ activeLang }) => {
                 changeLanguage(lang.code);
                 setIsOpen(false);
               }}
-              className={`w-full text-left flex items-center space-x-2.5 px-3 py-2 text-sm font-semibold transition-colors hover:bg-emerald-50 hover:text-emerald-700 cursor-pointer ${
+              className={`w-full text-left flex items-center space-x-2.5 px-3 py-2 text-xs font-semibold transition-colors hover:bg-emerald-50 hover:text-emerald-700 cursor-pointer ${
                 activeLang === lang.code ? 'text-emerald-700 bg-emerald-100/50' : 'text-gray-600'
               }`}
             >
@@ -123,12 +111,67 @@ const LanguageSelector = ({ activeLang }) => {
   );
 };
 
+const NotificationSelector = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  const notifications = [
+    { id: 1, text: 'Farmer offer received for Tomato Bulk Order #42', time: '10m ago' },
+    { id: 2, text: 'Wholesale contract #108 status updated to Active', time: '1h ago' },
+    { id: 3, text: 'Dispatch scheduled for APMC Mandi, Pune drop', time: '3h ago' },
+  ];
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="relative p-2 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full transition-colors cursor-pointer"
+        title="Notifications"
+      >
+        <Bell className="h-5 w-5" />
+        <span className="absolute top-0.5 right-0.5 inline-flex items-center justify-center w-4 h-4 text-[10px] font-black leading-none text-white bg-rose-500 rounded-full shadow-xs">
+          3
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-80 rounded-2xl shadow-xl bg-white border border-slate-200 py-2 z-[100] transform origin-top-right transition-all">
+          <div className="px-4 py-2 text-xs font-black text-slate-800 border-b border-slate-100 flex justify-between items-center">
+            <span>Notifications</span>
+            <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">3 New</span>
+          </div>
+          <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+            {notifications.map((n) => (
+              <div key={n.id} className="p-3 hover:bg-slate-50 transition-colors space-y-1">
+                <p className="text-xs font-semibold text-slate-700 leading-snug">{n.text}</p>
+                <span className="text-[10px] text-slate-400 font-medium">{n.time}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Navbar = ({ onCartToggle }) => {
   const { user, logout } = useAuth();
   const { getCartCount } = useCart();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [activeLang, setActiveLang] = useState('en');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     setActiveLang(getActiveLanguage());
@@ -152,12 +195,29 @@ const Navbar = ({ onCartToggle }) => {
     }
   };
 
+  const isProfileActive = location.pathname === '/profile' || location.pathname === '/farmer-profile';
+
+  const getProfileActiveStyle = () => {
+    if (!isProfileActive) return 'hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-1.5 rounded-2xl transition-all flex items-center space-x-2 cursor-pointer';
+    switch (user?.role) {
+      case 'bulk_buyer':
+        return 'bg-emerald-700 text-white font-black shadow-md shadow-emerald-600/25 ring-2 ring-emerald-500/50 px-3.5 py-1.5 rounded-2xl flex items-center space-x-2.5 transition-all active:scale-95 cursor-pointer';
+      case 'farmer':
+        return 'bg-emerald-600 text-white font-black shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/50 px-3.5 py-1.5 rounded-2xl flex items-center space-x-2.5 transition-all active:scale-95 cursor-pointer';
+      case 'consumer':
+        return 'bg-blue-600 text-white font-black shadow-md shadow-blue-500/25 ring-2 ring-blue-400/50 px-3.5 py-1.5 rounded-2xl flex items-center space-x-2.5 transition-all active:scale-95 cursor-pointer';
+      default:
+        return 'bg-emerald-600 text-white font-black shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/50 px-3.5 py-1.5 rounded-2xl flex items-center space-x-2.5 transition-all active:scale-95 cursor-pointer';
+    }
+  };
+
   return (
     <nav className="sticky top-0 z-50 glassmorphism shadow-md border-b border-emerald-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
+        <div className="flex justify-between items-center h-16 gap-4">
+          
           {/* Logo Section */}
-          <div className="flex items-center">
+          <div className="flex items-center shrink-0">
             <Link to="/" className="flex items-center space-x-2.5 group transition-transform active:scale-95">
               <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-md shadow-emerald-500/20 flex items-center justify-center">
                 <div className="h-full w-full bg-white dark:bg-slate-900 rounded-[10px] flex items-center justify-center">
@@ -170,42 +230,84 @@ const Navbar = ({ onCartToggle }) => {
             </Link>
           </div>
 
+          {/* Search Bar in Title Bar (Especially for Bulk Buyers & general search) */}
+          <div className="flex-1 max-w-md mx-2 hidden sm:block">
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search for products, farmers, or categories..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    navigate(`/marketplace?q=${encodeURIComponent(searchQuery)}`);
+                  }
+                }}
+                className="w-full pl-9 pr-4 py-2 bg-slate-50/90 border border-slate-200 rounded-full text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all shadow-xs"
+              />
+            </div>
+          </div>
+
           {/* Desktop Nav Items */}
-          <div className="hidden md:flex items-center space-x-6">
-            {/* Hide Marketplace link for farmers — they manage listings, not browse */}
-            {(!user || user.role !== 'farmer') && (
-              <Link to="/marketplace" className="text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 font-semibold transition-colors text-sm">
-                Marketplace
-              </Link>
-            )}
+          <div className="hidden md:flex items-center space-x-3 shrink-0">
             
-            {user && (
-              <div className="flex items-center space-x-6">
-                <Link to={getDashboardLink()} className="text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 font-semibold transition-colors text-sm flex items-center gap-1.5">
-                  <BarChart3 className="h-4 w-4 text-emerald-500" />
-                  Dashboard
-                </Link>
-                {user.role === 'farmer' && (
-                  <>
-                    <Link to="/farmer-profile" className="text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 font-semibold transition-colors text-sm flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-800 pl-6">
-                      <User className="h-4 w-4 text-emerald-500" />
-                      My Profile
-                    </Link>
-                    <Link to="/farmer-ai-assistant" className="text-slate-600 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400 font-semibold transition-colors text-sm flex items-center gap-1.5 pl-6">
-                      <span className="text-lg">🤖</span>
-                      AI Assistant
-                    </Link>
-                  </>
+            {/* Show Marketplace & Dashboard links in top nav ONLY for roles that do NOT have a left sidebar (Consumers and Bulk Buyers have left sidebars!) */}
+            {(!user || (!['bulk_buyer', 'consumer'].includes(user.role))) && (
+              <>
+                {(!user || user.role !== 'farmer') && (
+                  <Link
+                    to="/marketplace"
+                    className={`text-sm transition-all px-4 py-2 rounded-xl flex items-center gap-2 active:scale-95 ${
+                      location.pathname === '/marketplace'
+                        ? 'bg-emerald-600 text-white font-extrabold shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/40'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-emerald-700 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 font-bold'
+                    }`}
+                  >
+                    <ShoppingBag className={`h-4 w-4 ${location.pathname === '/marketplace' ? 'text-white' : 'text-emerald-600'}`} />
+                    Marketplace
+                  </Link>
                 )}
-              </div>
+                
+                {user && (
+                  <div className="flex items-center space-x-3">
+                    <Link
+                      to={getDashboardLink()}
+                      className={`text-sm transition-all px-4 py-2 rounded-xl flex items-center gap-2 active:scale-95 ${
+                        (location.pathname === getDashboardLink() || location.pathname.includes('dashboard') || location.pathname.includes('portal'))
+                          ? 'bg-teal-600 text-white font-extrabold shadow-md shadow-teal-500/25 ring-2 ring-teal-400/40'
+                          : 'text-slate-600 dark:text-slate-300 hover:text-teal-700 hover:bg-teal-50/80 dark:hover:bg-teal-950/40 font-bold'
+                      }`}
+                    >
+                      <BarChart3 className={`h-4 w-4 ${(location.pathname === getDashboardLink() || location.pathname.includes('dashboard') || location.pathname.includes('portal')) ? 'text-white' : 'text-teal-500'}`} />
+                      Dashboard
+                    </Link>
+                    {user.role === 'farmer' && (
+                      <>
+                        <Link to="/farmer-profile" className="text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 font-semibold transition-colors text-sm flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-800 pl-4">
+                          <User className="h-4 w-4 text-emerald-500" />
+                          My Profile
+                        </Link>
+                        <Link to="/farmer-ai-assistant" className="text-slate-600 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400 font-semibold transition-colors text-sm flex items-center gap-1.5 pl-4">
+                          <span className="text-lg">🤖</span>
+                          AI Assistant
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                )}
+              </>
             )}
-            
+
             {user && user.role === 'admin' && (
               <Link to="/control-tower" className="text-slate-600 dark:text-slate-300 hover:text-cyan-600 font-semibold transition-colors text-sm flex items-center gap-1.5">
                 <ShieldAlert className="h-4 w-4 text-cyan-500" />
                 Control Tower
               </Link>
             )}
+
+            {/* Notification Bell Button */}
+            {user && <NotificationSelector />}
 
             {/* Language Selector Dropdown */}
             <LanguageSelector activeLang={activeLang} />
@@ -220,15 +322,15 @@ const Navbar = ({ onCartToggle }) => {
                 </Link>
               </div>
             ) : (
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-3">
                 {/* Farmer KYC indicator */}
-                {user.role === 'farmer' && (
+                {user.role === 'farmer' && user.kyc_status && (
                   <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                     user.kyc_status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
                     user.kyc_status === 'pending' ? 'bg-amber-100 text-amber-800 animate-pulse' :
                     'bg-red-100 text-red-800'
                   }`}>
-                    <Award className="h-3 w-3" />
+                    <Award className="h-3.5 w-3.5" />
                     KYC: {user.kyc_status.toUpperCase()}
                   </span>
                 )}
@@ -237,31 +339,38 @@ const Navbar = ({ onCartToggle }) => {
                 {['consumer', 'bulk_buyer'].includes(user.role) && (
                   <button 
                     onClick={onCartToggle} 
-                    className="relative p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors"
+                    className="relative p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors cursor-pointer"
+                    title="Cart"
                   >
-                    <ShoppingCart className="h-6 w-6" />
+                    <ShoppingCart className="h-5 w-5" />
                     {getCartCount() > 0 && (
-                      <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-amber-500 rounded-full">
+                      <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold leading-none text-white transform translate-x-1/3 -translate-y-1/3 bg-amber-500 rounded-full">
                         {getCartCount()}
                       </span>
                     )}
                   </button>
                 )}
 
-                {/* Profile display & Logout */}
-                <div className="flex items-center space-x-2 pl-2 border-l border-gray-200">
-                  <Link to={user.role === 'farmer' ? '/farmer-profile' : '#'} className="flex items-center space-x-2 hover:opacity-80 transition-opacity cursor-pointer">
+                {/* Profile Button & Logout */}
+                <div className="flex items-center space-x-2 pl-2 border-l border-slate-200">
+                  <Link to={user.role === 'farmer' ? '/farmer-profile' : '/profile'} className={getProfileActiveStyle()}>
                     <div className="flex flex-col text-right">
-                      <span className="text-sm font-semibold text-gray-700">{user.username}</span>
-                      <span className="text-[10px] text-gray-400 capitalize">{user.role.replace('_', ' ')}</span>
+                      <span className={`text-xs font-extrabold ${isProfileActive ? 'text-white' : 'text-slate-800'}`}>
+                        {user.business_name || user.username}
+                      </span>
+                      <span className={`text-[10px] capitalize ${isProfileActive ? 'text-emerald-200 font-bold' : 'text-slate-400'}`}>
+                        {user.role.replace('_', ' ')}
+                      </span>
                     </div>
-                    <div className="h-8 w-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold ${
+                      isProfileActive ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
+                    }`}>
                       <User className="h-4 w-4" />
                     </div>
                   </Link>
                   <button 
                     onClick={handleLogout} 
-                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors cursor-pointer"
                     title="Log Out"
                   >
                     <LogOut className="h-5 w-5" />
@@ -303,9 +412,14 @@ const Navbar = ({ onCartToggle }) => {
           {(!user || user.role !== 'farmer') && (
             <Link 
               to="/marketplace" 
-              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-emerald-600 hover:bg-emerald-50"
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-base font-bold transition-all ${
+                location.pathname === '/marketplace'
+                  ? 'bg-emerald-600 text-white font-extrabold shadow-sm'
+                  : 'text-gray-700 hover:text-emerald-600 hover:bg-emerald-50'
+              }`}
               onClick={() => setIsOpen(false)}
             >
+              <ShoppingBag className={`h-5 w-5 ${location.pathname === '/marketplace' ? 'text-white' : 'text-emerald-600'}`} />
               Marketplace
             </Link>
           )}
@@ -313,9 +427,14 @@ const Navbar = ({ onCartToggle }) => {
           {user && (
             <Link 
               to={getDashboardLink()} 
-              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-emerald-600 hover:bg-emerald-50"
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-base font-bold transition-all ${
+                (location.pathname === getDashboardLink() || location.pathname.includes('dashboard') || location.pathname.includes('portal'))
+                  ? 'bg-teal-600 text-white font-extrabold shadow-sm'
+                  : 'text-gray-700 hover:text-teal-600 hover:bg-teal-50'
+              }`}
               onClick={() => setIsOpen(false)}
             >
+              <BarChart3 className={`h-5 w-5 ${(location.pathname === getDashboardLink() || location.pathname.includes('dashboard') || location.pathname.includes('portal')) ? 'text-white' : 'text-teal-600'}`} />
               Dashboard
             </Link>
           )}
@@ -373,15 +492,25 @@ const Navbar = ({ onCartToggle }) => {
             </div>
           ) : (
             <div className="pt-4 pb-2 border-t border-gray-200">
-              <div className="flex items-center px-3 mb-3">
-                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+              <Link 
+                to={user.role === 'farmer' ? '/farmer-profile' : '/profile'} 
+                onClick={() => setIsOpen(false)} 
+                className={`flex items-center px-3 mb-3 p-2 rounded-xl transition-all cursor-pointer ${
+                  isProfileActive
+                    ? 'bg-purple-600 text-white font-extrabold shadow-md'
+                    : 'hover:bg-emerald-50/80'
+                }`}
+              >
+                <div className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center font-bold ${
+                  isProfileActive ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
+                }`}>
                   <User className="h-6 w-6" />
                 </div>
                 <div className="ml-3">
-                  <div className="text-base font-medium text-gray-800">{user.username}</div>
-                  <div className="text-sm font-medium text-gray-500 capitalize">{user.role}</div>
+                  <div className={`text-base font-bold ${isProfileActive ? 'text-white' : 'text-gray-800'}`}>{user.username}</div>
+                  <div className={`text-sm capitalize ${isProfileActive ? 'text-purple-200 font-semibold' : 'text-gray-500'}`}>{user.role.replace('_', ' ')}</div>
                 </div>
-              </div>
+              </Link>
               <button 
                 onClick={handleLogout} 
                 className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-red-600 hover:bg-red-50 hover:text-red-700"

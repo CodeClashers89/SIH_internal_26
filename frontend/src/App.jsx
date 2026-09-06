@@ -7,6 +7,8 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CartDrawer from './components/CartDrawer';
 import Preloader from './components/Preloader';
+import BulkBuyerSidebar from './components/BulkBuyerSidebar';
+import ConsumerSidebar from './components/ConsumerSidebar';
 import Landing from './pages/Landing';
 import LoginSignup from './pages/LoginSignup';
 import FarmerDashboard from './pages/FarmerDashboard';
@@ -18,6 +20,7 @@ import BulkBuyerPortal from './pages/BulkBuyerPortal';
 import AdminPanel from './pages/AdminPanel';
 import LogisticsDashboard from './pages/LogisticsDashboard';
 import ControlTower from './pages/ControlTower';
+import UserProfilePage from './pages/UserProfilePage';
 
 // Protected Route Component
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -49,7 +52,7 @@ const NonFarmerRoute = ({ children }) => {
 
 function MainLayout() {
   const [cartOpen, setCartOpen] = useState(false);
-  const { loading } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -57,91 +60,116 @@ function MainLayout() {
   }
 
   const isChatbotPage = location.pathname === '/farmer-ai-assistant';
+  const isConsumer = user && user.role === 'consumer';
+  const isBulkBuyer = user && user.role === 'bulk_buyer';
+  const hasSidebar = isConsumer || isBulkBuyer;
+
+  const appRoutes = (
+    <Routes>
+      <Route path="/" element={<Landing />} />
+      <Route path="/login" element={<LoginSignup />} />
+      <Route path="/register" element={<LoginSignup />} />
+      <Route path="/marketplace" element={
+        <NonFarmerRoute>
+          <ConsumerMarketplace />
+        </NonFarmerRoute>
+      } />
+      
+      {/* Role Protected Paths */}
+      <Route 
+        path="/consumer-dashboard" 
+        element={
+          <ProtectedRoute allowedRoles={['consumer', 'admin']}>
+            <ConsumerDashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/farmer-dashboard" 
+        element={
+          <ProtectedRoute allowedRoles={['farmer']}>
+            <FarmerDashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/farmer-profile" 
+        element={
+          <ProtectedRoute allowedRoles={['farmer']}>
+            <FarmerProfilePage />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/farmer-ai-assistant" 
+        element={
+          <ProtectedRoute allowedRoles={['farmer']}>
+            <FarmerAIAssistant />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/bulk-portal" 
+        element={
+          <ProtectedRoute allowedRoles={['bulk_buyer']}>
+            <BulkBuyerPortal />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/admin-panel" 
+        element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AdminPanel />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/control-tower" 
+        element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <ControlTower />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/logistics-dashboard" 
+        element={
+          <ProtectedRoute allowedRoles={['logistics_partner']}>
+            <LogisticsDashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/profile" 
+        element={
+          <ProtectedRoute allowedRoles={['consumer', 'bulk_buyer', 'farmer', 'logistics_partner', 'admin']}>
+            <UserProfilePage />
+          </ProtectedRoute>
+        } 
+      />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
 
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar onCartToggle={() => setCartOpen(!cartOpen)} />
       
-      <main className="flex-grow">
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<LoginSignup />} />
-          <Route path="/register" element={<LoginSignup />} />
-          <Route path="/marketplace" element={
-            <NonFarmerRoute>
-              <ConsumerMarketplace />
-            </NonFarmerRoute>
-          } />
-          
-          {/* Role Protected Paths */}
-          <Route 
-            path="/consumer-dashboard" 
-            element={
-              <ProtectedRoute allowedRoles={['consumer', 'admin']}>
-                <ConsumerDashboard />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/farmer-dashboard" 
-            element={
-              <ProtectedRoute allowedRoles={['farmer']}>
-                <FarmerDashboard />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/farmer-profile" 
-            element={
-              <ProtectedRoute allowedRoles={['farmer']}>
-                <FarmerProfilePage />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/farmer-ai-assistant" 
-            element={
-              <ProtectedRoute allowedRoles={['farmer']}>
-                <FarmerAIAssistant />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/bulk-portal" 
-            element={
-              <ProtectedRoute allowedRoles={['bulk_buyer']}>
-                <BulkBuyerPortal />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/admin-panel" 
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminPanel />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/control-tower" 
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <ControlTower />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/logistics-dashboard" 
-            element={
-              <ProtectedRoute allowedRoles={['logistics_partner']}>
-                <LogisticsDashboard />
-              </ProtectedRoute>
-            } 
-          />
-
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
+      {hasSidebar ? (
+        <div className="flex flex-grow bg-slate-50/50 items-start">
+          {isConsumer && <ConsumerSidebar />}
+          {isBulkBuyer && <BulkBuyerSidebar />}
+          <main className="flex-grow p-4 sm:p-6 lg:p-8 overflow-x-hidden min-w-0">
+            {appRoutes}
+          </main>
+        </div>
+      ) : (
+        <main className="flex-grow">
+          {appRoutes}
+        </main>
+      )}
 
       {!isChatbotPage && <Footer />}
 
