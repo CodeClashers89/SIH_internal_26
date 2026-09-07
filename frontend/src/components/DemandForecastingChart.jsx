@@ -13,14 +13,14 @@ const DemandForecastingChart = ({ data = [] }) => {
       <div className="flex justify-between items-start mb-4">
         <div>
           <h3 className="text-base font-bold text-slate-800 mb-1">Sales Volume Trend (Last 30 Days)</h3>
-          <p className="text-xs text-slate-500">Aggregated daily orders (quantity) for listed crops.</p>
+          <p className="text-sm text-slate-600">Aggregated daily orders (quantity) for listed crops.</p>
         </div>
-        <span className="text-[10px] bg-blue-50 text-blue-700 font-extrabold px-2 py-0.5 rounded-full border border-blue-100">
+        <span className="text-[13px] bg-blue-50 text-blue-700 font-extrabold px-3 py-1 rounded-full border border-blue-100">
           Rule-Based Aggregation
         </span>
       </div>
 
-      <div className="h-64 w-full text-xs">
+      <div className="h-64 w-full text-[14px] font-bold">
         {formattedData.length === 0 ? (
           <div className="h-full flex items-center justify-center text-slate-400">
             No sales records available in the selected range.
@@ -41,8 +41,9 @@ const DemandForecastingChart = ({ data = [] }) => {
               <XAxis dataKey="label" stroke="#64748b" tickLine={false} />
               <YAxis stroke="#64748b" tickLine={false} />
               <Tooltip 
-                contentStyle={{ background: '#0f172a', borderRadius: '12px', border: 'none', color: '#white' }}
+                contentStyle={{ background: '#0f172a', borderRadius: '12px', border: 'none', color: 'white', fontSize: '14px', fontWeight: 'bold' }}
                 labelStyle={{ fontWeight: 'bold', color: '#38bdf8' }}
+                itemStyle={{ color: 'white', fontWeight: 'bold' }}
               />
               <Area type="monotone" dataKey="quantity" name="Qty Sold" stroke="#0ea5e9" strokeWidth={2.5} fillOpacity={1} fill="url(#colorSales)" />
             </AreaChart>
@@ -50,7 +51,7 @@ const DemandForecastingChart = ({ data = [] }) => {
         )}
       </div>
 
-      <div className="mt-4 p-3 bg-slate-50 rounded-2xl border border-slate-100 text-[10px] text-slate-500">
+      <div className="mt-4 p-3 bg-slate-50 rounded-2xl border border-slate-100 text-[13px] text-slate-600">
         <strong>💡 Note:</strong> Showing historical totals. A prediction curve (ML forecast models like ARIMA/Prophet) can be overlaid here when backend forecasting modules are activated.
       </div>
     </div>
