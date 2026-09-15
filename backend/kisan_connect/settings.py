@@ -87,25 +87,24 @@ WSGI_APPLICATION = 'kisan_connect.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-# Reads DATABASE_URL from .env to store all application data in Supabase PostgreSQL
-# NOTE: 'default' is the main KisanConnect business database
-# 'chatbot' is the SEPARATE database for chatbot conversation data
+# Reads DATABASE_URL and CHAT_DATABASE_URL from environment variables for Supabase PostgreSQL
+# 'default': Main KisanConnect business database (Users, Products, Orders, Bids, Logistics, etc.)
+# 'chatbot': Separate database for chatbot conversation data (Conversations, Messages, Memories)
 DATABASE_URL = os.environ.get('DATABASE_URL')
+CHAT_DATABASE_URL = os.environ.get('CHAT_DATABASE_URL')
 
 DATABASES = {
     'default': dj_database_url.config(
+        env='DATABASE_URL',
         default=DATABASE_URL or f'sqlite:///{BASE_DIR / "db.sqlite3"}',
-        conn_max_age=0,            # Close connection after each request for Supabase session pooler
+        conn_max_age=0,            # Recommended for Supabase transaction/session poolers
         conn_health_checks=True,   # Validate connections before reuse
     ),
     'chatbot': dj_database_url.config(
         env='CHAT_DATABASE_URL',
-        default=os.environ.get(
-            'CHAT_DATABASE_URL',
-            f'sqlite:///{BASE_DIR / "chatbot.sqlite3"}'
-        ),
-        conn_max_age=600,
-        conn_health_checks=True,
+        default=CHAT_DATABASE_URL or f'sqlite:///{BASE_DIR / "chatbot.sqlite3"}',
+        conn_max_age=0,            # Recommended for Supabase transaction/session poolers
+        conn_health_checks=True,   # Validate connections before reuse
     )
 }
 

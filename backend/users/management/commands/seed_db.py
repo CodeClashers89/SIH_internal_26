@@ -111,7 +111,7 @@ class Command(BaseCommand):
         bulk_buyer1 = User.objects.create_user(
             username='bulk_buyer1',
             email='bulkbuyer@gmail.com',
-            password='buyerpassword',
+            password='bulk_buyerpassword',
             role='bulk_buyer',
             phone='7654321098',
             is_verified=True,
@@ -123,9 +123,9 @@ class Command(BaseCommand):
 
         # Logistics Partner User
         driver1 = User.objects.create_user(
-            username='driver1',
+            username='logistics_partner1',
             email='driver1@gmail.com',
-            password='driverpassword',
+            password='logistics_partnerpassword',
             role='logistics_partner',
             phone='9000000004',
             is_verified=True,
