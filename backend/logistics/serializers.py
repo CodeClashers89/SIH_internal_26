@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import LogisticsPartner, DeliveryShipment
+from .models import LogisticsPartner, DeliveryShipment, TransportOffer
 from orders.serializers import OrderSerializer
 
 class LogisticsPartnerSerializer(serializers.ModelSerializer):
@@ -20,3 +20,17 @@ class DeliveryShipmentSerializer(serializers.ModelSerializer):
             'handover_completed_at', 'handover_confirmed_by'
         )
         read_only_fields = ('id', 'assigned_at')
+
+
+class TransportOfferSerializer(serializers.ModelSerializer):
+    farmer_username = serializers.ReadOnlyField(source='farmer.username')
+    partner_details = LogisticsPartnerSerializer(source='partner', read_only=True)
+    shipment_details = DeliveryShipmentSerializer(source='shipment', read_only=True)
+
+    class Meta:
+        model = TransportOffer
+        fields = (
+            'id', 'shipment', 'shipment_details', 'farmer', 'farmer_username',
+            'partner', 'partner_details', 'status', 'message', 'created_at', 'updated_at'
+        )
+        read_only_fields = ('id', 'farmer', 'farmer_username', 'status', 'created_at', 'updated_at')

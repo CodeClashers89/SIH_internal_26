@@ -85,7 +85,7 @@ const ConsumerMarketplace = () => {
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
-      let url = '/products/?';
+      let url = '/products/?exclude_zero_freshness=1&';
       if (category) url += `category=${category}&`;
       if (searchQuery) url += `search=${searchQuery}&`;
       if (filterPincode) url += `pincode=${filterPincode}&`;

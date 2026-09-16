@@ -27,10 +27,14 @@ class Product(models.Model):
     expiry_date = models.DateField()
     description = models.TextField(blank=True, null=True)
     image_url = models.URLField(max_length=500, blank=True, null=True)
+    stored_in_cold_storage = models.BooleanField(default=False)
+    source_land = models.CharField(max_length=100, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     @property
     def freshness_percentage(self):
+        if self.stored_in_cold_storage:
+            return None
         current_time = timezone.now()
         
         # Convert harvest_date to timezone-aware datetime at midnight

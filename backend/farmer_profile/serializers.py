@@ -37,7 +37,7 @@ class FarmerProfileSerializer(serializers.ModelSerializer):
             # Profile identity
             'avatar_url', 'full_name', 'farm_name', 'alternate_whatsapp',
             'village', 'taluka', 'state',
-            'farm_size_value', 'farm_size_unit', 'soil_farming_type',
+            'farm_size_value', 'farm_size_unit', 'farm_lands', 'soil_farming_type',
             # Trust & performance
             'trust_score', 'trust_tier', 'trust_color',
             'total_trips', 'ontime_rate', 'avg_rating', 'rating_count',
@@ -74,6 +74,24 @@ class FarmerProfileSerializer(serializers.ModelSerializer):
         if not acct or len(acct) < 4:
             return acct or ''
         return f"XXXX-XXXX-{acct[-4:]}"
+
+    def validate_farm_size_value(self, value):
+        if value is not None and value <= 0:
+            raise serializers.ValidationError("Farm size must be greater than zero.")
+        return value
+
+    def validate_farm_lands(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Farm lands must be a list.")
+        for land in value:
+            if not isinstance(land, dict):
+                raise serializers.ValidationError("Each farm land entry must be an object.")
+            area_value = land.get('area_value')
+            if area_value is None or area_value <= 0:
+                raise serializers.ValidationError("Each land area must be greater than zero.")
+            if not land.get('land_name'):
+                raise serializers.ValidationError("Each land entry must include a land name.")
+        return value
 
     def validate_alternate_whatsapp(self, value):
         if value:

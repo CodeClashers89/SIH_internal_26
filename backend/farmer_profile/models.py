@@ -54,6 +54,7 @@ class FarmerProfile(models.Model):
     state = models.CharField(max_length=100, blank=True, default='')
     farm_size_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     farm_size_unit = models.CharField(max_length=20, choices=FARM_UNIT_CHOICES, default='acres')
+    farm_lands = models.JSONField(default=list, blank=True)
     soil_farming_type = models.CharField(max_length=20, choices=SOIL_TYPE_CHOICES, default='conventional')
 
     # --- Trust & Performance (auto-calculated / admin-set) ---

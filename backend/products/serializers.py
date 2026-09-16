@@ -13,8 +13,8 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'farmer', 'farmer_details', 'name', 'category', 
             'quantity', 'unit', 'price_per_unit', 'harvest_date', 
-            'expiry_date', 'description', 'image_url', 
-            'freshness_percentage', 'created_at'
+            'expiry_date', 'description', 'image_url',
+            'stored_in_cold_storage', 'source_land', 'freshness_percentage', 'created_at'
         )
         read_only_fields = ('id', 'farmer', 'created_at', 'freshness_percentage')
 

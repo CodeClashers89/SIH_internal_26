@@ -133,6 +133,7 @@ const LogisticsDashboard = () => {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState('overview');
   const [shipments, setShipments] = useState([]);
+  const [transportOffers, setTransportOffers] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -179,6 +180,15 @@ const LogisticsDashboard = () => {
       showError('Failed to fetch delivery shipments.');
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const fetchTransportOffers = useCallback(async () => {
+    try {
+      const res = await api.get('/logistics/transport-offers/');
+      setTransportOffers(res.data);
+    } catch (err) {
+      console.error('Transport offer fetch error:', err);
     }
   }, []);
 
@@ -234,6 +244,7 @@ const LogisticsDashboard = () => {
 
   useEffect(() => {
     fetchShipments();
+    fetchTransportOffers();
     fetchStats();
     fetchActiveDeliveryRoute();
     if (user) {
@@ -251,8 +262,21 @@ const LogisticsDashboard = () => {
 
   const handleRefresh = () => {
     fetchShipments();
+    fetchTransportOffers();
     fetchStats();
     fetchActiveDeliveryRoute();
+  };
+
+  const handleTransportOfferResponse = async (offerId, accept) => {
+    try {
+      await api.post(`/logistics/transport-offers/${offerId}/respond/`, { accept });
+      showSuccess(accept ? 'Transport offer accepted. Shipment assigned to you.' : 'Transport offer declined.');
+      fetchTransportOffers();
+      fetchShipments();
+      fetchStats();
+    } catch (err) {
+      showError(err.response?.data?.error || 'Failed to respond to transport offer.');
+    }
   };
 
   const handleAcceptJob = async (shipmentId) => {
@@ -423,6 +447,27 @@ const LogisticsDashboard = () => {
           <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-sm text-rose-700 font-semibold flex items-center gap-2">
             <AlertCircle className="h-5 w-5 text-rose-500 shrink-0" />
             {error}
+          </div>
+        )}
+
+        {transportOffers.some(offer => offer.status === 'pending') && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-3">
+            <div>
+              <h3 className="font-black text-blue-900">New transport offers</h3>
+              <p className="text-xs text-blue-700 mt-1">A farmer has selected you for a delivery in your operating area.</p>
+            </div>
+            {transportOffers.filter(offer => offer.status === 'pending').map(offer => (
+              <div key={offer.id} className="bg-white border border-blue-100 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="text-sm text-slate-700">
+                  <strong>{offer.farmer_username}</strong> offered you a ride for Order #{offer.shipment_details?.order || offer.shipment}.
+                  <p className="text-xs text-slate-500 mt-1">Pickup: {offer.shipment_details?.pickup_address || 'See shipment details'}</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button type="button" onClick={() => handleTransportOfferResponse(offer.id, true)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-lg">Accept</button>
+                  <button type="button" onClick={() => handleTransportOfferResponse(offer.id, false)} className="bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold px-3 py-2 rounded-lg border border-rose-200">Decline</button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

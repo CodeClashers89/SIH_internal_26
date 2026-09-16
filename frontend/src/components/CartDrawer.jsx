@@ -134,12 +134,16 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
     const addr = shippingAddress || defaultAddress;
     const pin = shippingPincode || defaultPincode;
 
-    if (!addr || !pin) {
-      setError('Please provide your delivery address and pincode.');
+    if (!addr.trim() || !pin.trim()) {
+      setError('Delivery address and pincode are required before payment.');
       return;
     }
-    if (pin.length !== 6) {
+    if (!/^\d{6}$/.test(pin.trim())) {
       setError('Pincode must be exactly 6 digits.');
+      return;
+    }
+    if (!user?.username?.trim() || !user?.email?.trim() || !user?.phone?.trim()) {
+      setError('Your name, email, and phone number are required for payment. Please complete your profile first.');
       return;
     }
     setError('');

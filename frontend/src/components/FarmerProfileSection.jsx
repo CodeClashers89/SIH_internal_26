@@ -18,7 +18,8 @@ const FarmerProfileSection = () => {
   const [saving, setSaving] = useState(false);
   
   // Edit form state
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState({ farm_lands: [] });
+  const [newLand, setNewLand] = useState({ land_name: '', area_value: '', area_unit: 'acres' });
 
   useEffect(() => {
     fetchProfile();
@@ -46,10 +47,55 @@ const FarmerProfileSection = () => {
     }));
   };
 
+  const handleLandInputChange = (e) => {
+    const { name, value } = e.target;
+    setNewLand(prev => ({ ...prev, [name]: value }));
+  };
+
+  const addFarmLand = () => {
+    const areaValue = Number(newLand.area_value);
+    if (!newLand.land_name.trim()) {
+      alert('Please enter a land name.');
+      return;
+    }
+    if (!Number.isFinite(areaValue) || areaValue <= 0) {
+      alert('Land size must be greater than zero.');
+      return;
+    }
+
+    const nextLand = {
+      land_name: newLand.land_name.trim(),
+      area_value: areaValue,
+      area_unit: newLand.area_unit,
+    };
+
+    setFormData(prev => ({
+      ...prev,
+      farm_lands: [...(prev.farm_lands || []), nextLand],
+    }));
+    setNewLand({ land_name: '', area_value: '', area_unit: 'acres' });
+  };
+
+  const removeFarmLand = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      farm_lands: (prev.farm_lands || []).filter((_, i) => i !== index),
+    }));
+  };
+
   const handleListChange = (e, field) => {
-    const value = e.target.value;
-    const list = value.split(',').map(c => c.trim()).filter(c => c);
+    const list = Array.from(e.target.selectedOptions, option => option.value);
     setFormData(prev => ({ ...prev, [field]: list }));
+  };
+
+  const toggleMultiSelectValue = (field, value) => {
+    setFormData(prev => {
+      const currentValues = prev[field] || [];
+      const nextValues = currentValues.includes(value)
+        ? currentValues.filter(item => item !== value)
+        : [...currentValues, value];
+      return { ...prev, [field]: nextValues };
+    });
   };
 
   const handleSave = async (e) => {
@@ -483,7 +529,8 @@ const FarmerProfileSection = () => {
                     <div>
                       <label className="block text-xs font-bold text-slate-600 mb-1">Farm Size</label>
                       <div className="flex gap-1">
-                        <input type="number" step="0.01" name="farm_size_value" value={formData.farm_size_value || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-200 rounded-l-lg text-sm focus:ring-1 focus:ring-emerald-500 outline-none" />
+                        <input 
+                          type="number" step="0.01" min="0.01" name="farm_size_value" value={formData.farm_size_value || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-200 rounded-l-lg text-sm focus:ring-1 focus:ring-emerald-500 outline-none" />
                         <select name="farm_size_unit" value={formData.farm_size_unit || 'acres'} onChange={handleInputChange} className="px-2 py-2 border border-slate-200 rounded-r-lg text-sm bg-slate-50 outline-none">
                           <option value="acres">Acres</option>
                           <option value="bigha">Bigha</option>
@@ -491,6 +538,73 @@ const FarmerProfileSection = () => {
                         </select>
                       </div>
                     </div>
+                  </div>
+
+                  <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-bold text-slate-600">Land Details</label>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">Add plot</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        name="land_name"
+                        value={newLand.land_name}
+                        onChange={handleLandInputChange}
+                        placeholder="Land name"
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-emerald-500 outline-none"
+                      />
+                      <div className="flex gap-1">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          name="area_value"
+                          value={newLand.area_value}
+                          onChange={handleLandInputChange}
+                          placeholder="Size"
+                          className="w-full px-3 py-2 border border-slate-200 rounded-l-lg text-sm focus:ring-1 focus:ring-emerald-500 outline-none"
+                        />
+                        <select
+                          name="area_unit"
+                          value={newLand.area_unit}
+                          onChange={handleLandInputChange}
+                          className="px-2 py-2 border border-slate-200 rounded-r-lg text-sm bg-white outline-none"
+                        >
+                          <option value="acres">Acres</option>
+                          <option value="bigha">Bigha</option>
+                          <option value="hectares">Hectares</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={addFarmLand}
+                      className="w-full bg-emerald-600 text-white text-xs font-bold py-2 rounded-lg hover:bg-emerald-700"
+                    >
+                      Add Land
+                    </button>
+
+                    {(formData.farm_lands || []).length > 0 && (
+                      <div className="space-y-2">
+                        {(formData.farm_lands || []).map((land, index) => (
+                          <div key={`${land.land_name}-${index}`} className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+                            <span>
+                              {land.land_name} — {land.area_value} {land.area_unit}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeFarmLand(index)}
+                              className="text-rose-600 font-bold"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -542,13 +656,53 @@ const FarmerProfileSection = () => {
                   </div>
                   
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">Primary Crops (comma separated)</label>
-                    <input type="text" value={formData.primary_crops?.join(', ') || ''} onChange={(e) => handleListChange(e, 'primary_crops')} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-emerald-500 outline-none" placeholder="Tomato, Cotton, Onion" />
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Primary Crops</label>
+                    <details className="relative group">
+                      <summary className="list-none cursor-pointer w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white flex items-center justify-between">
+                        <span className={formData.primary_crops?.length ? 'text-slate-800' : 'text-slate-400'}>
+                          {formData.primary_crops?.length ? formData.primary_crops.join(', ') : 'Select primary crops'}
+                        </span>
+                        <span className="text-slate-400">⌄</span>
+                      </summary>
+                      <div className="absolute z-20 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+                        {['Tomato', 'Onion', 'Potato', 'Cotton', 'Rice', 'Wheat', 'Maize', 'Sugarcane', 'Mustard', 'Turmeric', 'Chilli', 'Other'].map(crop => (
+                          <label key={crop} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-emerald-50 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(formData.primary_crops || []).includes(crop)}
+                              onChange={() => toggleMultiSelectValue('primary_crops', crop)}
+                              className="h-4 w-4 accent-emerald-600"
+                            />
+                            {crop}
+                          </label>
+                        ))}
+                      </div>
+                    </details>
                   </div>
                   
                   <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">Seasons (comma separated)</label>
-                    <input type="text" value={formData.production_seasons?.join(', ') || ''} onChange={(e) => handleListChange(e, 'production_seasons')} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-emerald-500 outline-none" placeholder="Rabi, Kharif" />
+                    <label className="block text-xs font-bold text-slate-600 mb-1">Production Seasons</label>
+                    <details className="relative group">
+                      <summary className="list-none cursor-pointer w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white flex items-center justify-between">
+                        <span className={formData.production_seasons?.length ? 'text-slate-800' : 'text-slate-400'}>
+                          {formData.production_seasons?.length ? formData.production_seasons.join(', ') : 'Select production seasons'}
+                        </span>
+                        <span className="text-slate-400">⌄</span>
+                      </summary>
+                      <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+                        {['Kharif', 'Rabi', 'Zaid', 'Year-round'].map(season => (
+                          <label key={season} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-emerald-50 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(formData.production_seasons || []).includes(season)}
+                              onChange={() => toggleMultiSelectValue('production_seasons', season)}
+                              className="h-4 w-4 accent-emerald-600"
+                            />
+                            {season}
+                          </label>
+                        ))}
+                      </div>
+                    </details>
                   </div>
                   
                   <div>

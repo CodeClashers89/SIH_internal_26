@@ -31,36 +31,37 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        
-        # Filtering by category
+
         category = self.request.query_params.get('category')
         if category:
             queryset = queryset.filter(category=category)
-            
-        # Filtering by farmer
+
         farmer_id = self.request.query_params.get('farmer')
         if farmer_id:
             queryset = queryset.filter(farmer_id=farmer_id)
-            
-        # Filtering by district (from farmer's profile)
+
         district = self.request.query_params.get('district')
         if district:
             queryset = queryset.filter(farmer__district__icontains=district)
 
-        # Filtering by pincode (from farmer's profile)
         pincode = self.request.query_params.get('pincode')
         if pincode:
             queryset = queryset.filter(farmer__pincode=pincode)
-            
-        # Search query (by product name or description)
+
         search = self.request.query_params.get('search')
         if search:
             queryset = queryset.filter(name__icontains=search) | queryset.filter(description__icontains=search)
-            
+
         return queryset
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        if request.query_params.get('exclude_zero_freshness') == '1':
+            queryset = [product for product in queryset if product.stored_in_cold_storage or product.freshness_percentage > 0]
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
     def perform_create(self, serializer):
-        # Auto-set the farmer to the current authenticated farmer
         serializer.save(farmer=self.request.user)
 
 class AuctionViewSet(viewsets.ModelViewSet):

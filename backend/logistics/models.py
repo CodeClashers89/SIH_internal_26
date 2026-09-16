@@ -59,3 +59,27 @@ class DeliveryShipment(models.Model):
 
     def __str__(self):
         return f"Shipment for Order #{self.order.id} - Partner: {self.partner.name if self.partner else 'None'} ({self.status})"
+
+
+class TransportOffer(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('rejected', 'Rejected'),
+    )
+
+    shipment = models.ForeignKey(DeliveryShipment, on_delete=models.CASCADE, related_name='transport_offers')
+    farmer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='transport_offers_sent')
+    partner = models.ForeignKey(LogisticsPartner, on_delete=models.CASCADE, related_name='transport_offers_received')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    message = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['shipment', 'partner'], name='unique_transport_offer_per_driver'),
+        ]
+
+    def __str__(self):
+        return f"Transport offer for shipment #{self.shipment_id} to {self.partner.name} ({self.status})"

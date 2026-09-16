@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     LogisticsPartnerViewSet,
     DeliveryShipmentViewSet,
+    TransportOfferViewSet,
     LogisticsStatsView,
     LogisticsVehicleUpdateView,
 )
@@ -10,6 +11,7 @@ from .views import (
 router = DefaultRouter()
 router.register(r'partners', LogisticsPartnerViewSet, basename='logistics-partner')
 router.register(r'shipments', DeliveryShipmentViewSet, basename='delivery-shipment')
+router.register(r'transport-offers', TransportOfferViewSet, basename='transport-offer')
 
 urlpatterns = [
     path('', include(router.urls)),

@@ -1,4 +1,4 @@
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions, status, serializers
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.views import APIView
@@ -7,8 +7,8 @@ from django.db import transaction, OperationalError
 from django.db.utils import DatabaseError
 from django.utils import timezone
 from decimal import Decimal
-from .models import LogisticsPartner, DeliveryShipment
-from .serializers import LogisticsPartnerSerializer, DeliveryShipmentSerializer
+from .models import LogisticsPartner, DeliveryShipment, TransportOffer
+from .serializers import LogisticsPartnerSerializer, DeliveryShipmentSerializer, TransportOfferSerializer
 from .email_service import send_delivery_otp_email
 from control_tower.models import OperationalEvent
 from users.permissions import IsAdmin
@@ -156,6 +156,7 @@ class DeliveryShipmentViewSet(viewsets.ModelViewSet):
 
         print(f"[LOGISTICS] Driver '{user.username}' (partner #{partner.id}) accepted shipment #{shipment.id} for order #{shipment.order_id}. OTP Email: {email_info}")
         return Response(DeliveryShipmentSerializer(shipment).data, status=status.HTTP_200_OK)
+
 
     @action(detail=True, methods=['post'], url_path='confirm-handover')
     @transaction.atomic
@@ -322,6 +323,61 @@ class DeliveryShipmentViewSet(viewsets.ModelViewSet):
             'message': '✅ OTP verified! Order successfully delivered.',
             'shipment': DeliveryShipmentSerializer(shipment).data
         })
+
+
+class TransportOfferViewSet(viewsets.ModelViewSet):
+    queryset = TransportOffer.objects.select_related('shipment', 'partner', 'farmer').all().order_by('-created_at')
+    serializer_class = TransportOfferSerializer
+
+    def get_permissions(self):
+        return [permissions.IsAuthenticated()]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+        if user.role == 'farmer':
+            return queryset.filter(farmer=user)
+        if user.role == 'logistics_partner':
+            return queryset.filter(partner__user=user)
+        return queryset.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if user.role != 'farmer':
+            raise permissions.PermissionDenied('Only farmers can offer a ride to a driver.')
+        shipment = serializer.validated_data['shipment']
+        partner = serializer.validated_data['partner']
+        if not shipment.order.items.filter(product__farmer=user).exists():
+            raise permissions.PermissionDenied('You can only assign transport for your own shipment.')
+        if not partner.active:
+            raise serializers.ValidationError('This transport partner is not active.')
+        if shipment.partner_id:
+            raise serializers.ValidationError('This shipment already has a transport partner.')
+        serializer.save(farmer=user)
+
+    @action(detail=True, methods=['post'])
+    @transaction.atomic
+    def respond(self, request, pk=None):
+        offer = self.get_object()
+        if request.user.role != 'logistics_partner' or offer.partner.user_id != request.user.id:
+            return Response({'error': 'Only the selected driver can respond to this offer.'}, status=status.HTTP_403_FORBIDDEN)
+        if offer.status != 'pending':
+            return Response({'error': 'This transport offer has already been answered.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        accept = request.data.get('accept') is True
+        offer.status = 'accepted' if accept else 'rejected'
+        offer.save(update_fields=['status', 'updated_at'])
+        if accept:
+            shipment = DeliveryShipment.objects.select_for_update().get(pk=offer.shipment_id)
+            if shipment.partner_id:
+                offer.status = 'rejected'
+                offer.save(update_fields=['status', 'updated_at'])
+                return Response({'error': 'Another driver has already been assigned.'}, status=status.HTTP_409_CONFLICT)
+            shipment.partner = offer.partner
+            shipment.status = 'assigned'
+            shipment.save(update_fields=['partner', 'status'])
+            TransportOffer.objects.filter(shipment=shipment, status='pending').exclude(pk=offer.pk).update(status='rejected')
+        return Response(TransportOfferSerializer(offer).data)
 
 
 class LogisticsStatsView(APIView):

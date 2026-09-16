@@ -65,11 +65,56 @@ const OrdersListSkeleton = () => (
   </div>
 );
 
+const getFreshnessMeta = (value) => {
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return {
+      label: 'Cold Storage',
+      badgeClass: 'bg-blue-100 text-blue-800',
+      note: 'Freshness paused while stored',
+      alert: false,
+      score: null,
+    };
+  }
+
+  if (numericValue >= 70) {
+    return {
+      label: 'Fresh',
+      badgeClass: 'bg-emerald-100 text-emerald-800',
+      note: 'Ready for sale',
+      alert: false,
+      score: numericValue,
+    };
+  }
+
+  if (numericValue >= 40) {
+    return {
+      label: 'Standard',
+      badgeClass: 'bg-amber-100 text-amber-800',
+      note: 'Monitor stock timing',
+      alert: numericValue <= 75,
+      score: numericValue,
+    };
+  }
+
+  return {
+    label: 'Low Freshness',
+    badgeClass: 'bg-rose-100 text-rose-800',
+    note: 'Review price soon',
+    alert: true,
+    score: numericValue,
+  };
+};
 
 const FarmerDashboard = () => {
   const { user, submitKyc } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [transportPartners, setTransportPartners] = useState([]);
+  const [transportShipments, setTransportShipments] = useState([]);
+  const [transportOffers, setTransportOffers] = useState([]);
+  const [selectedTransportPartner, setSelectedTransportPartner] = useState({});
 
   const handleTabChange = (section) => {
     setActiveSection(section);
@@ -86,6 +131,7 @@ const FarmerDashboard = () => {
   const [preHarvestContracts, setPreHarvestContracts] = useState([]);
   const [markets, setMarkets] = useState([]);
   const [selectedMarket, setSelectedMarket] = useState(null);
+  const [farmerProfile, setFarmerProfile] = useState(null);
 
   // Route tracking states
   const [orderRoutes, setOrderRoutes] = useState({});
@@ -125,6 +171,7 @@ const FarmerDashboard = () => {
 
   // Add listing state
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState('');
   
@@ -137,9 +184,18 @@ const FarmerDashboard = () => {
   const [pHarvest, setPHarvest] = useState('');
   const [pDesc, setPDesc] = useState('');
   const [pImage, setPImage] = useState('');
+  const [pColdStorage, setPColdStorage] = useState(false);
+  const [pSourceLand, setPSourceLand] = useState('');
 
   // Form states for counter offering quote
   const [counterPrices, setCounterPrices] = useState({});
+  const [dismissedZeroFreshness, setDismissedZeroFreshness] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(`freshness-alerts-read-${user?.id}`) || '[]');
+    } catch {
+      return [];
+    }
+  });
 
   // Form states for submitting offer to bulk requirement
   const [offerReqId, setOfferReqId] = useState(null);
@@ -166,7 +222,7 @@ const FarmerDashboard = () => {
   const fetchDashboardData = async () => {
     setRefreshing(true);
     try {
-      const [statsRes, listingsRes, ordersRes, quotesRes, bulkRes, myOffersRes, contractRes, marketsRes] = await Promise.all([
+      const [statsRes, listingsRes, ordersRes, quotesRes, bulkRes, myOffersRes, contractRes, marketsRes, profileRes] = await Promise.all([
         api.get('/farmer/stats/'),
         api.get(`/products/?farmer=${user.id}`),
         api.get('/orders/'),
@@ -174,7 +230,8 @@ const FarmerDashboard = () => {
         api.get('/orders/bulk-requirements/'),
         api.get('/orders/farmer-offers/'),
         api.get('/orders/pre-harvest-contracts/'),
-        api.get('/market-prices/markets/')
+        api.get('/market-prices/markets/'),
+        api.get('/v1/farmer/profile/')
       ]);
       setStats(statsRes.data);
       setListings(listingsRes.data);
@@ -184,6 +241,7 @@ const FarmerDashboard = () => {
       setMyOffers(myOffersRes.data);
       setPreHarvestContracts(contractRes.data);
       setMarkets(marketsRes.data);
+      setFarmerProfile(profileRes.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -197,6 +255,27 @@ const FarmerDashboard = () => {
       fetchDashboardData();
     }
   }, [user]);
+
+  const fetchTransportOptions = async () => {
+    try {
+      const [shipmentsRes, partnersRes, offersRes] = await Promise.all([
+        api.get('/logistics/shipments/'),
+        api.get('/logistics/partners/'),
+        api.get('/logistics/transport-offers/')
+      ]);
+      setTransportShipments(shipmentsRes.data.filter(shipment => !shipment.partner && shipment.status !== 'delivered'));
+      setTransportPartners(partnersRes.data.filter(partner => partner.active));
+      setTransportOffers(offersRes.data);
+    } catch (err) {
+      console.error('Transport options fetch error:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (user && ['orders', 'quotes'].includes(activeSection)) {
+      fetchTransportOptions();
+    }
+  }, [user, activeSection]);
 
   // Listen for hash changes to switch tabs
   useEffect(() => {
@@ -222,13 +301,20 @@ const FarmerDashboard = () => {
       price_per_unit: parseFloat(pPrice),
       harvest_date: pHarvest,
       description: pDesc,
-      image_url: pImage
+      image_url: pImage,
+      stored_in_cold_storage: pColdStorage,
+      source_land: pSourceLand
     };
 
     try {
-      const response = await api.post('/products/', payload);
-      setListings([response.data, ...listings]);
+      const response = editingProduct
+        ? await api.patch(`/products/${editingProduct.id}/`, payload)
+        : await api.post('/products/', payload);
+      setListings(editingProduct
+        ? listings.map((item) => item.id === editingProduct.id ? response.data : item)
+        : [response.data, ...listings]);
       setShowAddModal(false);
+      setEditingProduct(null);
       // Reset form
       setPName('');
       setPQuantity('');
@@ -236,6 +322,8 @@ const FarmerDashboard = () => {
       setPHarvest('');
       setPDesc('');
       setPImage('');
+      setPColdStorage(false);
+      setPSourceLand('');
       fetchDashboardData(); // update stats
     } catch (err) {
       setAddError(err.response?.data?.non_field_errors?.[0] || 'Failed to add product. Verify inputs.');
@@ -243,6 +331,39 @@ const FarmerDashboard = () => {
       setAddLoading(false);
     }
   };
+
+  const handleEditProduct = (product) => {
+    setEditingProduct(product);
+    setPName(product.name || '');
+    setPCategory(product.category || 'vegetables');
+    setPQuantity(product.quantity || '');
+    setPUnit(product.unit || 'kg');
+    setPPrice(product.price_per_unit || '');
+    setPHarvest(product.harvest_date || '');
+    setPDesc(product.description || '');
+    setPImage(product.image_url || '');
+    setPColdStorage(Boolean(product.stored_in_cold_storage));
+    setPSourceLand(product.source_land || '');
+    setShowAddModal(true);
+  };
+
+  const handleMarkFreshnessAlertRead = (productId) => {
+    setDismissedZeroFreshness((prev) => {
+      const next = prev.includes(productId) ? prev : [...prev, productId];
+      localStorage.setItem(`freshness-alerts-read-${user?.id}`, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const activeListings = listings.filter((item) => {
+    const isZeroFreshness = !item.stored_in_cold_storage && Number(item.freshness_percentage ?? 100) === 0;
+    return !isZeroFreshness;
+  });
+
+  const zeroFreshnessAlerts = listings.filter((item) => {
+    const isZeroFreshness = !item.stored_in_cold_storage && Number(item.freshness_percentage ?? 100) === 0;
+    return isZeroFreshness && !dismissedZeroFreshness.includes(item.id);
+  });
 
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
     try {
@@ -298,6 +419,25 @@ const FarmerDashboard = () => {
   };
 
   const handleRejectQuote = async (quoteId) => {
+
+      const handleOfferTransport = async (shipmentId) => {
+        const partnerId = selectedTransportPartner[shipmentId];
+        if (!partnerId) {
+          alert('Select a transport driver first.');
+          return;
+        }
+        try {
+          await api.post('/logistics/transport-offers/', {
+            shipment: shipmentId,
+            partner: partnerId,
+            message: 'Please accept this delivery ride offer for my order.'
+          });
+          alert('Ride offer sent to the selected driver.');
+          fetchTransportOptions();
+        } catch (err) {
+          alert(err.response?.data?.error || 'Failed to send transport offer.');
+        }
+      };
     try {
       await api.post(`/orders/quotes/${quoteId}/reject-offer/`);
       alert('Quote rejected.');
@@ -533,6 +673,26 @@ const FarmerDashboard = () => {
             </button>
           </div>
 
+          {zeroFreshnessAlerts.length > 0 && (
+            <div className="space-y-3">
+              {zeroFreshnessAlerts.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <div className="text-sm font-bold text-rose-700">{item.name} was removed from active inventory because freshness reached 0%.</div>
+                    <div className="text-xs text-rose-600 mt-1">This is only a temporary alert. It is not saved to the database.</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleMarkFreshnessAlertRead(item.id)}
+                    className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-3 py-2 rounded-lg transition-all"
+                  >
+                    Mark as read
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {loading ? (
             <TableSkeleton />
           ) : (
@@ -544,72 +704,75 @@ const FarmerDashboard = () => {
                     <th className="py-3 px-2">Category</th>
                     <th className="py-3 px-2">Stock Level</th>
                     <th className="py-3 px-2">Price per Unit</th>
-                    <th className="py-3 px-2">Freshness Gauge</th>
+                    <th className="py-3 px-2">Storage / Freshness</th>
                     <th className="py-3 px-2">Harvest Date</th>
+                    <th className="py-3 px-2">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {listings.length === 0 ? (
+                  {activeListings.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="py-8 text-center text-slate-400">No products listed. Add your first crop!</td>
+                      <td colSpan="7" className="py-8 text-center text-slate-400">No products listed. Add your first crop!</td>
                     </tr>
                   ) : (
-                    listings.map((l) => (
-                      <tr key={l.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-3.5 px-2 font-semibold text-slate-800 flex items-center gap-2">
-                          {l.image_url ? (
-                            <img
-                              src={l.image_url}
-                              alt={l.name}
-                              className="h-8 w-8 rounded-lg object-cover bg-slate-100 shrink-0"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                                e.currentTarget.nextSibling.style.display = 'flex';
-                              }}
-                            />
-                          ) : null}
-                          <span
-                            className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 text-base flex items-center justify-center shrink-0 select-none"
-                            style={{ display: l.image_url ? 'none' : 'flex' }}
-                            title="No image"
-                          >
-                            🌿
-                          </span>
-                          {l.name}
-                        </td>
-                        <td className="py-3.5 px-2 capitalize text-slate-500">{l.category}</td>
-                        <td className="py-3.5 px-2 font-medium text-slate-700">{l.quantity} {l.unit}</td>
-                        <td className="py-3.5 px-2 font-extrabold text-slate-900">₹{parseFloat(l.price_per_unit).toFixed(2)}</td>
-                        <td className="py-3.5 px-2">
-                          <span className={`px-2 py-0.5 rounded text-[13px] font-bold whitespace-nowrap ${
-                            l.freshness_percentage >= 90 ? 'bg-emerald-100 text-emerald-800' :
-                            l.freshness_percentage >= 70 ? 'bg-teal-100 text-teal-800' :
-                            l.freshness_percentage >= 40 ? 'bg-amber-100 text-amber-800' :
-                            'bg-rose-100 text-rose-800'
-                          }`}>
-                            {l.freshness_percentage}% | {
-                              l.freshness_percentage >= 90 ? 'Ultra Fresh' :
-                              l.freshness_percentage >= 70 ? 'Fresh' :
-                              l.freshness_percentage >= 40 ? 'Standard' : 'Processing Grade'
-                            }
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-2 text-slate-500 leading-relaxed">
-                          {new Date(l.harvest_date).toLocaleDateString('en-IN')}
-                        </td>
-                      </tr>
-                    ))
+                    activeListings.map((l) => {
+                      const freshness = getFreshnessMeta(l.freshness_percentage);
+
+                      return (
+                        <tr key={l.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="py-3.5 px-2 font-semibold text-slate-800 flex items-center gap-2">
+                            {l.image_url ? (
+                              <img
+                                src={l.image_url}
+                                alt={l.name}
+                                className="h-8 w-8 rounded-lg object-cover bg-slate-100 shrink-0"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  e.currentTarget.nextSibling.style.display = 'flex';
+                                }}
+                              />
+                            ) : null}
+                            <span
+                              className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 text-base flex items-center justify-center shrink-0 select-none"
+                              style={{ display: l.image_url ? 'none' : 'flex' }}
+                              title="No image"
+                            >
+                              🌿
+                            </span>
+                            {l.name}
+                          </td>
+                          <td className="py-3.5 px-2 capitalize text-slate-500">{l.category}</td>
+                          <td className="py-3.5 px-2 font-medium text-slate-700">{l.quantity} {l.unit}</td>
+                          <td className="py-3.5 px-2 font-extrabold text-slate-900">₹{parseFloat(l.price_per_unit).toFixed(2)}</td>
+                          <td className="py-3.5 px-2">
+                            {l.stored_in_cold_storage ? (
+                              <div className="space-y-1">
+                                <span className="px-2 py-0.5 rounded text-[13px] font-bold bg-blue-100 text-blue-800 whitespace-nowrap">Cold Storage</span>
+                              </div>
+                            ) : (
+                              <div className="space-y-1">
+                                <span className={`px-2 py-0.5 rounded text-[13px] font-bold whitespace-nowrap ${freshness.badgeClass}`}>
+                                  {freshness.score !== null ? `${freshness.score}% | ${freshness.label}` : freshness.label}
+                                </span>
+                                {freshness.alert && <p className="text-[10px] font-bold text-rose-600">Review price soon</p>}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-2 text-slate-500 leading-relaxed">
+                            {new Date(l.harvest_date).toLocaleDateString('en-IN')}
+                          </td>
+                          <td className="py-3.5 px-2">
+                            <button onClick={() => handleEditProduct(l)} className="text-xs font-bold text-emerald-700 hover:text-emerald-900">Edit</button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
             </div>
           )}
 
-          <div className="mt-8 border-t border-slate-200 pt-6">
-            <h4 className="text-lg font-black text-slate-800 mb-1">Retail Subscription Orders</h4>
-            <p className="text-sm text-slate-500 mb-3">Recurring subscriptions placed by retail consumers.</p>
-            <SubscriptionWidget role="farmer" buyerRole="consumer" />
-          </div>
         </div>
       )}
 
@@ -788,6 +951,69 @@ const FarmerDashboard = () => {
               )}
             </div>
           )}
+
+          <div className="border-t border-slate-200 pt-6 space-y-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-600">Packed order transport</p>
+              <h4 className="text-lg font-black text-slate-800 mt-1">Assign a Transport Driver</h4>
+              <p className="text-sm text-slate-500 mt-1">Select any active driver operating in the delivery area. The driver will receive your ride offer and can accept or decline it.</p>
+            </div>
+            {transportShipments.filter(shipment => {
+              const order = orders.find(item => item.id === shipment.order);
+              return order?.status === 'packed';
+            }).length === 0 ? (
+              <p className="text-xs text-slate-400 rounded-2xl border border-slate-100 bg-slate-50 p-4">No packed orders are waiting for a transport driver.</p>
+            ) : (
+              transportShipments.filter(shipment => {
+                const order = orders.find(item => item.id === shipment.order);
+                return order?.status === 'packed';
+              }).map(shipment => {
+                const existingOffer = transportOffers.find(offer => offer.shipment === shipment.id && offer.status === 'pending');
+                return (
+                  <div key={shipment.id} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">Order #{shipment.order}</p>
+                        <p className="text-xs text-slate-500">Pickup: {shipment.pickup_address}</p>
+                        <p className="text-xs text-slate-500">Delivery: {shipment.delivery_address}</p>
+                      </div>
+                      <span className="text-xs font-bold text-amber-700 bg-amber-50 rounded-full px-2.5 py-1">Packed · Driver needed</span>
+                    </div>
+                    {existingOffer ? (
+                      <p className="text-xs font-bold text-blue-700 bg-blue-50 rounded-lg px-3 py-2">Offer sent to {existingOffer.partner_details?.name || 'selected driver'} and awaiting response.</p>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <select
+                          value={selectedTransportPartner[shipment.id] || ''}
+                          onChange={(event) => setSelectedTransportPartner(prev => ({ ...prev, [shipment.id]: event.target.value }))}
+                          className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                        >
+                          <option value="">Select any transport driver</option>
+                          {transportPartners.map(partner => (
+                            <option key={partner.id} value={partner.id}>{partner.name} · {partner.district} · PIN {partner.pincode}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => handleOfferTransport(shipment.id)}
+                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+                        >
+                          Offer Ride
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="border-t border-slate-200 pt-6">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600">Retail subscription channel</p>
+            <h4 className="text-lg font-black text-slate-800 mb-1 mt-1">Retail Subscription Orders</h4>
+            <p className="text-sm text-slate-500 mb-3">Recurring subscriptions placed by retail consumers are listed here and kept separate from wholesale bids.</p>
+            <SubscriptionWidget role="farmer" buyerRole="consumer" />
+          </div>
         </div>
       )}
 
@@ -894,6 +1120,55 @@ const FarmerDashboard = () => {
             <h4 className="text-lg font-black text-slate-800 mb-1">Wholesale Subscription Orders</h4>
             <p className="text-sm text-slate-500 mb-3">Recurring subscriptions placed by bulk buyers.</p>
             <SubscriptionWidget role="farmer" buyerRole="bulk_buyer" />
+          </div>
+
+          <div className="border-t border-slate-200 pt-6 space-y-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-600">Transport coordination</p>
+              <h4 className="text-lg font-black text-slate-800 mt-1">Offer a Ride to a Driver</h4>
+              <p className="text-sm text-slate-500 mt-1">Choose an active driver operating near the shipment area. The selected driver will receive this offer in their dashboard.</p>
+            </div>
+            {transportShipments.length === 0 ? (
+              <p className="text-xs text-slate-400 rounded-2xl border border-slate-100 bg-slate-50 p-4">No unassigned confirmed shipments need a transport partner.</p>
+            ) : (
+              transportShipments.map(shipment => {
+                const existingOffer = transportOffers.find(offer => offer.shipment === shipment.id && offer.status === 'pending');
+                return (
+                  <div key={shipment.id} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">Order #{shipment.order}</p>
+                        <p className="text-xs text-slate-500">Pickup: {shipment.pickup_address}</p>
+                      </div>
+                      <span className="text-xs font-bold text-amber-700 bg-amber-50 rounded-full px-2.5 py-1">Driver needed</span>
+                    </div>
+                    {existingOffer ? (
+                      <p className="text-xs font-bold text-blue-700 bg-blue-50 rounded-lg px-3 py-2">Offer sent to {existingOffer.partner_details?.name || 'selected driver'} and awaiting response.</p>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <select
+                          value={selectedTransportPartner[shipment.id] || ''}
+                          onChange={(event) => setSelectedTransportPartner(prev => ({ ...prev, [shipment.id]: event.target.value }))}
+                          className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                        >
+                          <option value="">Select transport driver</option>
+                          {transportPartners.map(partner => (
+                            <option key={partner.id} value={partner.id}>{partner.name} — {partner.district}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => handleOfferTransport(shipment.id)}
+                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+                        >
+                          Offer Ride
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}
@@ -1309,9 +1584,9 @@ const FarmerDashboard = () => {
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
-              <h3 className="text-xl font-bold text-slate-800">Add Crop Listing</h3>
+              <h3 className="text-xl font-bold text-slate-800">{editingProduct ? 'Edit Crop Listing' : 'Add Crop Listing'}</h3>
               <button 
-                onClick={() => setShowAddModal(false)}
+                onClick={() => { setShowAddModal(false); setEditingProduct(null); }}
                 className="text-slate-400 hover:text-slate-600 transition-colors"
               >
                 Cancel
@@ -1417,6 +1692,24 @@ const FarmerDashboard = () => {
               </div>
 
               <div>
+                <label className="block text-slate-600 font-bold mb-1 uppercase">Source Land</label>
+                <select
+                  value={pSourceLand}
+                  onChange={(e) => setPSourceLand(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                >
+                  <option value="">Select land / plot</option>
+                  {Array.isArray(farmerProfile?.farm_lands) && farmerProfile.farm_lands.length > 0 ? (
+                    farmerProfile.farm_lands.map((land, index) => (
+                      <option key={`${land.land_name || 'land'}-${index}`} value={land.land_name}>{land.land_name} ({land.area_value} {land.area_unit})</option>
+                    ))
+                  ) : (
+                    <option value="">Add farm land in profile first</option>
+                  )}
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-slate-600 font-bold mb-1 uppercase">Image URL (Optional)</label>
                 <input
                   type="url"
@@ -1427,12 +1720,17 @@ const FarmerDashboard = () => {
                 />
               </div>
 
+              <label className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-3 text-sm font-semibold text-slate-700">
+                <input type="checkbox" checked={pColdStorage} onChange={(e) => setPColdStorage(e.target.checked)} className="h-4 w-4 accent-emerald-600" />
+                Stored in cold storage
+              </label>
+
               <button
                 type="submit"
                 disabled={addLoading}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
               >
-                {addLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Publish Listing'}
+                {addLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : editingProduct ? 'Save Crop Changes' : 'Publish Listing'}
               </button>
             </form>
           </div>
