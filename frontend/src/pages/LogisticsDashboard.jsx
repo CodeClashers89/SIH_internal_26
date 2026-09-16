@@ -397,6 +397,7 @@ const LogisticsDashboard = () => {
       <div className="max-w-6xl mx-auto space-y-6">
 
         {/* ── Header ── */}
+        {activeTab === 'overview' && (
         <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -435,6 +436,7 @@ const LogisticsDashboard = () => {
             </button>
           </div>
         </div>
+        )}
 
         {/* ── Alerts ── */}
         {successMsg && (
