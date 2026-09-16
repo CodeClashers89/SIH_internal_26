@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useSearchParams } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 import ReviewWidget from '../components/ReviewWidget';
 import Stepper from '../components/Stepper';
@@ -11,7 +12,8 @@ import SubscriptionWidget from '../components/SubscriptionWidget';
 import {
   Search, MapPin, X, Loader2, ArrowRight, ShoppingBag,
   Truck, CheckCircle, CreditCard, Key, RefreshCw, Package,
-  AlertCircle, IndianRupee, Calendar
+  AlertCircle, IndianRupee, Calendar, Clock3, LockKeyhole, Mail,
+  ClipboardList, AlertTriangle
 } from 'lucide-react';
 
 // Loads Razorpay SDK for retry-pay flow
@@ -28,16 +30,25 @@ const loadRazorpayScript = () =>
 
 const STATUS_STEPS = ['placed', 'confirmed', 'packed', 'in_transit', 'delivered'];
 const STATUS_LABELS = {
-  placed: '🛒 Placed',
-  confirmed: '✅ Confirmed',
-  packed: '📦 Packed',
-  in_transit: '🚚 In Transit',
-  delivered: '🎉 Delivered',
+  placed: 'Placed',
+  confirmed: 'Confirmed',
+  packed: 'Packed',
+  in_transit: 'In Transit',
+  delivered: 'Delivered',
+};
+
+const STATUS_ICONS = {
+  placed: ShoppingBag,
+  confirmed: CheckCircle,
+  packed: Package,
+  in_transit: Truck,
+  delivered: CheckCircle,
 };
 
 const ConsumerMarketplace = () => {
   const { addToCart } = useCart();
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Marketplace
   const [products, setProducts] = useState([]);
@@ -54,7 +65,10 @@ const ConsumerMarketplace = () => {
   const [sortBy, setSortBy] = useState('newest');
 
   // Tabs
-  const [activeTab, setActiveTab] = useState('browse');
+  const activeTab = ['browse', 'tracking', 'recurring'].includes(searchParams.get('tab'))
+    ? searchParams.get('tab')
+    : 'browse';
+  const setActiveTab = (tab) => setSearchParams(tab === 'browse' ? {} : { tab }, { replace: true });
 
   // Cart drawer
   const [cartOpen, setCartOpen] = useState(false);
@@ -351,62 +365,37 @@ const ConsumerMarketplace = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-      {/* Sub-navigation */}
-      <div className="flex border-b border-slate-100 pb-px gap-1">
-        <button
-          onClick={() => setActiveTab('browse')}
-          className={`pb-4 px-6 text-sm font-extrabold border-b-2 transition-all ${
-            activeTab === 'browse' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          🌾 Browse Fresh Produce
-        </button>
-        {user && (
-          <>
-            <button
-              onClick={() => setActiveTab('tracking')}
-              className={`pb-4 px-6 text-sm font-extrabold border-b-2 transition-all ${
-                activeTab === 'tracking' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              📦 One Time Orders
-            </button>
-            <button
-              onClick={() => setActiveTab('recurring')}
-              className={`pb-4 px-6 text-sm font-extrabold border-b-2 transition-all ${
-                activeTab === 'recurring' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              🔁 Recurring Orders
-            </button>
-            <button
-              onClick={() => setCartOpen(true)}
-              className="ml-auto mb-3 flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm shadow-emerald-200"
-            >
-              <ShoppingBag className="h-3.5 w-3.5" />
-              Open Cart
-            </button>
-          </>
-        )}
-      </div>
+      {/* Page actions */}
+      {user && (
+        <div className="flex justify-end">
+          <button
+            onClick={() => setCartOpen(true)}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm shadow-emerald-200"
+          >
+            <ShoppingBag className="h-3.5 w-3.5" />
+            Open Cart
+          </button>
+        </div>
+      )}
 
       {/* ── Browse Tab ── */}
       {activeTab === 'browse' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Sidebar */}
-          <div className="lg:col-span-1 bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-6 h-fit">
+        <div className="space-y-6">
+          {/* Filters */}
+          <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-5">
             <h3 className="font-bold text-base text-slate-800 uppercase tracking-wider">Filters</h3>
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search produce..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white"
-              />
-            </div>
-            <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="relative sm:col-span-2 lg:col-span-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search produce..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white"
+                />
+              </div>
+              <div>
               <label className="block text-[10px] font-bold text-slate-600 mb-1.5 uppercase">Category</label>
               <select value={category} onChange={(e) => setCategory(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
@@ -418,20 +407,20 @@ const ConsumerMarketplace = () => {
                 <option value="spices">Spices</option>
                 <option value="others">Others</option>
               </select>
-            </div>
-            <div>
+              </div>
+              <div>
               <label className="block text-[10px] font-bold text-slate-600 mb-1.5 uppercase">Pincode</label>
               <input type="text" maxLength="6" placeholder="e.g. 411001" value={filterPincode}
                 onChange={(e) => setFilterPincode(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white" />
-            </div>
-            <div>
+              </div>
+              <div>
               <label className="block text-[10px] font-bold text-slate-600 mb-1.5 uppercase">District</label>
               <input type="text" placeholder="e.g. Pune" value={filterDistrict}
                 onChange={(e) => setFilterDistrict(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white" />
-            </div>
-            <div>
+              </div>
+              <div>
               <label className="block text-[10px] font-bold text-slate-600 mb-1.5 uppercase">Sort By</label>
               <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
@@ -440,11 +429,12 @@ const ConsumerMarketplace = () => {
                 <option value="price-high">Price: High → Low</option>
                 <option value="freshness">Freshness</option>
               </select>
+              </div>
             </div>
           </div>
 
-          {/* Products (2 products per row) */}
-          <div className="lg:col-span-2">
+          {/* Products */}
+          <div>
             {loading ? (
               <div className="flex justify-center items-center py-24 text-slate-400">
                 <Loader2 className="h-8 w-8 animate-spin" />
@@ -454,7 +444,7 @@ const ConsumerMarketplace = () => {
                 No matching produce for these filters.
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {products.map((p) => (
                   <div key={p.id} onClick={() => setSelectedProduct(p)} className="cursor-pointer">
                     <ProductCard
@@ -491,23 +481,26 @@ const ConsumerMarketplace = () => {
             </div>
           ) : (
             orders.map((o) => (
-              <div key={o.id} className="bg-white border border-slate-100 rounded-3xl shadow-xs overflow-hidden">
-                {/* Status accent bar */}
-                <div className={`h-1.5 w-full ${
+              <div key={o.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                {/* Status accent */}
+                <div className={`h-1 w-full ${
                   o.status === 'delivered' ? 'bg-emerald-400' :
                   o.status === 'in_transit' ? 'bg-blue-400' :
-                  o.status === 'packed' ? 'bg-purple-400' :
-                  o.status === 'confirmed' ? 'bg-teal-400' : 'bg-amber-400'
+                  o.status === 'packed' ? 'bg-amber-400' :
+                  o.status === 'confirmed' ? 'bg-teal-500' : 'bg-slate-300'
                 }`} />
 
-                <div className="p-5 space-y-4">
+                <div className="p-5 sm:p-6 space-y-5">
                   {/* Header */}
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-slate-100">
                     <div>
-                      <span className="font-extrabold text-sm text-slate-800">Order #{o.id}</span>
-                      <span className="text-[10px] text-slate-400 ml-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-display font-extrabold text-base text-slate-900">Order #{o.id}</span>
+                        <span className="text-[11px] text-slate-400">
                         {new Date(o.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </span>
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 mt-1 block">Direct farmer delivery</span>
                     </div>
                     <div className="flex flex-wrap gap-2 items-center">
                       {/* Payment badge */}
@@ -515,25 +508,29 @@ const ConsumerMarketplace = () => {
                         <button
                           onClick={() => handleRetryPayment(o)}
                           disabled={retryLoading}
-                          className="flex items-center gap-1 bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[10px] px-2.5 py-1.5 rounded-full hover:bg-rose-100 transition-all"
+                          className="flex items-center gap-1 bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[10px] px-3 py-1.5 rounded-lg hover:bg-rose-100 transition-all"
                         >
                           <CreditCard className="h-3 w-3" />
                           {retryLoading ? 'Loading...' : 'Pay Now ₹' + parseFloat(o.total_amount).toFixed(0)}
                         </button>
                       ) : (
-                        <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold px-2.5 py-1 rounded-full">
-                          ✅ Paid
+                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold px-3 py-1.5 rounded-lg">
+                          <CheckCircle className="h-3 w-3" /> Paid
                         </span>
                       )}
-                      <span className="bg-slate-100 border border-slate-200 text-slate-700 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase">
+                      <span className="bg-slate-50 border border-slate-200 text-slate-600 text-[10px] font-bold px-3 py-1.5 rounded-lg uppercase">
+                        {(() => {
+                          const StatusIcon = STATUS_ICONS[o.status] || AlertCircle;
+                          return <StatusIcon className="inline-block h-3 w-3 mr-1" />;
+                        })()}
                         {STATUS_LABELS[o.status] || o.status}
                       </span>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 text-xs">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5 text-xs">
                     {/* Items & Price Breakdown */}
-                    <div className="space-y-2">
+                    <div className="space-y-2 bg-slate-50/70 border border-slate-200/70 p-4 rounded-xl">
                       <span className="font-bold text-slate-400 uppercase text-[9px]">Bill Breakdown</span>
                       {o.items?.map((item) => (
                         <div key={item.id} className="flex justify-between font-semibold text-slate-700">
@@ -548,7 +545,7 @@ const ConsumerMarketplace = () => {
                           <span>₹{parseFloat(o.product_subtotal || o.items?.reduce((acc, it) => acc + (it.quantity * it.price), 0) || o.total_amount).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-emerald-600 font-medium">
-                          <span>🚚 Transportation / Delivery</span>
+                          <span className="flex items-center gap-1"><Truck className="h-3 w-3" /> Transportation / Delivery</span>
                           <span>+ ₹{parseFloat(o.shipping_charge || 0).toFixed(2)}</span>
                         </div>
                       </div>
@@ -560,7 +557,7 @@ const ConsumerMarketplace = () => {
                     </div>
 
                     {/* Logistics / Shipment */}
-                    <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl space-y-2">
+                    <div className="bg-[#f7faf8] border border-emerald-100 p-4 rounded-xl space-y-2">
                       <span className="font-bold text-slate-400 uppercase text-[9px] flex items-center gap-1">
                         <Truck className="h-3 w-3 text-emerald-600" /> Delivery Status
                       </span>
@@ -579,7 +576,7 @@ const ConsumerMarketplace = () => {
                             </>
                           ) : (
                             <p className="text-amber-600 font-semibold">
-                              ⏳ Waiting for a driver to accept...
+                              <><Clock3 className="inline-block h-3 w-3 mr-1" />Waiting for a driver to accept...</>
                             </p>
                           )}
                           <p>
@@ -590,9 +587,9 @@ const ConsumerMarketplace = () => {
                               o.shipment.status === 'delivered' ? 'bg-emerald-500' :
                               o.shipment.status === 'picked_up' ? 'bg-blue-500' : 'bg-amber-400'
                             }`} />
-                            {o.shipment.status === 'delivered' ? '✅ Delivered' :
-                             o.shipment.status === 'picked_up' ? '🚚 Out for Delivery' :
-                             '📋 Driver Assigned / Awaiting Pickup'}
+                            {o.shipment.status === 'delivered' ? <><CheckCircle className="inline-block h-3 w-3 mr-1" />Delivered</> :
+                             o.shipment.status === 'picked_up' ? <><Truck className="inline-block h-3 w-3 mr-1" />Out for Delivery</> :
+                             <><ClipboardList className="inline-block h-3 w-3 mr-1" />Driver Assigned / Awaiting Pickup</>}
                           </p>
 
                           {/* OTP display logic: ONLY show OTP when paid! If unpaid, OTP is locked */}
@@ -604,7 +601,7 @@ const ConsumerMarketplace = () => {
                                     <Key className="h-3 w-3" /> Your Delivery OTP
                                   </p>
                                   <span className="text-[9px] text-amber-600 font-semibold">
-                                    📧 Emailed to you
+                                    <><Mail className="inline-block h-3 w-3 mr-1" />Emailed to you</>
                                   </span>
                                 </div>
                                 <p className="text-lg font-black tracking-[0.3em] text-amber-800">
@@ -617,7 +614,7 @@ const ConsumerMarketplace = () => {
                             ) : (
                               <div className="mt-2 bg-rose-50 border border-rose-200 rounded-xl p-2.5 text-rose-700">
                                 <p className="text-[10px] font-bold flex items-center gap-1">
-                                  🔒 Delivery OTP Locked
+                                  <><LockKeyhole className="inline-block h-3 w-3 mr-1" />Delivery OTP Locked</>
                                 </p>
                                 <p className="text-[9px] text-rose-600 mt-0.5">
                                   Pay ₹{parseFloat(o.total_amount).toFixed(2)} (produce + transport) to unlock OTP &amp; receive delivery.
@@ -629,17 +626,17 @@ const ConsumerMarketplace = () => {
                       ) : (
                         <p className="text-[10px] text-slate-400 italic">
                           {o.payment_status !== 'paid'
-                            ? '⚠️ Complete payment to activate delivery scheduling.'
+                            ? <><AlertTriangle className="inline-block h-3 w-3 mr-1" />Complete payment to activate delivery scheduling.</>
                             : o.status === 'placed'
-                            ? '⏳ Waiting for farmer to confirm order...'
-                            : '🔄 Scheduling delivery...'}
+                            ? <><Clock3 className="inline-block h-3 w-3 mr-1" />Waiting for farmer to confirm order...</>
+                            : <><RefreshCw className="inline-block h-3 w-3 mr-1" />Scheduling delivery...</>}
                         </p>
                       )}
                     </div>
 
                     {/* Stepper */}
-                    <div className="flex flex-col justify-center">
-                      <span className="font-bold text-slate-400 uppercase text-[9px] mb-2 text-center">
+                    <div className="bg-slate-50/70 border border-slate-200/70 p-4 rounded-xl flex flex-col justify-center">
+                      <span className="font-bold text-slate-400 uppercase text-[9px] mb-3 text-left">
                         Order Progress
                       </span>
                       <Stepper currentStatus={o.status} />
@@ -657,10 +654,10 @@ const ConsumerMarketplace = () => {
                     )}
                     {o.cancellation_locked && o.status !== 'delivered' && o.status !== 'cancelled' && (
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-semibold text-rose-600 bg-rose-50 px-3 py-2 rounded-xl">Cancellation Locked</span>
+                        <span className="text-[10px] font-semibold text-rose-600 bg-rose-50 border border-rose-100 px-3 py-2 rounded-lg">Cancellation Locked</span>
                         <button 
                           onClick={() => alert("Post-handover resolution feature coming soon.")}
-                          className="px-4 py-2 bg-indigo-50 text-indigo-600 font-semibold text-xs rounded-xl hover:bg-indigo-100 transition-colors"
+                          className="px-4 py-2 bg-slate-900 text-white font-semibold text-xs rounded-lg hover:bg-slate-800 transition-colors"
                         >
                           Request Resolution
                         </button>

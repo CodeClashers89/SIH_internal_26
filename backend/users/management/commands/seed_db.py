@@ -111,7 +111,7 @@ class Command(BaseCommand):
         bulk_buyer1 = User.objects.create_user(
             username='bulk_buyer1',
             email='bulkbuyer@gmail.com',
-            password='bulk_buyerpassword',
+            password='buyerpassword',
             role='bulk_buyer',
             phone='7654321098',
             is_verified=True,

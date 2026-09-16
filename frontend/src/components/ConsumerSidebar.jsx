@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ShoppingBag, User, MapPin, Home } from 'lucide-react';
+import { ShoppingBag, User, MapPin, Home, Package, Repeat } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const ConsumerSidebar = () => {
@@ -8,7 +8,10 @@ const ConsumerSidebar = () => {
   const { user } = useAuth();
 
   const isDashboardActive = location.pathname === '/consumer-dashboard' || location.pathname.includes('consumer-dashboard');
-  const isMarketplaceActive = location.pathname === '/marketplace';
+  const marketplaceTab = new URLSearchParams(location.search).get('tab') || 'browse';
+  const isMarketplaceActive = location.pathname === '/marketplace' && marketplaceTab === 'browse';
+  const isOrdersActive = location.pathname === '/marketplace' && marketplaceTab === 'tracking';
+  const isRecurringActive = location.pathname === '/marketplace' && marketplaceTab === 'recurring';
   const isProfileActive = location.pathname === '/profile';
 
   return (
@@ -48,9 +51,9 @@ const ConsumerSidebar = () => {
             <span>Dashboard</span>
           </Link>
 
-          {/* 2. Marketplace */}
+          {/* 2. Browse produce */}
           <Link
-            to="/marketplace"
+            to="/marketplace?tab=browse"
             className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-extrabold text-sm transition-all duration-200 ${
               isMarketplaceActive
                 ? 'bg-[#059669] text-white shadow-md shadow-emerald-950/40 ring-1 ring-emerald-400/30'
@@ -58,7 +61,31 @@ const ConsumerSidebar = () => {
             }`}
           >
             <ShoppingBag className={`h-5 w-5 ${isMarketplaceActive ? 'text-white' : 'text-emerald-300'}`} />
-            <span>Marketplace</span>
+            <span>Browse Fresh Produce</span>
+          </Link>
+
+          <Link
+            to="/marketplace?tab=tracking"
+            className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-extrabold text-sm transition-all duration-200 ${
+              isOrdersActive
+                ? 'bg-[#059669] text-white shadow-md shadow-emerald-950/40 ring-1 ring-emerald-400/30'
+                : 'text-emerald-100/80 hover:bg-emerald-900/60 hover:text-white'
+            }`}
+          >
+            <Package className={`h-5 w-5 ${isOrdersActive ? 'text-white' : 'text-emerald-300'}`} />
+            <span>One Time Orders</span>
+          </Link>
+
+          <Link
+            to="/marketplace?tab=recurring"
+            className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-extrabold text-sm transition-all duration-200 ${
+              isRecurringActive
+                ? 'bg-[#059669] text-white shadow-md shadow-emerald-950/40 ring-1 ring-emerald-400/30'
+                : 'text-emerald-100/80 hover:bg-emerald-900/60 hover:text-white'
+            }`}
+          >
+            <Repeat className={`h-5 w-5 ${isRecurringActive ? 'text-white' : 'text-emerald-300'}`} />
+            <span>Recurring Orders</span>
           </Link>
         </div>
 

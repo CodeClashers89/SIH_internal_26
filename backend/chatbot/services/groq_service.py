@@ -23,7 +23,7 @@ class GroqService:
         """Initialize Groq client with API key from environment."""
         self.api_key = (os.environ.get('GROQ_API_KEY') or '').strip()
         self.offline_mode = False
-        self.model = os.environ.get('GROQ_MODEL', 'mixtral-8x7b-32768')
+        self.model = os.environ.get('GROQ_MODEL', 'openai/gpt-oss-20b')
 
         if not self.api_key:
             logger.error('GROQ_API_KEY is not configured. Chatbot will return a configuration error instead of a fake offline response.')

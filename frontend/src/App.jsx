@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
+import { Sparkles, MessageCircleMore } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { ChatProvider } from './context/ChatContext';
@@ -9,6 +10,9 @@ import CartDrawer from './components/CartDrawer';
 import Preloader from './components/Preloader';
 import BulkBuyerSidebar from './components/BulkBuyerSidebar';
 import ConsumerSidebar from './components/ConsumerSidebar';
+import FarmerSidebar from './components/FarmerSidebar';
+import LogisticsSidebar from './components/LogisticsSidebar';
+import AdminSidebar from './components/AdminSidebar';
 import Landing from './pages/Landing';
 import LoginSignup from './pages/LoginSignup';
 import FarmerDashboard from './pages/FarmerDashboard';
@@ -50,6 +54,32 @@ const NonFarmerRoute = ({ children }) => {
 };
 
 
+const FloatingAssistantButton = () => {
+  const { user } = useAuth();
+  const location = useLocation();
+
+  if (!user || user.role !== 'farmer' || location.pathname === '/farmer-ai-assistant') {
+    return null;
+  }
+
+  return (
+    <Link
+      to="/farmer-ai-assistant"
+      className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_18px_45px_rgba(16,185,129,0.35)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_50px_rgba(16,185,129,0.45)] focus:outline-none focus:ring-4 focus:ring-emerald-200"
+      aria-label="Open AI assistant"
+      title="AI Assistant"
+    >
+      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/12 backdrop-blur-sm">
+        <MessageCircleMore className="h-6 w-6" />
+      </span>
+      <span className="hidden sm:flex items-center gap-2 pr-5 text-sm font-black tracking-wide">
+        <Sparkles className="h-4 w-4" />
+        AI Assistant
+      </span>
+    </Link>
+  );
+};
+
 function MainLayout() {
   const [cartOpen, setCartOpen] = useState(false);
   const { user, loading } = useAuth();
@@ -60,9 +90,16 @@ function MainLayout() {
   }
 
   const isChatbotPage = location.pathname === '/farmer-ai-assistant';
+  const isLandingPage = location.pathname === '/';
+  const isAuthPage = ['/login', '/register'].includes(location.pathname);
   const isConsumer = user && user.role === 'consumer';
   const isBulkBuyer = user && user.role === 'bulk_buyer';
-  const hasSidebar = isConsumer || isBulkBuyer;
+  const isFarmer = user && user.role === 'farmer';
+  const isLogistics = user && user.role === 'logistics_partner';
+  const isAdmin = user && user.role === 'admin';
+  const hasSidebar = isConsumer || isBulkBuyer || isFarmer || isLogistics || isAdmin;
+  const isPublicRoute = ['/', '/login', '/register'].includes(location.pathname);
+  const showSidebar = hasSidebar && !isChatbotPage && !isPublicRoute;
 
   const appRoutes = (
     <Routes>
@@ -155,23 +192,32 @@ function MainLayout() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Navbar onCartToggle={() => setCartOpen(!cartOpen)} />
+      {!isFarmer && (
+        <Navbar
+          landing={isLandingPage || isAuthPage}
+          onCartToggle={() => setCartOpen(!cartOpen)}
+        />
+      )}
       
-      {hasSidebar ? (
-        <div className="flex flex-grow bg-slate-50/50 items-start">
+      {showSidebar ? (
+        <div className="app-shell flex flex-grow bg-slate-50/50 items-start">
           {isConsumer && <ConsumerSidebar />}
           {isBulkBuyer && <BulkBuyerSidebar />}
-          <main className="flex-grow p-4 sm:p-6 lg:p-8 overflow-x-hidden min-w-0">
+          {isFarmer && <FarmerSidebar />}
+          {isLogistics && <LogisticsSidebar />}
+          {isAdmin && <AdminSidebar />}
+          <main className="app-main flex-grow p-4 sm:p-6 lg:p-8 overflow-x-hidden min-w-0">
             {appRoutes}
           </main>
         </div>
       ) : (
-        <main className="flex-grow">
+        <main className={`flex-grow ${isChatbotPage ? 'app-main-full' : ''}`}>
           {appRoutes}
         </main>
       )}
 
-      {!isChatbotPage && <Footer />}
+      {!isChatbotPage && !isConsumer && !isFarmer && !isLandingPage && !isAuthPage && <Footer />}
+      <FloatingAssistantButton />
 
       {/* Cart Drawer for Consumers/Bulk Buyers */}
       <CartDrawer isOpen={cartOpen} onClose={() => setCartOpen(false)} />
@@ -180,20 +226,10 @@ function MainLayout() {
 }
 
 function App() {
-  const [initialLoading, setInitialLoading] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setInitialLoading(false);
-    }, 1800);
-    return () => clearTimeout(timer);
-  }, []);
-
   return (
     <AuthProvider>
       <CartProvider>
         <ChatProvider>
-          {initialLoading && <Preloader />}
           <Router>
             <MainLayout />
           </Router>

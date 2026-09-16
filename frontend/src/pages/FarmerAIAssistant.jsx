@@ -762,12 +762,16 @@ const FarmerAIAssistant = () => {
   const fetchLiveListings = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE_URL}/products/`, {
+      const farmerQuery = user?.id ? `?farmer=${encodeURIComponent(user.id)}` : '';
+      const response = await axios.get(`${API_BASE_URL}/products/${farmerQuery}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = response.data.results || response.data || [];
-      setLiveListings(data);
-      return data;
+      const farmerListings = user?.id
+        ? data.filter((listing) => String(listing.farmer) === String(user.id))
+        : data;
+      setLiveListings(farmerListings);
+      return farmerListings;
     } catch (err) {
       console.error('Error querying live listings:', err);
       return [];

@@ -126,7 +126,7 @@ const LoginSignup = () => {
   };
 
   return (
-    <div className="min-height-[calc(100vh-4rem)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-tr from-emerald-50 via-green-50/20 to-amber-50/30">
+    <div className="min-h-screen flex items-start justify-center px-4 pb-12 pt-28 sm:px-6 lg:px-8 bg-gradient-to-br from-emerald-50 via-white to-amber-50/60">
       <div className="max-w-md w-full bg-white border border-slate-100 p-8 rounded-3xl shadow-lg space-y-6">
         
         {/* Brand header */}

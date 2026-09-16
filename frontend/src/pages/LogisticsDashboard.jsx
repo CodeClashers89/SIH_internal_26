@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import {
@@ -129,6 +130,7 @@ const ShipmentsGridSkeleton = () => (
 // ─── Main Component ───────────────────────────────────────────────────────────
 const LogisticsDashboard = () => {
   const { user, setUser } = useAuth();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('overview');
   const [shipments, setShipments] = useState([]);
   const [stats, setStats] = useState(null);
@@ -219,6 +221,16 @@ const LogisticsDashboard = () => {
       showError('Geolocation is not supported by your browser.');
     }
   };
+
+  useEffect(() => {
+    const hash = location.hash.replace('#', '');
+    const validTabs = ['overview', 'available', 'active', 'delivery_map', 'completed', 'vehicle'];
+    if (hash && validTabs.includes(hash)) {
+      setActiveTab(hash);
+    } else {
+      setActiveTab('overview');
+    }
+  }, [location.hash]);
 
   useEffect(() => {
     fetchShipments();
@@ -413,31 +425,6 @@ const LogisticsDashboard = () => {
             {error}
           </div>
         )}
-
-        {/* ── Navigation Tabs ── */}
-        <div className="flex border-b border-slate-200 gap-1 overflow-x-auto">
-          {tabs.map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 pb-3 px-3 text-sm font-bold border-b-2 whitespace-nowrap transition-all ${
-                activeTab === tab.key
-                  ? 'border-emerald-600 text-emerald-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <tab.icon className="h-3.5 w-3.5" />
-              {tab.label}
-              {tab.badge > 0 && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold text-white ${
-                  tab.key === 'active' ? 'bg-emerald-600' : 'bg-amber-500'
-                }`}>
-                  {tab.badge}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
 
         {/* ════════════════════════════════════════════════════════════════
             TAB 1: OVERVIEW

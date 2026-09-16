@@ -212,7 +212,7 @@ RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', 'KisanConnectSecretK
 
 # Groq LLM Configuration (for Farmer AI Assistant)
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
-GROQ_MODEL = os.environ.get('GROQ_MODEL', 'mixtral-8x7b-32768')
+GROQ_MODEL = os.environ.get('GROQ_MODEL', 'openai/gpt-oss-20b')
 
 # Chatbot Configuration
 CHATBOT_RECENT_MESSAGE_LIMIT = int(os.environ.get('CHAT_RECENT_MESSAGE_LIMIT', 15))

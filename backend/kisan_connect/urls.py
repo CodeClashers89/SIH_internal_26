@@ -9,8 +9,18 @@ from django.http import JsonResponse
 def health_check(request):
     return JsonResponse({'status': 'healthy'})
 
+def api_root(request):
+    return JsonResponse({
+        'service': 'KisanConnect API',
+        'status': 'running',
+        'frontend': 'http://localhost:5173/',
+        'health': '/api/health/',
+        'documentation': '/api/schema/swagger-ui/',
+    })
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('', api_root, name='api_root'),
     
     # Health check endpoint
     path('api/health/', health_check, name='health_check'),

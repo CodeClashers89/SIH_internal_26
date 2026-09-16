@@ -3,8 +3,8 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { 
-  Sprout, ShoppingCart, LogOut, User, Menu, X, BarChart3, ShieldAlert, 
-  Award, Globe, ChevronDown, ShoppingBag, Search, Bell 
+  Sprout, ShoppingCart, LogOut, User, Menu, X,
+  Award, Globe, ChevronDown, ShoppingBag, Search, Bell, Sparkles
 } from 'lucide-react';
 
 const LANGUAGES = [
@@ -57,7 +57,7 @@ const changeLanguage = (langCode) => {
   window.location.reload();
 };
 
-const LanguageSelector = ({ activeLang }) => {
+export const LanguageSelector = ({ activeLang }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -111,7 +111,7 @@ const LanguageSelector = ({ activeLang }) => {
   );
 };
 
-const NotificationSelector = () => {
+export const NotificationSelector = () => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -164,7 +164,7 @@ const NotificationSelector = () => {
   );
 };
 
-const Navbar = ({ onCartToggle }) => {
+const Navbar = ({ onCartToggle, landing = false }) => {
   const { user, logout } = useAuth();
   const { getCartCount } = useCart();
   const navigate = useNavigate();
@@ -177,22 +177,32 @@ const Navbar = ({ onCartToggle }) => {
     setActiveLang(getActiveLanguage());
   }, []);
 
+  if (landing) {
+    return (
+      <nav className="absolute inset-x-0 top-0 z-50 px-4 pt-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto rounded-2xl border border-white/70 bg-white/60 px-4 shadow-lg shadow-emerald-900/5 backdrop-blur-xl sm:px-6">
+          <div className="flex h-16 items-center justify-between">
+            <Link to="/" className="flex items-center space-x-2.5 group transition-transform active:scale-95">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-md shadow-emerald-500/20 flex items-center justify-center">
+                <div className="h-full w-full rounded-[10px] bg-white flex items-center justify-center">
+                  <Sprout className="h-6 w-6 text-emerald-500 stroke-[2.5] group-hover:rotate-12 transition-transform duration-300" />
+                </div>
+              </div>
+              <span className="font-display font-extrabold text-2xl tracking-tight bg-gradient-to-r from-emerald-700 via-teal-600 to-amber-500 bg-clip-text text-transparent">
+                KisanConnect
+              </span>
+            </Link>
+            <LanguageSelector activeLang={activeLang} />
+          </div>
+        </div>
+      </nav>
+    );
+  }
+
   const handleLogout = () => {
     logout();
     navigate('/');
     setIsOpen(false);
-  };
-
-  const getDashboardLink = () => {
-    if (!user) return '/';
-    switch (user.role) {
-      case 'farmer': return '/farmer-dashboard';
-      case 'bulk_buyer': return '/bulk-portal';
-      case 'logistics_partner': return '/logistics-dashboard';
-      case 'admin': return '/admin-panel';
-      case 'consumer': return '/consumer-dashboard';
-      default: return '/consumer-dashboard';
-    }
   };
 
   const isProfileActive = location.pathname === '/profile' || location.pathname === '/farmer-profile';
@@ -252,58 +262,21 @@ const Navbar = ({ onCartToggle }) => {
           {/* Desktop Nav Items */}
           <div className="hidden md:flex items-center space-x-3 shrink-0">
             
-            {/* Show Marketplace & Dashboard links in top nav ONLY for roles that do NOT have a left sidebar (Consumers and Bulk Buyers have left sidebars!) */}
-            {(!user || (!['bulk_buyer', 'consumer'].includes(user.role))) && (
+            {/* Authenticated app navigation belongs to the role sidebar. */}
+            {!user && (
               <>
-                {(!user || user.role !== 'farmer') && (
-                  <Link
-                    to="/marketplace"
-                    className={`text-sm transition-all px-4 py-2 rounded-xl flex items-center gap-2 active:scale-95 ${
-                      location.pathname === '/marketplace'
-                        ? 'bg-emerald-600 text-white font-extrabold shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/40'
-                        : 'text-slate-600 dark:text-slate-300 hover:text-emerald-700 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 font-bold'
-                    }`}
-                  >
-                    <ShoppingBag className={`h-4 w-4 ${location.pathname === '/marketplace' ? 'text-white' : 'text-emerald-600'}`} />
-                    Marketplace
-                  </Link>
-                )}
-                
-                {user && (
-                  <div className="flex items-center space-x-3">
-                    <Link
-                      to={getDashboardLink()}
-                      className={`text-sm transition-all px-4 py-2 rounded-xl flex items-center gap-2 active:scale-95 ${
-                        (location.pathname === getDashboardLink() || location.pathname.includes('dashboard') || location.pathname.includes('portal'))
-                          ? 'bg-teal-600 text-white font-extrabold shadow-md shadow-teal-500/25 ring-2 ring-teal-400/40'
-                          : 'text-slate-600 dark:text-slate-300 hover:text-teal-700 hover:bg-teal-50/80 dark:hover:bg-teal-950/40 font-bold'
-                      }`}
-                    >
-                      <BarChart3 className={`h-4 w-4 ${(location.pathname === getDashboardLink() || location.pathname.includes('dashboard') || location.pathname.includes('portal')) ? 'text-white' : 'text-teal-500'}`} />
-                      Dashboard
-                    </Link>
-                    {user.role === 'farmer' && (
-                      <>
-                        <Link to="/farmer-profile" className="text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 font-semibold transition-colors text-sm flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-800 pl-4">
-                          <User className="h-4 w-4 text-emerald-500" />
-                          My Profile
-                        </Link>
-                        <Link to="/farmer-ai-assistant" className="text-slate-600 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400 font-semibold transition-colors text-sm flex items-center gap-1.5 pl-4">
-                          <span className="text-lg">🤖</span>
-                          AI Assistant
-                        </Link>
-                      </>
-                    )}
-                  </div>
-                )}
+                <Link
+                  to="/marketplace"
+                  className={`text-sm transition-all px-4 py-2 rounded-xl flex items-center gap-2 active:scale-95 ${
+                    location.pathname === '/marketplace'
+                      ? 'bg-emerald-600 text-white font-extrabold shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/40'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-emerald-700 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 font-bold'
+                  }`}
+                >
+                  <ShoppingBag className={`h-4 w-4 ${location.pathname === '/marketplace' ? 'text-white' : 'text-emerald-600'}`} />
+                  Marketplace
+                </Link>
               </>
-            )}
-
-            {user && user.role === 'admin' && (
-              <Link to="/control-tower" className="text-slate-600 dark:text-slate-300 hover:text-cyan-600 font-semibold transition-colors text-sm flex items-center gap-1.5">
-                <ShieldAlert className="h-4 w-4 text-cyan-500" />
-                Control Tower
-              </Link>
             )}
 
             {/* Notification Bell Button */}
@@ -408,8 +381,7 @@ const Navbar = ({ onCartToggle }) => {
       {/* Mobile Menu */}
       {isOpen && (
         <div className="md:hidden glassmorphism border-b border-emerald-100 px-2 pt-2 pb-3 space-y-1 sm:px-3">
-          {/* Hide Marketplace link for farmers in mobile menu too */}
-          {(!user || user.role !== 'farmer') && (
+          {!user && (
             <Link 
               to="/marketplace" 
               className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-base font-bold transition-all ${
@@ -424,31 +396,6 @@ const Navbar = ({ onCartToggle }) => {
             </Link>
           )}
           
-          {user && (
-            <Link 
-              to={getDashboardLink()} 
-              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-base font-bold transition-all ${
-                (location.pathname === getDashboardLink() || location.pathname.includes('dashboard') || location.pathname.includes('portal'))
-                  ? 'bg-teal-600 text-white font-extrabold shadow-sm'
-                  : 'text-gray-700 hover:text-teal-600 hover:bg-teal-50'
-              }`}
-              onClick={() => setIsOpen(false)}
-            >
-              <BarChart3 className={`h-5 w-5 ${(location.pathname === getDashboardLink() || location.pathname.includes('dashboard') || location.pathname.includes('portal')) ? 'text-white' : 'text-teal-600'}`} />
-              Dashboard
-            </Link>
-          )}
-
-          {user && user.role === 'admin' && (
-            <Link 
-              to="/control-tower" 
-              className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-indigo-50"
-              onClick={() => setIsOpen(false)}
-            >
-              Control Tower
-            </Link>
-          )}
-
           {/* Mobile Language Selector */}
           <div className="border-t border-emerald-100/50 pt-3 pb-2 px-3">
             <span className="block text-xs font-bold text-emerald-800/60 uppercase tracking-wider mb-2 flex items-center gap-1.5">

@@ -365,130 +365,7 @@ const FarmerDashboard = () => {
 
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      {/* Sidebar Navigation */}
-      <aside className="w-72 bg-white border-r border-slate-200 hidden lg:flex flex-col sticky top-0 h-screen shrink-0 shadow-sm z-10">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-black text-slate-800 tracking-tight">Workspace</h2>
-            <p className="text-sm font-bold text-emerald-600 uppercase mt-0.5 tracking-wider">Farmer Operations</p>
-          </div>
-        </div>
-        <nav className="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar">
-          {/* Main App Navigation */}
-          <button
-            onClick={() => handleTabChange('overview')}
-            className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl text-left text-base font-semibold leading-relaxed transition-all ${
-              activeSection === 'overview' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200/50' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            <div className={`p-1.5 rounded-xl ${activeSection === 'overview' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>
-            </div>
-            Dashboard
-          </button>
-          <button
-            onClick={() => handleTabChange('profile')}
-            className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl text-left text-base font-semibold leading-relaxed transition-all ${
-              activeSection === 'profile' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200/50' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            <div className={`p-1.5 rounded-xl ${activeSection === 'profile' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-              <User className="w-5 h-5" />
-            </div>
-            My Profile
-          </button>
-
-          <div className="pt-4 pb-2">
-            <p className="text-[13px] font-extrabold text-slate-400 tracking-widest uppercase px-4">Farmer Operations</p>
-          </div>
-
-          <button
-            onClick={() => handleTabChange('inventory')}
-            className={`w-full flex items-center justify-between px-4 py-4 rounded-2xl text-left text-base font-semibold leading-relaxed transition-all ${
-              activeSection === 'inventory' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200/50' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className={`p-1.5 rounded-xl ${activeSection === 'inventory' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                <Package className="w-5 h-5" />
-              </div>
-              Crop Inventory
-            </div>
-            {listings.length > 0 && <span className={`px-2 py-0.5 rounded-full text-[13px] font-bold ${activeSection === 'inventory' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>{listings.length}</span>}
-          </button>
-          <button
-            onClick={() => handleTabChange('orders')}
-            className={`w-full flex items-center justify-between px-4 py-4 rounded-2xl text-left text-base font-semibold leading-relaxed transition-all ${
-              activeSection === 'orders' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200/50' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className={`p-1.5 rounded-xl ${activeSection === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                <ShoppingBag className="w-5 h-5" />
-              </div>
-              Retail Orders
-            </div>
-            {orders.length > 0 && <span className={`px-2 py-0.5 rounded-full text-[13px] font-bold ${activeSection === 'orders' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>{orders.length}</span>}
-          </button>
-          <button
-            onClick={() => handleTabChange('quotes')}
-            className={`w-full flex items-center justify-between px-4 py-4 rounded-2xl text-left text-base font-semibold leading-relaxed transition-all ${
-              activeSection === 'quotes' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200/50' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className={`p-1.5 rounded-xl ${activeSection === 'quotes' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                <Handshake className="w-5 h-5" />
-              </div>
-              Wholesale Bids
-            </div>
-            {quotes.length > 0 && <span className={`px-2 py-0.5 rounded-full text-[13px] font-bold ${activeSection === 'quotes' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>{quotes.length}</span>}
-          </button>
-          <button
-            onClick={() => handleTabChange('sourcing')}
-            className={`w-full flex items-center justify-between px-4 py-4 rounded-2xl text-left text-base font-semibold leading-relaxed transition-all ${
-              activeSection === 'sourcing' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200/50' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className={`p-1.5 rounded-xl ${activeSection === 'sourcing' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                <FileCheck className="w-5 h-5" />
-              </div>
-              Bulk Demands
-            </div>
-            {bulkReqs.length > 0 && <span className={`px-2 py-0.5 rounded-full text-[13px] font-bold ${activeSection === 'sourcing' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>{bulkReqs.length}</span>}
-          </button>
-          <button
-            onClick={() => handleTabChange('contracts')}
-            className={`w-full flex items-center justify-between px-4 py-4 rounded-2xl text-left text-base font-semibold leading-relaxed transition-all ${
-              activeSection === 'contracts' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200/50' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <div className={`p-1.5 rounded-xl ${activeSection === 'contracts' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                <Calendar className="w-5 h-5" />
-              </div>
-              Contracts
-            </div>
-            {preHarvestContracts.length > 0 && <span className={`px-2 py-0.5 rounded-full text-[13px] font-bold ${activeSection === 'contracts' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>{preHarvestContracts.length}</span>}
-          </button>
-          <button
-            onClick={() => handleTabChange('markets')}
-            className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl text-left text-base font-semibold leading-relaxed transition-all ${
-              activeSection === 'markets' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200/50' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            <div className={`p-1.5 rounded-xl ${activeSection === 'markets' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
-              <MapPin className="w-5 h-5" />
-            </div>
-            Market Prices
-          </button>
-        </nav>
-      </aside>
-
-      {/* Main Content Area */}
-      <main className="flex-1 w-full min-w-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-8 space-y-8 overflow-y-auto">
+    <div className="flex-1 w-full min-w-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-8 space-y-8 overflow-y-auto">
         
         {/* Header and Refresh */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -1525,8 +1402,6 @@ const FarmerDashboard = () => {
         </div>
       )}
 
-
-      </main>
     </div>
   );
 };
