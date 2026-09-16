@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
-import { Sparkles, MessageCircleMore } from 'lucide-react';
+import { Sparkles, MessageCircleMore, ShoppingCart } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { CartProvider } from './context/CartContext';
+import { CartProvider, useCart } from './context/CartContext';
 import { ChatProvider } from './context/ChatContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -78,6 +78,31 @@ const FloatingAssistantButton = () => {
         AI Assistant
       </span>
     </Link>
+  );
+};
+
+const FloatingCartButton = ({ onClick }) => {
+  const { user } = useAuth();
+  const { getCartCount } = useCart();
+  const itemCount = getCartCount();
+
+  if (!user || user.role !== 'consumer') return null;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-600 text-white shadow-[0_14px_35px_rgba(5,150,105,0.4)] transition-all duration-200 hover:-translate-y-1 hover:bg-emerald-700 hover:shadow-[0_18px_42px_rgba(5,150,105,0.5)] focus:outline-none focus:ring-4 focus:ring-emerald-200"
+      aria-label={`Open cart${itemCount ? ` with ${itemCount} items` : ''}`}
+      title="Cart"
+    >
+      <ShoppingCart className="h-6 w-6" />
+      {itemCount > 0 && (
+        <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-amber-500 px-1.5 text-xs font-black text-white ring-2 ring-white">
+          {itemCount}
+        </span>
+      )}
+    </button>
   );
 };
 
@@ -201,7 +226,7 @@ function MainLayout() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      {!isFarmer && (
+      {!isFarmer && !isConsumer && !isLogistics && (
         <Navbar
           landing={isLandingPage || isAuthPage}
           onCartToggle={() => setCartOpen(!cartOpen)}
@@ -226,6 +251,7 @@ function MainLayout() {
       )}
 
       {!isChatbotPage && !isConsumer && !isFarmer && !isLandingPage && !isAuthPage && <Footer />}
+      <FloatingCartButton onClick={() => setCartOpen(!cartOpen)} />
       <FloatingAssistantButton />
 
       {/* Cart Drawer for Consumers/Bulk Buyers */}

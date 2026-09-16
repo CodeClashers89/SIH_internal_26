@@ -66,6 +66,11 @@ class LogisticsPartnerViewSet(viewsets.ModelViewSet):
                 shipment = DeliveryShipment.objects.get(pk=shipment_id)
             except DeliveryShipment.DoesNotExist:
                 return queryset.none()
+            rejected_partner_ids = TransportOffer.objects.filter(
+                shipment=shipment,
+                status='rejected',
+            ).values_list('partner_id', flat=True)
+            queryset = queryset.exclude(id__in=rejected_partner_ids)
             queryset = [partner for partner in queryset if partner_operates_both_areas(partner, shipment)]
         return queryset
 

@@ -30,8 +30,8 @@ const Stepper = ({ currentStatus }) => {
       <div className="flex items-center justify-between">
         {steps.map((step, index) => {
           const Icon = step.icon;
-          const isCompleted = index < currentIndex;
-          const isActive = index === currentIndex;
+          const isCompleted = index <= currentIndex;
+          const isActive = false;
           
           return (
             <React.Fragment key={step.status}>

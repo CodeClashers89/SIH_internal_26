@@ -16,6 +16,13 @@ const UserProfilePage = () => {
   const [address, setAddress] = useState(user?.address || '');
   const [district, setDistrict] = useState(user?.district || '');
   const [pincode, setPincode] = useState(user?.pincode || '');
+  const [farmSize, setFarmSize] = useState(user?.farm_size || '');
+  const [cropsGrown, setCropsGrown] = useState(user?.crops_grown || '');
+  const [farmCoordinates, setFarmCoordinates] = useState(user?.farm_coordinates || '');
+  const [vehicleNumber, setVehicleNumber] = useState(user?.vehicle_number || '');
+  const [vehicleType, setVehicleType] = useState(user?.vehicle_type || 'tempo');
+  const [capacity, setCapacity] = useState(user?.capacity || '');
+  const [serviceArea, setServiceArea] = useState(user?.service_area || '');
 
   // Wholesaler / Bulk Buyer specific fields
   const [businessName, setBusinessName] = useState(user?.business_name || '');

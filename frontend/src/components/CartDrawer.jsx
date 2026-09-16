@@ -25,6 +25,7 @@ const loadRazorpayScript = () => {
 };
 
 const DAYS_OF_WEEK = [
+  { id: 'Every day', label: 'Every day' },
   { id: 'Monday', label: 'Mon' },
   { id: 'Tuesday', label: 'Tue' },
   { id: 'Wednesday', label: 'Wed' },
@@ -56,6 +57,7 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
   // the `if (!isOpen) return null` guard, which resets useState defaults).
   const [orderType, setOrderType] = useState(() => subscriptionConfig?.orderType || 'onetime');
   const [deliveryDay, setDeliveryDay] = useState(() => subscriptionConfig?.deliveryDay || 'Monday');
+  const [deliveryDays, setDeliveryDays] = useState(() => subscriptionConfig?.deliveryDays || [subscriptionConfig?.deliveryDay || 'Monday']);
   const [deliveryTimeSlot, setDeliveryTimeSlot] = useState(() => subscriptionConfig?.deliveryTimeSlot || 'morning');
   const [durationMonths, setDurationMonths] = useState(() => subscriptionConfig?.durationMonths || 2);
 
@@ -65,6 +67,7 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
     if (isOpen && subscriptionConfig) {
       setOrderType(subscriptionConfig.orderType || 'onetime');
       setDeliveryDay(subscriptionConfig.deliveryDay || 'Monday');
+      setDeliveryDays(subscriptionConfig.deliveryDays || [subscriptionConfig.deliveryDay || 'Monday']);
       setDeliveryTimeSlot(subscriptionConfig.deliveryTimeSlot || 'morning');
       setDurationMonths(subscriptionConfig.durationMonths || 2);
     }
@@ -94,6 +97,7 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
   const perDeliveryTotal = baseSubtotal - subscriberSavings;
   const totalDeliveries = durationMonths * 4;
   const totalPlanAmount = perDeliveryTotal * totalDeliveries;
+  const selectedScheduleLabel = deliveryDays.includes('Every day') ? 'Every day' : deliveryDays.join(', ') || 'Monday';
 
   // Calculate next delivery date for display
   const getNextDeliveryDate = (targetDay) => {
@@ -158,7 +162,8 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
       // A) RECURRING SUBSCRIPTION ORDER FLOW
       if (orderType === 'subscription') {
         const subPayload = {
-          delivery_day: deliveryDay,
+          delivery_day: deliveryDays.includes('Every day') ? 'Every day' : deliveryDays[0] || 'Monday',
+          delivery_days: deliveryDays,
           delivery_time_slot: deliveryTimeSlot,
           duration_months: durationMonths,
           shipping_address: addr,
@@ -390,14 +395,20 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
                       <label className="block text-[10px] font-bold text-slate-700 mb-1.5 uppercase">
                         Deliver Every Week On:
                       </label>
-                      <div className="grid grid-cols-7 gap-1">
+                      <div className="grid grid-cols-4 sm:grid-cols-8 gap-1">
                         {DAYS_OF_WEEK.map((d) => (
                           <button
                             key={d.id}
                             type="button"
-                            onClick={() => setDeliveryDay(d.id)}
+                            onClick={() => {
+                              setDeliveryDays(prev => d.id === 'Every day'
+                                ? ['Every day']
+                                : [...prev.filter(value => value !== 'Every day'), ...(prev.includes(d.id) ? [] : [d.id])]
+                              );
+                              setDeliveryDay(d.id === 'Every day' ? 'Every day' : d.id);
+                            }}
                             className={`py-1 text-center text-xs font-bold rounded-lg border transition-all ${
-                              deliveryDay === d.id
+                              deliveryDays.includes(d.id)
                                 ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs scale-105'
                                 : 'bg-white text-slate-700 border-slate-200 hover:border-emerald-300'
                             }`}
@@ -476,11 +487,11 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
                           First Delivery:
                         </span>
                         <span className="text-emerald-700 font-black">
-                          {getNextDeliveryDate(deliveryDay)} ({deliveryTimeSlot})
+                          {deliveryDays.includes('Every day') ? 'Every day' : getNextDeliveryDate(deliveryDays[0] || 'Monday')} ({deliveryTimeSlot})
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-500">
-                        🔁 <strong>{totalDeliveries} deliveries</strong> every {deliveryDay} morning directly from the farmer. Pause or cancel anytime.
+                        🔁 <strong>{totalDeliveries} deliveries</strong> on {selectedScheduleLabel} directly from the farmer. Pause or cancel anytime.
                       </p>
                     </div>
                   </div>

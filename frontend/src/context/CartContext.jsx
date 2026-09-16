@@ -7,6 +7,7 @@ export const CartProvider = ({ children }) => {
   const [subscriptionConfig, setSubscriptionConfig] = useState({
     orderType: 'onetime',
     deliveryDay: 'Monday',
+    deliveryDays: ['Monday'],
     deliveryTimeSlot: 'morning',
     durationMonths: 2,
   });

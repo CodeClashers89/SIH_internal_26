@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 
 const DAYS_OF_WEEK = [
+  { id: 'Every day', label: 'Every day' },
   { id: 'Monday', label: 'Mon' },
   { id: 'Tuesday', label: 'Tue' },
   { id: 'Wednesday', label: 'Wed' },
@@ -28,7 +29,7 @@ const DURATIONS = [
 
 const OrderTypeModal = ({ isOpen, onClose, product, onConfirm }) => {
   const [selectedType, setSelectedType] = useState('onetime'); // 'onetime' | 'subscription'
-  const [deliveryDay, setDeliveryDay] = useState('Monday');
+  const [deliveryDays, setDeliveryDays] = useState(['Monday']);
   const [deliveryTimeSlot, setDeliveryTimeSlot] = useState('morning');
   const [durationMonths, setDurationMonths] = useState(2);
 
@@ -52,9 +53,11 @@ const OrderTypeModal = ({ isOpen, onClose, product, onConfirm }) => {
 
   const handleConfirm = () => {
     if (selectedType === 'subscription') {
+      const primaryDay = deliveryDays.includes('Every day') ? 'Every day' : deliveryDays[0] || 'Monday';
       onConfirm('subscription', {
         orderType: 'subscription',
-        deliveryDay,
+        deliveryDay: primaryDay,
+        deliveryDays,
         deliveryTimeSlot,
         durationMonths,
       });
@@ -191,14 +194,20 @@ const OrderTypeModal = ({ isOpen, onClose, product, onConfirm }) => {
                     <label className="block text-[10px] font-bold text-slate-700 mb-1.5 uppercase">
                       Select Day of Week when product is needed:
                     </label>
-                    <div className="grid grid-cols-7 gap-1">
+                    <div className="grid grid-cols-4 sm:grid-cols-8 gap-1">
                       {DAYS_OF_WEEK.map((day) => (
                         <button
                           key={day.id}
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); setDeliveryDay(day.id); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeliveryDays(prev => day.id === 'Every day'
+                              ? ['Every day']
+                              : [...prev.filter(value => value !== 'Every day'), ...(prev.includes(day.id) ? [] : [day.id])]
+                            );
+                          }}
                           className={`py-1.5 text-center text-xs font-bold rounded-lg border transition-all ${
-                            deliveryDay === day.id
+                            deliveryDays.includes(day.id)
                               ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs scale-105'
                               : 'bg-white text-slate-700 border-slate-200 hover:border-emerald-300'
                           }`}
@@ -277,11 +286,11 @@ const OrderTypeModal = ({ isOpen, onClose, product, onConfirm }) => {
                         First Delivery:
                       </span>
                       <span className="text-emerald-700 font-black">
-                        {getNextDeliveryDate(deliveryDay)} ({deliveryTimeSlot})
+                        {deliveryDays.includes('Every day') ? 'Every day' : getNextDeliveryDate(deliveryDays[0] || 'Monday')} ({deliveryTimeSlot})
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      🔁 <strong>{totalDeliveries} scheduled drops</strong> every {deliveryDay} for {durationMonths} month{durationMonths > 1 ? 's' : ''} · ₹{discountedPrice.toFixed(2)} / delivery.
+                      🔁 <strong>{totalDeliveries} scheduled drops</strong> on {deliveryDays.join(', ') || 'Monday'} for {durationMonths} month{durationMonths > 1 ? 's' : ''} · ₹{discountedPrice.toFixed(2)} / delivery.
                     </p>
                   </div>
                 </div>

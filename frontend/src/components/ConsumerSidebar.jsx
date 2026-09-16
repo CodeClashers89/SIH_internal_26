@@ -1,11 +1,12 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ShoppingBag, User, MapPin, Home, Package, Repeat } from 'lucide-react';
+import { ShoppingBag, User, MapPin, Home, Package, Repeat, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { LanguageSelector } from './Navbar';
 
 const ConsumerSidebar = () => {
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   const isDashboardActive = location.pathname === '/consumer-dashboard' || location.pathname.includes('consumer-dashboard');
   const marketplaceTab = new URLSearchParams(location.search).get('tab') || 'browse';
@@ -14,8 +15,13 @@ const ConsumerSidebar = () => {
   const isRecurringActive = location.pathname === '/marketplace' && marketplaceTab === 'recurring';
   const isProfileActive = location.pathname === '/profile';
 
+  const handleLogout = () => {
+    logout();
+    window.location.href = '/';
+  };
+
   return (
-    <aside className="w-64 shrink-0 bg-[#064e3b] text-white sticky top-16 h-[calc(100vh-4rem)] p-4 flex flex-col justify-between border-r border-emerald-900/50 shadow-xl font-sans overflow-y-auto z-40">
+    <aside className="w-64 shrink-0 bg-[#064e3b] text-white sticky top-0 h-screen p-4 flex flex-col justify-between border-r border-emerald-900/50 shadow-xl font-sans overflow-y-auto z-40">
       <div className="space-y-6">
         
         {/* Consumer Header Info */}
@@ -30,6 +36,10 @@ const ConsumerSidebar = () => {
               <MapPin className="h-3 w-3 shrink-0" /> {user?.district || 'Pune'} ({user?.pincode || '411001'})
             </span>
           </div>
+        </div>
+
+        <div className="rounded-2xl bg-emerald-900/40 border border-emerald-700/50 p-2">
+          <LanguageSelector activeLang="en" />
         </div>
 
         {/* Sidebar Navigation Options */}
@@ -91,8 +101,7 @@ const ConsumerSidebar = () => {
 
       </div>
 
-      {/* Bottom Profile Button (replaces Verified Consumer) */}
-      <div className="pt-4 border-t border-emerald-900/60">
+      <div className="pt-4 border-t border-emerald-900/60 space-y-2">
         <Link
           to="/profile"
           className={`flex items-center gap-3 px-4 py-3 rounded-2xl font-extrabold text-sm transition-all duration-200 ${
@@ -104,6 +113,14 @@ const ConsumerSidebar = () => {
           <User className={`h-5 w-5 ${isProfileActive ? 'text-white' : 'text-emerald-300'} shrink-0`} />
           <span>Profile</span>
         </Link>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-extrabold text-sm text-emerald-100 hover:bg-rose-900/50 hover:text-white transition-all duration-200"
+        >
+          <LogOut className="h-5 w-5 text-emerald-300 shrink-0" />
+          <span>Log Out</span>
+        </button>
       </div>
     </aside>
   );
