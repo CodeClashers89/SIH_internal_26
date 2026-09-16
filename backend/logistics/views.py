@@ -17,6 +17,38 @@ from users.permissions import IsAdmin
 EARNINGS_PER_KM = Decimal('12.00')
 
 
+def partner_operates_both_areas(partner, shipment):
+    origin_terms = {
+        str(value).strip().lower()
+        for value in [
+            partner.district,
+            partner.pincode,
+            partner.user.district if partner.user else None,
+            partner.user.pincode if partner.user else None,
+        ]
+        if value
+    }
+    destination_terms = {
+        term.strip().lower()
+        for value in [
+            partner.district,
+            partner.pincode,
+            partner.user.district if partner.user else None,
+            partner.user.pincode if partner.user else None,
+            partner.user.service_area if partner.user else None,
+        ]
+        if value
+        for term in str(value).replace(';', ',').split(',')
+        if term.strip()
+    }
+    pickup = (shipment.pickup_address or '').lower()
+    drop = (shipment.delivery_address or '').lower()
+    pickup_matches = any(term in pickup for term in origin_terms)
+    drop_matches = any(term in drop for term in destination_terms)
+    has_service_corridor = bool((partner.user.service_area if partner.user else '').strip())
+    return pickup_matches and (drop_matches or has_service_corridor)
+
+
 class LogisticsPartnerViewSet(viewsets.ModelViewSet):
     queryset = LogisticsPartner.objects.all()
     serializer_class = LogisticsPartnerSerializer
@@ -25,6 +57,17 @@ class LogisticsPartnerViewSet(viewsets.ModelViewSet):
         if self.action in ['list', 'retrieve']:
             return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticated(), IsAdmin()]
+
+    def get_queryset(self):
+        queryset = super().get_queryset().filter(active=True)
+        shipment_id = self.request.query_params.get('shipment')
+        if shipment_id:
+            try:
+                shipment = DeliveryShipment.objects.get(pk=shipment_id)
+            except DeliveryShipment.DoesNotExist:
+                return queryset.none()
+            queryset = [partner for partner in queryset if partner_operates_both_areas(partner, shipment)]
+        return queryset
 
 
 class DeliveryShipmentViewSet(viewsets.ModelViewSet):
@@ -50,14 +93,17 @@ class DeliveryShipmentViewSet(viewsets.ModelViewSet):
             #   2. Their own accepted/active/completed jobs
             partner = getattr(user, 'logistics_profile', None)
 
-            # Open jobs = unassigned AND not already delivered (delivered+no-partner = data error, exclude)
-            open_jobs = Q(partner__isnull=True) & ~Q(status='delivered')
+            # A pending farmer offer makes the shipment private to that driver.
+            pending_offer_shipments = TransportOffer.objects.filter(status='pending').values('shipment_id')
+            open_jobs = Q(partner__isnull=True) & ~Q(status='delivered') & ~Q(id__in=pending_offer_shipments)
 
             if partner:
+                selected_offer_jobs = Q(transport_offers__partner=partner, transport_offers__status='pending')
                 return queryset.filter(
                     open_jobs |               # open broadcast jobs
+                    selected_offer_jobs |     # private offer for this driver
                     Q(partner=partner)         # this driver's own jobs (including completed)
-                )
+                ).distinct()
             else:
                 # Driver has no profile yet — still show open jobs so they can accept
                 return queryset.filter(open_jobs)
@@ -90,6 +136,13 @@ class DeliveryShipmentViewSet(viewsets.ModelViewSet):
                 {'error': 'Only logistics partner accounts can accept delivery jobs.'},
                 status=status.HTTP_403_FORBIDDEN
             )
+
+        partner = getattr(user, 'logistics_profile', None)
+        pending_offer = TransportOffer.objects.filter(
+            shipment_id=pk,
+            partner=partner,
+            status='pending',
+        ).exists() if partner else False
 
         # ── Step 1: Acquire row lock (blocks concurrent requests on same row) ──
         try:
@@ -133,6 +186,12 @@ class DeliveryShipmentViewSet(viewsets.ModelViewSet):
             return Response(
                 {'error': f'⚡ Just taken! Another driver accepted this job a moment ago.'},
                 status=status.HTTP_409_CONFLICT
+            )
+
+        if TransportOffer.objects.filter(shipment=shipment, status='pending').exists() and not pending_offer:
+            return Response(
+                {'error': 'This shipment has been privately offered to another driver.'},
+                status=status.HTTP_403_FORBIDDEN
             )
 
         # ── Step 3: Claim the shipment ────────────────────────────────────────
@@ -351,6 +410,8 @@ class TransportOfferViewSet(viewsets.ModelViewSet):
             raise permissions.PermissionDenied('You can only assign transport for your own shipment.')
         if not partner.active:
             raise serializers.ValidationError('This transport partner is not active.')
+        if not partner_operates_both_areas(partner, shipment):
+            raise serializers.ValidationError('This driver does not operate in both the pickup and delivery areas.')
         if shipment.partner_id:
             raise serializers.ValidationError('This shipment already has a transport partner.')
         serializer.save(farmer=user)

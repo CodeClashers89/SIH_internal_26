@@ -22,6 +22,36 @@ const SubscriptionWidget = ({ role = 'buyer', buyerRole }) => {
   const [subError, setSubError] = useState('');
   const [respondingId, setRespondingId] = useState(null);
 
+  const fetchDjangoSubscriptions = async () => {
+    if (role !== 'farmer') return;
+    const response = await api.get('/orders/subscriptions/');
+    const normalized = response.data.map((subscription) => ({
+      subscription_id: `django-${subscription.id}`,
+      farmer_id: String(user.id),
+      buyer_profile: {
+        buyer_id: String(subscription.buyer),
+        name: subscription.buyer_username || `Buyer #${subscription.buyer}`,
+      },
+      schedule_matrix: {
+        recurring_days: [subscription.delivery_day],
+      },
+      items_breakdown: (subscription.items || []).map((item) => ({
+        commodity_name: item.product_details?.name || 'Produce',
+        quantity: Number(item.quantity),
+        unit: item.product_details?.unit || 'kg',
+        price_per_unit: Number(item.price),
+      })),
+      billing_summary: {
+        weekly_estimate: Number(subscription.per_delivery_total || subscription.per_delivery_subtotal || 0),
+        discount_applied_pct: Number(subscription.discount_percentage || 0),
+      },
+      is_active: subscription.status === 'active',
+      approval_status: subscription.status === 'cancelled' ? 'REJECTED' : 'ACCEPTED',
+      buyer_role: subscription.buyer_role,
+    }));
+    setSubscriptions(buyerRole ? normalized.filter((item) => item.buyer_role === buyerRole) : normalized);
+  };
+
   const fetchSubscriptions = async () => {
     if (!user) return;
     try {
@@ -37,36 +67,13 @@ const SubscriptionWidget = ({ role = 'buyer', buyerRole }) => {
 
       // Farmer subscriptions are also persisted in Django. Fall back to that
       // source when the standalone engine has no JSON record for this farmer.
-      if (role === 'farmer') {
-        const response = await api.get('/orders/subscriptions/');
-        const normalized = response.data.map((subscription) => ({
-          subscription_id: `django-${subscription.id}`,
-          farmer_id: String(user.id),
-          buyer_profile: {
-            buyer_id: String(subscription.buyer),
-            name: subscription.buyer_username || `Buyer #${subscription.buyer}`,
-          },
-          schedule_matrix: {
-            recurring_days: [subscription.delivery_day],
-          },
-          items_breakdown: (subscription.items || []).map((item) => ({
-            commodity_name: item.product_details?.name || 'Produce',
-            quantity: Number(item.quantity),
-            unit: item.product_details?.unit || 'kg',
-            price_per_unit: Number(item.price),
-          })),
-          billing_summary: {
-            weekly_estimate: Number(subscription.per_delivery_total || subscription.per_delivery_subtotal || 0),
-            discount_applied_pct: Number(subscription.discount_percentage || 0),
-          },
-          is_active: subscription.status === 'active',
-          approval_status: subscription.status === 'cancelled' ? 'REJECTED' : 'ACCEPTED',
-          buyer_role: subscription.buyer_role,
-        }));
-        setSubscriptions(buyerRole ? normalized.filter((item) => item.buyer_role === buyerRole) : normalized);
-      }
+      await fetchDjangoSubscriptions();
     } catch (err) {
-      console.error('Failed to fetch subscriptions', err);
+      try {
+        await fetchDjangoSubscriptions();
+      } catch (fallbackError) {
+        console.error('Failed to fetch subscriptions', fallbackError);
+      }
     }
   };
 

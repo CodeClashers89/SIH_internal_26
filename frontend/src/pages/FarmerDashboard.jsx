@@ -112,6 +112,7 @@ const FarmerDashboard = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [transportPartners, setTransportPartners] = useState([]);
+  const [transportPartnersByShipment, setTransportPartnersByShipment] = useState({});
   const [transportShipments, setTransportShipments] = useState([]);
   const [transportOffers, setTransportOffers] = useState([]);
   const [selectedTransportPartner, setSelectedTransportPartner] = useState({});
@@ -258,13 +259,20 @@ const FarmerDashboard = () => {
 
   const fetchTransportOptions = async () => {
     try {
-      const [shipmentsRes, partnersRes, offersRes] = await Promise.all([
+      const [shipmentsRes, offersRes] = await Promise.all([
         api.get('/logistics/shipments/'),
-        api.get('/logistics/partners/'),
         api.get('/logistics/transport-offers/')
       ]);
-      setTransportShipments(shipmentsRes.data.filter(shipment => !shipment.partner && shipment.status !== 'delivered'));
-      setTransportPartners(partnersRes.data.filter(partner => partner.active));
+      const unassignedShipments = shipmentsRes.data.filter(shipment => !shipment.partner && shipment.status !== 'delivered');
+      const partnerResults = await Promise.all(
+        unassignedShipments.map(async shipment => [
+          shipment.id,
+          (await api.get(`/logistics/partners/?shipment=${shipment.id}`)).data
+        ])
+      );
+      setTransportShipments(unassignedShipments);
+      setTransportPartnersByShipment(Object.fromEntries(partnerResults));
+      setTransportPartners([...new Map(partnerResults.flatMap(([, partners]) => partners).map(partner => [partner.id, partner])).values()]);
       setTransportOffers(offersRes.data);
     } catch (err) {
       console.error('Transport options fetch error:', err);
@@ -418,26 +426,26 @@ const FarmerDashboard = () => {
     }
   };
 
-  const handleRejectQuote = async (quoteId) => {
+  const handleOfferTransport = async (shipmentId) => {
+    const partnerId = selectedTransportPartner[shipmentId];
+    if (!partnerId) {
+      alert('Select a transport driver first.');
+      return;
+    }
+    try {
+      await api.post('/logistics/transport-offers/', {
+        shipment: shipmentId,
+        partner: partnerId,
+        message: 'Please accept this delivery ride offer for my order.'
+      });
+      alert('Ride offer sent to the selected driver.');
+      fetchTransportOptions();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to send transport offer.');
+    }
+  };
 
-      const handleOfferTransport = async (shipmentId) => {
-        const partnerId = selectedTransportPartner[shipmentId];
-        if (!partnerId) {
-          alert('Select a transport driver first.');
-          return;
-        }
-        try {
-          await api.post('/logistics/transport-offers/', {
-            shipment: shipmentId,
-            partner: partnerId,
-            message: 'Please accept this delivery ride offer for my order.'
-          });
-          alert('Ride offer sent to the selected driver.');
-          fetchTransportOptions();
-        } catch (err) {
-          alert(err.response?.data?.error || 'Failed to send transport offer.');
-        }
-      };
+  const handleRejectQuote = async (quoteId) => {
     try {
       await api.post(`/orders/quotes/${quoteId}/reject-offer/`);
       alert('Quote rejected.');
@@ -792,7 +800,11 @@ const FarmerDashboard = () => {
               {orders.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-6">No orders received yet.</p>
               ) : (
-                orders.map((o) => (
+                orders.map((o) => {
+                  const selectedTransportOffer = transportOffers.find(offer => offer.shipment_details?.order === o.id && offer.status === 'pending');
+                  const assignedPartner = o.shipment?.partner_details || selectedTransportOffer?.partner_details;
+
+                  return (
                   <div key={o.id} className="border border-slate-100 rounded-3xl p-5 space-y-4">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-3 gap-2">
                       <div>
@@ -858,6 +870,18 @@ const FarmerDashboard = () => {
                         <p className="font-semibold text-slate-700">Buyer: {o.buyer_username}</p>
                         <p className="text-slate-500 leading-relaxed">{o.shipping_address}</p>
                         <p className="text-slate-500">PIN: {o.shipping_pincode}</p>
+                        <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2">
+                          <span className="block text-[11px] font-bold uppercase tracking-wide text-blue-700">Delivery Partner</span>
+                          {assignedPartner ? (
+                            <>
+                              <p className="text-sm font-bold text-slate-800 mt-1">{assignedPartner.name}</p>
+                              <p className="text-xs text-slate-600">{assignedPartner.phone || 'Contact not available'} · {assignedPartner.district}</p>
+                              {!o.shipment?.partner_details && <p className="text-[11px] font-semibold text-blue-700 mt-1">Offer sent · Awaiting driver acceptance</p>}
+                            </>
+                          ) : (
+                            <p className="text-xs font-semibold text-amber-700 mt-1">Awaiting driver assignment</p>
+                          )}
+                        </div>
                       </div>
 
                       <div className="space-y-1 col-span-1">
@@ -947,7 +971,8 @@ const FarmerDashboard = () => {
                       )}
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
@@ -968,7 +993,9 @@ const FarmerDashboard = () => {
                 const order = orders.find(item => item.id === shipment.order);
                 return order?.status === 'packed';
               }).map(shipment => {
-                const existingOffer = transportOffers.find(offer => offer.shipment === shipment.id && offer.status === 'pending');
+                const shipmentOffers = transportOffers.filter(offer => offer.shipment === shipment.id);
+                const existingOffer = shipmentOffers.find(offer => offer.status === 'pending');
+                const declinedOffer = shipmentOffers.find(offer => offer.status === 'rejected');
                 return (
                   <div key={shipment.id} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -982,14 +1009,16 @@ const FarmerDashboard = () => {
                     {existingOffer ? (
                       <p className="text-xs font-bold text-blue-700 bg-blue-50 rounded-lg px-3 py-2">Offer sent to {existingOffer.partner_details?.name || 'selected driver'} and awaiting response.</p>
                     ) : (
-                      <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="space-y-2">
+                        {declinedOffer && <p className="text-xs font-bold text-rose-700 bg-rose-50 rounded-lg px-3 py-2">{declinedOffer.partner_details?.name || 'The selected driver'} declined this task. Please select another driver.</p>}
+                        <div className="flex flex-col sm:flex-row gap-2">
                         <select
                           value={selectedTransportPartner[shipment.id] || ''}
                           onChange={(event) => setSelectedTransportPartner(prev => ({ ...prev, [shipment.id]: event.target.value }))}
                           className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
                         >
                           <option value="">Select any transport driver</option>
-                          {transportPartners.map(partner => (
+                          {(transportPartnersByShipment[shipment.id] || []).map(partner => (
                             <option key={partner.id} value={partner.id}>{partner.name} · {partner.district} · PIN {partner.pincode}</option>
                           ))}
                         </select>
@@ -1000,6 +1029,7 @@ const FarmerDashboard = () => {
                         >
                           Offer Ride
                         </button>
+                        </div>
                       </div>
                     )}
                   </div>
