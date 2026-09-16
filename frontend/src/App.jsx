@@ -250,7 +250,7 @@ function MainLayout() {
         </main>
       )}
 
-      {!isChatbotPage && !isConsumer && !isFarmer && !isLandingPage && !isAuthPage && <Footer />}
+      {!isChatbotPage && !isConsumer && !isFarmer && !isLogistics && !isLandingPage && !isAuthPage && <Footer />}
       <FloatingCartButton onClick={() => setCartOpen(!cartOpen)} />
       <FloatingAssistantButton />
 
