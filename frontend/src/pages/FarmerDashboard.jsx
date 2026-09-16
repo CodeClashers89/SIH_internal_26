@@ -147,6 +147,8 @@ const FarmerDashboard = () => {
   const [offerPrice, setOfferPrice] = useState('');
   const [offerDate, setOfferDate] = useState('');
   const [offerNotes, setOfferNotes] = useState('');
+  const [offerError, setOfferError] = useState('');
+  const [offerSuccess, setOfferSuccess] = useState('');
   const [submittingOffer, setSubmittingOffer] = useState(false);
 
   // Form states for proposing pre-harvest contract
@@ -246,7 +248,11 @@ const FarmerDashboard = () => {
     try {
       const response = await api.patch(`/orders/${orderId}/status/`, { status: newStatus });
       setOrders(orders.map(o => o.id === orderId ? { ...o, status: response.data.status } : o));
+      fetchDashboardData();
     } catch (err) {
+      if (err.response?.status === 409) {
+        fetchDashboardData();
+      }
       alert(err.response?.data?.error || 'Error updating order status');
     }
   };
@@ -307,11 +313,40 @@ const FarmerDashboard = () => {
     setOfferQty(req.quantity);
     setOfferPrice(req.target_price_max);
     setOfferDate(req.required_date);
+    setOfferError('');
+    setOfferSuccess('');
   };
 
   const handleSubmitSourcingOffer = async (e) => {
     e.preventDefault();
     if (!offerReqId) return;
+    setOfferError('');
+    setOfferSuccess('');
+
+    const requirement = bulkReqs.find((req) => req.id === offerReqId);
+    const requestedQuantity = Number(offerQty);
+    const matchingProducts = listings.filter((product) => {
+      const productName = (product.name || '').toLowerCase();
+      const cropName = (requirement?.crop_name || '').toLowerCase();
+      return product.quantity > 0 && (productName.includes(cropName) || cropName.includes(productName));
+    });
+    const availableQuantity = matchingProducts.reduce((sum, product) => sum + Number(product.quantity || 0), 0);
+    const alreadyOffered = (requirement?.offers || []).reduce((sum, offer) => sum + Number(offer.quantity || 0), 0);
+    const remainingQuantity = Math.max(0, Number(requirement?.quantity || 0) - alreadyOffered);
+
+    if (!Number.isFinite(requestedQuantity) || requestedQuantity <= 0) {
+      setOfferError('Enter a quantity greater than zero.');
+      return;
+    }
+    if (requestedQuantity > availableQuantity) {
+      setOfferError(`You have only ${availableQuantity} ${matchingProducts[0]?.unit || 'units'} of matching inventory available.`);
+      return;
+    }
+    if (requestedQuantity > remainingQuantity) {
+      setOfferError(`This demand needs only ${remainingQuantity} ${requirement?.unit || 'units'} more.`);
+      return;
+    }
+
     setSubmittingOffer(true);
     try {
       const payload = {
@@ -322,15 +357,15 @@ const FarmerDashboard = () => {
         notes: offerNotes
       };
       await api.post('/orders/farmer-offers/', payload);
-      alert('Sourcing contribution offer submitted successfully!');
       setOfferQty('');
       setOfferPrice('');
       setOfferDate('');
       setOfferNotes('');
       setOfferReqId(null);
+      setOfferSuccess('Offer submitted successfully. The wholesaler can now review it.');
       fetchDashboardData();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to submit sourcing offer.');
+      setOfferError(err.response?.data?.error || 'Failed to submit sourcing offer.');
     } finally {
       setSubmittingOffer(false);
     }
@@ -368,20 +403,22 @@ const FarmerDashboard = () => {
     <div className="flex-1 w-full min-w-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-8 space-y-8 overflow-y-auto">
         
         {/* Header and Refresh */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">Farmer Dashboard</h1>
-          <p className="text-sm text-slate-500">Manage listings, view orders, negotiate wholesale bids, and forecast yield demand.</p>
-        </div>
-        <button
-          onClick={fetchDashboardData}
-          disabled={refreshing}
-          className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 px-4 py-2.5 rounded-xl transition-all shadow-xs border border-emerald-100"
-        >
-          <RefreshCcw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-          Sync Data
-        </button>
-      </div>
+        {activeSection === 'overview' && (
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-black text-slate-800 tracking-tight">Farmer Dashboard</h1>
+              <p className="text-sm text-slate-500">Manage listings, view orders, negotiate wholesale bids, and forecast yield demand.</p>
+            </div>
+            <button
+              onClick={fetchDashboardData}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 px-4 py-2.5 rounded-xl transition-all shadow-xs border border-emerald-100"
+            >
+              <RefreshCcw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+              Sync Data
+            </button>
+          </div>
+        )}
 
       {/* KYC Warning Panel */}
       {user.kyc_status !== 'approved' && (
@@ -567,6 +604,12 @@ const FarmerDashboard = () => {
               </table>
             </div>
           )}
+
+          <div className="mt-8 border-t border-slate-200 pt-6">
+            <h4 className="text-lg font-black text-slate-800 mb-1">Retail Subscription Orders</h4>
+            <p className="text-sm text-slate-500 mb-3">Recurring subscriptions placed by retail consumers.</p>
+            <SubscriptionWidget role="farmer" buyerRole="consumer" />
+          </div>
         </div>
       )}
 
@@ -574,8 +617,9 @@ const FarmerDashboard = () => {
       {activeSection === 'orders' && (
         <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-6">
           <div>
-            <h3 className="font-bold text-lg text-slate-800">Incoming Orders</h3>
-            <p className="text-sm text-slate-600 leading-relaxed">Track shipping schedules and trigger logistics partner operations.</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600">Retail channel</p>
+            <h3 className="font-black text-xl text-slate-800 mt-1">Retail Orders</h3>
+            <p className="text-sm text-slate-500 leading-relaxed mt-1">Consumer purchases for your listed produce. Wholesale negotiations appear under Wholesale Bids.</p>
           </div>
 
           {loading ? (
@@ -751,8 +795,9 @@ const FarmerDashboard = () => {
       {activeSection === 'quotes' && (
         <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-6">
           <div>
-            <h3 className="font-bold text-lg text-slate-800">Wholesale Negotiations</h3>
-            <p className="text-sm text-slate-600 leading-relaxed">Quotes submitted by wholesalers. Accept the bid, reject it, or send a counter-offer.</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-600">Wholesale channel</p>
+            <h3 className="font-black text-xl text-slate-800 mt-1">Wholesale Bids</h3>
+            <p className="text-sm text-slate-500 leading-relaxed mt-1">Bulk-buyer quote requests and negotiated prices. Retail consumer orders are kept separate.</p>
           </div>
 
           <div className="overflow-x-auto text-[15px]">
@@ -776,7 +821,9 @@ const FarmerDashboard = () => {
                 ) : (
                   quotes.map(q => (
                     <tr key={q.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-4 px-2 font-semibold text-slate-800">{q.buyer_username}</td>
+                      <td className="py-4 px-2 font-semibold text-slate-800">
+                        {q.buyer_username || q.buyer_details?.username || `Buyer #${q.buyer}`}
+                      </td>
                       <td className="py-4 px-2 font-medium text-slate-600">{q.product_details?.name}</td>
                       <td className="py-4 px-2">{q.quantity} {q.product_details?.unit}</td>
                       <td className="py-4 px-2 font-bold text-slate-900">₹{parseFloat(q.target_price).toFixed(2)}/{q.product_details?.unit}</td>
@@ -842,6 +889,12 @@ const FarmerDashboard = () => {
               </tbody>
             </table>
           </div>
+
+          <div className="border-t border-slate-200 pt-6">
+            <h4 className="text-lg font-black text-slate-800 mb-1">Wholesale Subscription Orders</h4>
+            <p className="text-sm text-slate-500 mb-3">Recurring subscriptions placed by bulk buyers.</p>
+            <SubscriptionWidget role="farmer" buyerRole="bulk_buyer" />
+          </div>
         </div>
       )}
 
@@ -850,9 +903,15 @@ const FarmerDashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Sourcing list */}
           <div className="lg:col-span-2 space-y-6">
-            <div>
-              <h3 className="font-bold text-lg text-slate-800">Wholesale Buying Demands</h3>
-              <p className="text-sm text-slate-600 leading-relaxed">Buyers looking for bulk quantities. Review requests and submit your price offers.</p>
+            <div className="flex items-end justify-between gap-4 border-b border-slate-200 pb-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600">Reverse marketplace</p>
+                <h3 className="font-black text-xl text-slate-800 mt-1">Wholesale Buying Demands</h3>
+                <p className="text-sm text-slate-500 leading-relaxed mt-1">Review bulk requests and submit competitive offers for crops you can supply.</p>
+              </div>
+              <span className="hidden sm:inline-flex shrink-0 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
+                {bulkReqs.length} {bulkReqs.length === 1 ? 'request' : 'requests'}
+              </span>
             </div>
 
             <div className="space-y-4">
@@ -866,22 +925,25 @@ const FarmerDashboard = () => {
                   const progressPct = Math.min(100, Math.round((totalOffered / (totalTarget || 1)) * 100));
 
                   return (
-                    <div key={req.id} className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs space-y-4">
-                      <div className="flex justify-between items-start">
+                    <div key={req.id} className="bg-white border border-slate-200 border-l-4 border-l-emerald-500 rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+                      <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                         <div>
-                          <h4 className="font-bold text-slate-800 text-base">{req.crop_name}</h4>
-                          <p className="text-sm text-slate-600 leading-relaxed">Variety: {req.variety || 'Standard'} | Target Date: {req.required_date}</p>
+                          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                            <h4 className="font-black text-slate-800 text-lg">{req.crop_name}</h4>
+                            <span className="rounded-full bg-emerald-50 border border-emerald-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-700">Open demand</span>
+                          </div>
+                          <p className="text-xs text-slate-500 leading-relaxed">{req.variety || 'Standard'} <span className="mx-1 text-slate-300">•</span> Required by {req.required_date}</p>
                         </div>
-                        <div className="text-right text-base">
-                          <span className="text-sm text-slate-600 block font-semibold">Total Pool</span>
-                          <span className="text-slate-800 font-extrabold text-lg">{totalTarget} {req.unit}</span>
+                        <div className="sm:text-right rounded-xl bg-slate-50 px-3 py-2 sm:min-w-28">
+                          <span className="text-[10px] text-slate-500 block font-black uppercase tracking-wider">Total pool</span>
+                          <span className="text-slate-800 font-black text-lg">{totalTarget} <span className="text-xs font-bold text-slate-500">{req.unit}</span></span>
                         </div>
                       </div>
 
                       {/* Aggregation Progress Bar */}
-                      <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 space-y-2 text-[15px]">
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="font-semibold text-slate-600">Farmer Sourcing Pool Progress</span>
+                      <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-4 space-y-2.5">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="font-bold text-slate-600">Pool progress</span>
                           <span className="font-bold text-emerald-700">{progressPct}% Pooled</span>
                         </div>
                         <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
@@ -890,19 +952,19 @@ const FarmerDashboard = () => {
                             style={{ width: `${progressPct}%` }}
                           />
                         </div>
-                        <div className="flex justify-between text-sm text-slate-600 leading-relaxed pt-0.5">
+                        <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-500 leading-relaxed pt-0.5">
                           <span>Pledged: <strong className="text-emerald-700 font-bold">{totalOffered} {req.unit}</strong></span>
                           <span>Remaining Needed: <strong className="text-amber-700 font-bold">{remainingQty} {req.unit}</strong></span>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl text-[15px] text-slate-700">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-white border border-slate-200 p-4 rounded-xl text-sm text-slate-700">
                         <div>
-                          <span className="text-sm text-slate-600 font-semibold block">Target Budget</span>
+                          <span className="text-[10px] text-slate-500 font-black uppercase tracking-wider block mb-1">Target budget</span>
                           <span className="font-bold text-slate-900">₹{req.target_price_min} - ₹{req.target_price_max} per {req.unit}</span>
                         </div>
                         <div>
-                          <span className="text-sm text-slate-600 font-semibold block">Deliver Location</span>
+                          <span className="text-[10px] text-slate-500 font-black uppercase tracking-wider block mb-1">Delivery location</span>
                           <span className="font-bold text-slate-900 flex items-center gap-1">
                             <MapPin className="h-4 w-4 text-slate-500" />
                             {req.location}
@@ -916,6 +978,7 @@ const FarmerDashboard = () => {
                           onClick={() => {
                             if (offerReqId === req.id) {
                               setOfferReqId(null);
+                              setOfferError('');
                             } else {
                               handleOpenOfferForm(req);
                             }
@@ -930,80 +993,6 @@ const FarmerDashboard = () => {
                           {offerReqId === req.id ? 'Close Offer Form' : 'Submit Sourcing Contribution'}
                         </button>
 
-                        {offerReqId === req.id && (
-                          <div className="bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 space-y-3 animate-fade-in text-[15px]">
-                            <div className="flex justify-between items-center pb-1 border-b border-emerald-100/60">
-                              <span className="font-bold text-emerald-900 text-[15px]">Your Sourcing Contribution Offer</span>
-                              <span className="text-[13px] text-emerald-600 font-medium">Target: ₹{req.target_price_min} - ₹{req.target_price_max}/{req.unit}</span>
-                            </div>
-
-                            <form onSubmit={handleSubmitSourcingOffer} className="space-y-3">
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                                <div>
-                                  <label className="block text-slate-700 font-bold mb-1 text-sm">Your Quantity ({req.unit})</label>
-                                  <input
-                                    type="number"
-                                    required
-                                    placeholder={`e.g. ${req.quantity}`}
-                                    value={offerQty}
-                                    onChange={(e) => setOfferQty(e.target.value)}
-                                    className="w-full px-3 py-1.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white text-xs"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-slate-700 font-bold mb-1 text-sm">Your Offered Price (₹/{req.unit})</label>
-                                  <input
-                                    type="number"
-                                    required
-                                    placeholder={`e.g. ${req.target_price_max}`}
-                                    value={offerPrice}
-                                    onChange={(e) => setOfferPrice(e.target.value)}
-                                    className="w-full px-3 py-1.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white text-xs"
-                                  />
-                                </div>
-                              </div>
-
-                              <div>
-                                <label className="block text-slate-700 font-bold mb-1 text-sm">Expected Delivery Date</label>
-                                <input
-                                  type="date"
-                                  required
-                                  value={offerDate}
-                                  onChange={(e) => setOfferDate(e.target.value)}
-                                  className="w-full px-3 py-1.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white text-xs"
-                                />
-                              </div>
-
-                              <div>
-                                <label className="block text-slate-700 font-bold mb-1 text-sm">Notes / Terms (Optional)</label>
-                                <input
-                                  type="text"
-                                  placeholder="e.g. Moisture 11%, graded, direct from farm..."
-                                  value={offerNotes}
-                                  onChange={(e) => setOfferNotes(e.target.value)}
-                                  className="w-full px-3 py-1.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white text-xs"
-                                />
-                              </div>
-
-                              <div className="flex gap-2 pt-1">
-                                <button
-                                  type="submit"
-                                  disabled={submittingOffer}
-                                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 text-xs shadow-xs"
-                                >
-                                  {submittingOffer ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Send Offer to Wholesaler'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setOfferReqId(null)}
-                                  className="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-semibold"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </form>
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
@@ -1014,24 +1003,46 @@ const FarmerDashboard = () => {
           </div>
 
           {/* Submit/Edit Offer panel & my submitted offers */}
-          <div className="lg:col-span-1 space-y-6">
+          <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-6 lg:self-start">
             {offerReqId && (
               <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs space-y-4 animate-fade-in">
                 <div className="flex justify-between items-center">
-                  <h4 className="font-bold text-slate-800 text-sm">Submit Sourcing Offer</h4>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Selected demand</p>
+                    <h4 className="font-black text-slate-800 text-base mt-1">Submit Sourcing Offer</h4>
+                  </div>
                   <button 
-                    onClick={() => setOfferReqId(null)}
+                    onClick={() => { setOfferReqId(null); setOfferError(''); }}
                     className="text-slate-400 hover:text-slate-600 text-xs font-semibold"
                   >
                     Cancel
                   </button>
                 </div>
 
+                {(() => {
+                  const selectedRequirement = bulkReqs.find((req) => req.id === offerReqId);
+                  const offered = (selectedRequirement?.offers || []).reduce((sum, offer) => sum + Number(offer.quantity || 0), 0);
+                  const remaining = Math.max(0, Number(selectedRequirement?.quantity || 0) - offered);
+                  return (
+                    <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs">
+                      <div><span className="block text-[10px] uppercase font-black tracking-wider text-slate-400">Demand</span><strong className="text-slate-700">{selectedRequirement?.crop_name}</strong></div>
+                      <div><span className="block text-[10px] uppercase font-black tracking-wider text-slate-400">Remaining</span><strong className="text-emerald-700">{remaining} {selectedRequirement?.unit}</strong></div>
+                    </div>
+                  );
+                })()}
+
+                {offerError && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-semibold text-rose-700">
+                    {offerError}
+                  </div>
+                )}
+
                 <form onSubmit={handleSubmitSourcingOffer} className="space-y-3 text-[15px]">
                   <div>
                     <label className="block text-slate-600 font-bold mb-1">Your Offered Qty</label>
                     <input
                       type="number"
+                      min="0.01"
                       required
                       placeholder="e.g. 500"
                       value={offerQty}
@@ -1081,8 +1092,20 @@ const FarmerDashboard = () => {
               </div>
             )}
 
-            <div>
-              <h4 className="font-bold text-slate-800 text-sm mb-3">Your Sourcing Contributions</h4>
+            {offerSuccess && (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">
+                {offerSuccess}
+              </div>
+            )}
+
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Your activity</p>
+                  <h4 className="font-black text-slate-800 text-base mt-1">Sourcing Contributions</h4>
+                </div>
+                <span className="h-8 min-w-8 px-2 rounded-full bg-white border border-slate-200 flex items-center justify-center text-xs font-black text-slate-600">{myOffers.length}</span>
+              </div>
               {myOffers.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-6 bg-white border border-slate-100 rounded-3xl">No offers submitted.</p>
               ) : (
@@ -1133,13 +1156,26 @@ const FarmerDashboard = () => {
 
       {/* 5. Pre-Harvest Contracts */}
       {activeSection === 'contracts' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="space-y-7">
+          <div className="flex items-end justify-between gap-4 border-b border-slate-200 pb-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600">Forward planning</p>
+              <h2 className="font-black text-2xl text-slate-800 mt-1">Pre-Harvest Contracts</h2>
+              <p className="text-sm text-slate-500 mt-1">Lock future demand and pricing before your crop is ready to harvest.</p>
+            </div>
+            <span className="hidden sm:inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
+              {preHarvestContracts.length} {preHarvestContracts.length === 1 ? 'contract' : 'contracts'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           
           {/* Propose Contract Form */}
-          <div className="lg:col-span-1 bg-white border border-slate-100 rounded-3xl p-6 shadow-xs h-fit space-y-6">
+          <div className="lg:col-span-1 bg-white border border-slate-200 border-t-4 border-t-emerald-600 rounded-2xl p-6 shadow-sm h-fit space-y-6 lg:sticky lg:top-6">
             <div>
-              <h3 className="font-bold text-base text-slate-800">Propose Pre-Harvest Yield</h3>
-              <p className="text-sm text-slate-600 leading-relaxed mt-1">Guarantee sale prices for your upcoming yield prior to actual harvest.</p>
+              <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Create agreement</p>
+              <h3 className="font-black text-lg text-slate-800 mt-1">Propose Pre-Harvest Yield</h3>
+              <p className="text-sm text-slate-500 leading-relaxed mt-1">Guarantee a sale price for your upcoming yield before harvest.</p>
             </div>
 
             <form onSubmit={handleSubmitContract} className="space-y-4 text-[15px]">
@@ -1221,20 +1257,26 @@ const FarmerDashboard = () => {
 
           {/* Proposed Contracts Log */}
           <div className="lg:col-span-2 space-y-6">
-            <div>
-              <h3 className="font-bold text-base text-slate-800">Proposed Pre-Harvest Yields</h3>
-              <p className="text-sm text-slate-600 leading-relaxed">Track which buyers have reserved your pre-harvest agreements.</p>
+            <div className="flex items-end justify-between gap-4 border-b border-slate-200 pb-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Contract portfolio</p>
+                <h3 className="font-black text-xl text-slate-800 mt-1">Proposed Yields</h3>
+                <p className="text-sm text-slate-500 leading-relaxed mt-1">Track availability and buyer reservations.</p>
+              </div>
             </div>
 
             {preHarvestContracts.length === 0 ? (
               <p className="text-xs text-slate-400 text-center py-8 bg-white border border-slate-100 rounded-3xl">No pre-harvest agreements listed.</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
                 {preHarvestContracts.map(c => (
-                  <div key={c.id} className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs space-y-3 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 left-0 h-1 bg-emerald-600"></div>
-                    <div className="flex justify-between items-start">
-                      <h4 className="font-bold text-slate-800 text-sm">{c.crop_name}</h4>
+                  <div key={c.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 relative overflow-hidden">
+                    <div className={`absolute inset-x-0 top-0 h-1 ${c.status === 'accepted' ? 'bg-emerald-600' : 'bg-slate-300'}`}></div>
+                    <div className="flex justify-between items-start gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Pre-harvest yield</p>
+                        <h4 className="font-black text-slate-800 text-base mt-1">{c.crop_name}</h4>
+                      </div>
                       <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
                         c.status === 'accepted' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
                       }`}>
@@ -1242,12 +1284,12 @@ const FarmerDashboard = () => {
                       </span>
                     </div>
 
-                    <div className="text-sm text-slate-600 leading-relaxed space-y-1">
-                      <p>Expected harvest date: <span className="font-semibold text-slate-700">{c.expected_harvest_date}</span></p>
-                      <p>Expected volume: <span className="font-semibold text-slate-700">{c.expected_quantity} {c.unit}</span></p>
-                      <p>Contract rate: <span className="font-bold text-emerald-700">₹{parseFloat(c.contract_price).toFixed(2)}/{c.unit}</span></p>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="rounded-xl bg-slate-50 p-3"><span className="block text-[10px] font-black uppercase tracking-wider text-slate-400">Harvest date</span><strong className="text-slate-700 block mt-1">{c.expected_harvest_date}</strong></div>
+                      <div className="rounded-xl bg-slate-50 p-3"><span className="block text-[10px] font-black uppercase tracking-wider text-slate-400">Expected volume</span><strong className="text-slate-700 block mt-1">{c.expected_quantity} {c.unit}</strong></div>
+                      <div className="col-span-2 rounded-xl bg-emerald-50/70 border border-emerald-100 p-3"><span className="block text-[10px] font-black uppercase tracking-wider text-emerald-700">Locked contract rate</span><strong className="text-emerald-800 block mt-1 text-base">₹{parseFloat(c.contract_price).toFixed(2)}<span className="text-xs font-bold">/{c.unit}</span></strong></div>
                       {c.status === 'accepted' && (
-                        <p className="pt-2 border-t border-slate-100 text-emerald-800 font-semibold flex items-center gap-1 mt-2">
+                        <p className="col-span-2 pt-3 border-t border-slate-100 text-emerald-800 font-semibold flex items-center gap-1">
                           <CheckCircle className="h-4.5 w-4.5" />
                           Reserved by Wholesaler: {c.buyer_username}
                         </p>
@@ -1258,14 +1300,9 @@ const FarmerDashboard = () => {
               </div>
             )}
           </div>
+          </div>
         </div>
       )}
-
-      {/* ── Subscriptions Widget ── */}
-      <div className="pt-8 border-t border-slate-200 mt-12">
-        <h2 className="text-xl font-black text-slate-800 mb-2">Regular Subscriptions (B2B)</h2>
-        <SubscriptionWidget role="farmer" />
-      </div>
 
       {/* Add Produce Modal */}
       {showAddModal && (

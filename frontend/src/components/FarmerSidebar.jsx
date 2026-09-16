@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, Package, ShoppingBag, Handshake, FileCheck, Calendar, MapPin, User, LogOut, Bell } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { LanguageSelector, NotificationSelector } from './Navbar';
+import { LanguageSelector } from './Navbar';
 
 const FarmerSidebar = () => {
   const location = useLocation();
@@ -32,6 +32,7 @@ const FarmerSidebar = () => {
     { key: 'sourcing', label: 'Bulk Demands', to: '/farmer-dashboard#sourcing', icon: FileCheck },
     { key: 'contracts', label: 'Contracts', to: '/farmer-dashboard#contracts', icon: Calendar },
     { key: 'markets', label: 'Market Prices', to: '/farmer-dashboard#markets', icon: MapPin },
+    { key: 'notifications', label: 'Notifications', to: '/farmer-notifications', icon: Bell },
   ];
 
   return (
@@ -48,13 +49,21 @@ const FarmerSidebar = () => {
           </div>
         </div>
 
+        <div className="rounded-2xl bg-emerald-900/40 border border-emerald-700/50 p-2">
+          <LanguageSelector activeLang={activeLang} />
+        </div>
+
         <div className="space-y-2">
           <span className="text-[10px] font-extrabold text-emerald-300/60 uppercase tracking-widest px-3 block">Navigation</span>
 
           {navItems.map(({ key, label, to, icon: Icon }) => {
-            const isActive = location.pathname === '/farmer-dashboard' || location.pathname === '/farmer-profile'
-              ? (key === activeSection || (key === 'profile' && location.pathname === '/farmer-profile'))
-              : false;
+            const isProfilePage = location.pathname === '/farmer-profile';
+            const isDashboardPage = location.pathname === '/farmer-dashboard';
+            const isActive = isProfilePage
+              ? key === 'profile'
+              : isDashboardPage
+              ? key === activeSection
+              : key === 'notifications' && location.pathname === '/farmer-notifications';
 
             return (
               <Link
@@ -75,18 +84,6 @@ const FarmerSidebar = () => {
       </div>
 
       <div className="pt-4 border-t border-emerald-900/60 space-y-2">
-        <div className="rounded-2xl bg-emerald-900/40 border border-emerald-700/50 p-2 space-y-2">
-          <div className="flex items-center justify-between px-2 py-1">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-300/70">Language</span>
-            <LanguageSelector activeLang={activeLang} />
-          </div>
-          <div className="flex items-center justify-between border-t border-emerald-800/60 pt-2">
-            <span className="flex items-center gap-2 px-2 text-xs font-bold text-emerald-100">
-              <Bell className="h-4 w-4 text-emerald-300" /> Notifications
-            </span>
-            <NotificationSelector />
-          </div>
-        </div>
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-extrabold text-sm text-emerald-100 hover:bg-rose-900/50 hover:text-white transition-all duration-200"

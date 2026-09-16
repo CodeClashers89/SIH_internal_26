@@ -112,55 +112,17 @@ export const LanguageSelector = ({ activeLang }) => {
 };
 
 export const NotificationSelector = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
-
-  const notifications = [
-    { id: 1, text: 'Farmer offer received for Tomato Bulk Order #42', time: '10m ago' },
-    { id: 2, text: 'Wholesale contract #108 status updated to Active', time: '1h ago' },
-    { id: 3, text: 'Dispatch scheduled for APMC Mandi, Pune drop', time: '3h ago' },
-  ];
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full transition-colors cursor-pointer"
+    <Link
+        to="/farmer-notifications"
+        className="relative flex items-center gap-2 px-3 py-2 text-emerald-100 hover:text-white hover:bg-emerald-800/70 rounded-xl transition-colors"
         title="Notifications"
       >
         <Bell className="h-5 w-5" />
         <span className="absolute top-0.5 right-0.5 inline-flex items-center justify-center w-4 h-4 text-[10px] font-black leading-none text-white bg-rose-500 rounded-full shadow-xs">
           3
         </span>
-      </button>
-
-      {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 rounded-2xl shadow-xl bg-white border border-slate-200 py-2 z-[100] transform origin-top-right transition-all">
-          <div className="px-4 py-2 text-xs font-black text-slate-800 border-b border-slate-100 flex justify-between items-center">
-            <span>Notifications</span>
-            <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">3 New</span>
-          </div>
-          <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
-            {notifications.map((n) => (
-              <div key={n.id} className="p-3 hover:bg-slate-50 transition-colors space-y-1">
-                <p className="text-xs font-semibold text-slate-700 leading-snug">{n.text}</p>
-                <span className="text-[10px] text-slate-400 font-medium">{n.time}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+      </Link>
   );
 };
 

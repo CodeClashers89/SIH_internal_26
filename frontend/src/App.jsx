@@ -17,6 +17,7 @@ import Landing from './pages/Landing';
 import LoginSignup from './pages/LoginSignup';
 import FarmerDashboard from './pages/FarmerDashboard';
 import FarmerProfilePage from './pages/FarmerProfilePage';
+import FarmerNotifications from './pages/FarmerNotifications';
 import FarmerAIAssistant from './pages/FarmerAIAssistant';
 import ConsumerMarketplace from './pages/ConsumerMarketplace';
 import ConsumerDashboard from './pages/ConsumerDashboard';
@@ -136,6 +137,14 @@ function MainLayout() {
             <FarmerProfilePage />
           </ProtectedRoute>
         } 
+      />
+      <Route
+        path="/farmer-notifications"
+        element={
+          <ProtectedRoute allowedRoles={['farmer']}>
+            <FarmerNotifications />
+          </ProtectedRoute>
+        }
       />
       <Route 
         path="/farmer-ai-assistant" 

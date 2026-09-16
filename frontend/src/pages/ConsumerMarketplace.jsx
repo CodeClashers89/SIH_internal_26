@@ -528,6 +528,13 @@ const ConsumerMarketplace = () => {
                     </div>
                   </div>
 
+                  {o.status === 'cancelled' && o.cancellation_reason && (
+                    <div className="flex items-start gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2.5 text-xs text-rose-700">
+                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span><strong>Order cancelled:</strong> {o.cancellation_reason}</span>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5 text-xs">
                     {/* Items & Price Breakdown */}
                     <div className="space-y-2 bg-slate-50/70 border border-slate-200/70 p-4 rounded-xl">

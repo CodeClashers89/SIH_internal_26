@@ -41,6 +41,7 @@ class Order(models.Model):
     )
     cancellation_locked = models.BooleanField(default=False)
     cancellation_locked_at = models.DateTimeField(null=True, blank=True)
+    cancellation_reason = models.CharField(max_length=255, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -4,9 +4,11 @@ from rest_framework.views import APIView
 from rest_framework.decorators import action
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 from datetime import timedelta, date
 from decimal import Decimal
+import re
 from .models import (
     Order, OrderItem, Subscription, SubscriptionItem,
     QuoteRequest, BulkRequirement, FarmerOffer, PreHarvestContract
@@ -38,13 +40,18 @@ class OrderViewSet(viewsets.ModelViewSet):
         if user.role == 'admin':
             return queryset
         elif user.role == 'farmer':
-            # Farmer sees orders that contain their products
-            return queryset.filter(items__product__farmer=user).distinct()
+            # Retail Orders contains only consumer purchases. Wholesale buyer
+            # activity is represented separately by QuoteRequest/Wholesale Bids.
+            return queryset.filter(
+                items__product__farmer=user,
+                buyer__role='consumer',
+            ).exclude(status='cancelled').distinct()
         else:
             # Consumer or Bulk Buyer sees their own orders
             return queryset.filter(buyer=user)
 
     @action(detail=True, methods=['patch'], url_path='status')
+    @transaction.atomic
     def update_status(self, request, pk=None):
         order = self.get_object()
         new_status = request.data.get('status')
@@ -70,6 +77,52 @@ class OrderViewSet(viewsets.ModelViewSet):
                                f'Shipping and delivery are handled by the logistics partner.'},
                     status=status.HTTP_403_FORBIDDEN
                 )
+
+            if new_status == 'confirmed':
+                order_items = list(order.items.select_related('product').all())
+                locked_products = {}
+                for item in order_items:
+                    product = Product.objects.select_for_update().get(pk=item.product_id)
+                    if product.farmer_id != user.id:
+                        return Response({'error': 'You can only confirm your own products.'}, status=status.HTTP_403_FORBIDDEN)
+                    locked_products[product.id] = product
+
+                insufficient = next(
+                    (item for item in order_items if locked_products[item.product_id].quantity < item.quantity),
+                    None,
+                )
+                if insufficient:
+                    order.status = 'cancelled'
+                    order.cancellation_reason = (
+                        f'Order cancelled because {insufficient.product.name} inventory ran out before confirmation.'
+                    )
+                    order.save(update_fields=['status', 'cancellation_reason', 'updated_at'])
+                    return Response(
+                        {'error': order.cancellation_reason, 'order': OrderSerializer(order).data},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+
+                for item in order_items:
+                    product = locked_products[item.product_id]
+                    product.quantity -= item.quantity
+                    product.save(update_fields=['quantity'])
+
+                # Any other pending order for the same product that no longer fits
+                # is cancelled and remains visible to its buyer with an explanation.
+                competing_orders = Order.objects.filter(
+                    status='placed',
+                    items__product_id__in=locked_products.keys(),
+                ).exclude(pk=order.pk).distinct()
+                for competing in competing_orders.prefetch_related('items__product'):
+                    for item in competing.items.all():
+                        product = locked_products.get(item.product_id)
+                        if product and product.quantity < item.quantity:
+                            competing.status = 'cancelled'
+                            competing.cancellation_reason = (
+                                f'Order cancelled because {product.name} inventory ran out after another order was confirmed.'
+                            )
+                            competing.save(update_fields=['status', 'cancellation_reason', 'updated_at'])
+                            break
 
         if new_status == 'cancelled':
             if getattr(order, 'cancellation_locked', False):
@@ -154,10 +207,6 @@ class OrderCreateView(APIView):
         for item in validated_data['items']:
             product = item['product']
             qty = item['quantity']
-
-            # Deduct stock atomically
-            product.quantity -= qty
-            product.save()
 
             price = product.price_per_unit
             product_subtotal += price * qty
@@ -454,7 +503,38 @@ class BulkRequirementViewSet(viewsets.ModelViewSet):
             return queryset
         elif user.role == 'bulk_buyer':
             return queryset.filter(buyer=user)
-        return queryset.filter(status='pending')
+        pending_requirements = queryset.filter(status='pending')
+        matching_ids = []
+        farmer_products = Product.objects.filter(farmer=user, quantity__gt=0).values('name')
+
+        # Match the requested crop to the farmer's registered products while
+        # ignoring descriptive words and simple singular/plural differences.
+        product_tokens = [
+            self._crop_tokens(product['name'])
+            for product in farmer_products
+        ]
+        for requirement in pending_requirements:
+            requirement_tokens = self._crop_tokens(requirement.crop_name)
+            if any(requirement_tokens & tokens for tokens in product_tokens):
+                matching_ids.append(requirement.id)
+
+        return pending_requirements.filter(id__in=matching_ids)
+
+    @staticmethod
+    def _crop_tokens(value):
+        ignored = {'fresh', 'organic', 'premium', 'natural', 'local', 'standard', 'grade'}
+        tokens = set()
+        for token in re.findall(r'[a-z]+', (value or '').lower()):
+            if token in ignored or len(token) < 3:
+                continue
+            if token.endswith('ies') and len(token) > 4:
+                token = f'{token[:-3]}y'
+            elif token.endswith('es') and len(token) > 4:
+                token = token[:-2]
+            elif token.endswith('s') and len(token) > 3:
+                token = token[:-1]
+            tokens.add(token)
+        return tokens
 
     def perform_create(self, serializer):
         serializer.save(buyer=self.request.user)
@@ -498,21 +578,40 @@ class FarmerOfferViewSet(viewsets.ModelViewSet):
         farmer = self.request.user
         
         if requirement and quantity:
-            # Lock the matching product for this farmer to prevent race conditions
-            prod = Product.objects.select_for_update().filter(
-                farmer=farmer, 
-                name__icontains=requirement.crop_name
-            ).first()
-            
-            if not prod:
+            if requirement.status != 'pending':
+                raise ValidationError({'error': 'This bulk requirement is no longer accepting offers.'})
+
+            offered_quantity = requirement.offers.exclude(status='rejected').aggregate(
+                total=Sum('quantity')
+            )['total'] or Decimal('0')
+            remaining_quantity = max(Decimal('0'), requirement.quantity - offered_quantity)
+            if quantity > remaining_quantity:
+                raise ValidationError({
+                    'error': f'This demand needs only {remaining_quantity} {requirement.unit} more.'
+                })
+
+            # Lock all matching products so contributions cannot oversell inventory.
+            products = list(Product.objects.select_for_update().filter(
+                farmer=farmer,
+                quantity__gt=0,
+                name__icontains=requirement.crop_name,
+            ).order_by('id'))
+
+            available_quantity = sum((product.quantity for product in products), Decimal('0'))
+            if not products:
                 raise ValidationError({"error": f"You do not have any inventory matching '{requirement.crop_name}' to contribute."})
-                
-            if prod.quantity < quantity:
-                raise ValidationError({"error": f"Insufficient inventory. You have {prod.quantity} {prod.unit} of {prod.name}, but tried to contribute {quantity}."})
-                
-            # Deduct inventory
-            prod.quantity -= quantity
-            prod.save(update_fields=['quantity'])
+
+            if available_quantity < quantity:
+                raise ValidationError({"error": f"Insufficient inventory. You have {available_quantity} {requirement.unit}, but tried to contribute {quantity}."})
+
+            remaining_to_deduct = quantity
+            for product in products:
+                deduction = min(product.quantity, remaining_to_deduct)
+                product.quantity -= deduction
+                product.save(update_fields=['quantity'])
+                remaining_to_deduct -= deduction
+                if remaining_to_deduct <= 0:
+                    break
             
         serializer.save(farmer=farmer)
 

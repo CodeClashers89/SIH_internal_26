@@ -33,6 +33,14 @@ api.interceptors.response.use(
       localStorage.removeItem('user');
       // redirect to login:
       window.location.href = '/login';
+    } else if (
+      error.response?.status === 403 &&
+      error.config?.url?.includes('/farmer/')
+    ) {
+      // A cached JWT can outlive a role change; force a fresh login for farmer pages.
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
     }
     return Promise.reject(error);
   }

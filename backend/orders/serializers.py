@@ -24,6 +24,7 @@ class SubscriptionItemSerializer(serializers.ModelSerializer):
 class SubscriptionSerializer(serializers.ModelSerializer):
     items = SubscriptionItemSerializer(many=True, read_only=True)
     buyer_username = serializers.ReadOnlyField(source='buyer.username')
+    buyer_role = serializers.ReadOnlyField(source='buyer.role')
     farmer_names = serializers.SerializerMethodField()
 
     def get_farmer_names(self, obj):
@@ -36,7 +37,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subscription
         fields = (
-            'id', 'buyer', 'buyer_username', 'frequency', 'delivery_day',
+            'id', 'buyer', 'buyer_username', 'buyer_role', 'frequency', 'delivery_day',
             'delivery_time_slot', 'duration_months', 'total_deliveries',
             'completed_deliveries', 'start_date', 'next_delivery_date',
             'shipping_address', 'shipping_pincode', 'per_delivery_subtotal',
@@ -86,6 +87,7 @@ class ShipmentSummarySerializer(serializers.Serializer):
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     buyer_username = serializers.ReadOnlyField(source='buyer.username')
+    buyer_role = serializers.ReadOnlyField(source='buyer.role')
     shipment = serializers.SerializerMethodField()
 
     def get_shipment(self, obj):
@@ -99,11 +101,11 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = (
-            'id', 'buyer', 'buyer_username', 'subscription',
+            'id', 'buyer', 'buyer_username', 'buyer_role', 'subscription',
             'product_subtotal', 'shipping_charge', 'total_amount',
             'status', 'shipping_address', 'shipping_pincode',
             'payment_status', 'payment_id', 'razorpay_order_id',
-            'cancellation_locked', 'cancellation_locked_at',
+            'cancellation_locked', 'cancellation_locked_at', 'cancellation_reason',
             'items', 'shipment', 'created_at', 'updated_at'
         )
         read_only_fields = (
@@ -129,8 +131,6 @@ class CreateOrderSerializer(serializers.Serializer):
             quantity = item['quantity']
             if quantity <= 0:
                 raise serializers.ValidationError(f"Quantity for {product.name} must be greater than zero.")
-            if product.quantity < quantity:
-                raise serializers.ValidationError(f"Not enough stock for {product.name}. Available: {product.quantity} {product.unit}.")
         return value
 
 class QuoteRequestSerializer(serializers.ModelSerializer):

@@ -11,7 +11,7 @@ const STATUS_BADGE = {
   REJECTED: { bg: 'bg-rose-100', text: 'text-rose-700', label: '❌ Rejected' },
 };
 
-const SubscriptionWidget = ({ role = 'buyer' }) => {
+const SubscriptionWidget = ({ role = 'buyer', buyerRole }) => {
   const { user } = useAuth();
   const [subscriptions, setSubscriptions] = useState([]);
   const [products, setProducts] = useState([]);
@@ -29,7 +29,41 @@ const SubscriptionWidget = ({ role = 'buyer' }) => {
       const res = await fetch(`${B2B_API}/list?${param}`);
       if (res.ok) {
         const data = await res.json();
-        setSubscriptions(data);
+        if (data.length > 0 || role !== 'farmer') {
+          setSubscriptions(buyerRole ? data.filter((item) => item.buyer_role === buyerRole) : data);
+          return;
+        }
+      }
+
+      // Farmer subscriptions are also persisted in Django. Fall back to that
+      // source when the standalone engine has no JSON record for this farmer.
+      if (role === 'farmer') {
+        const response = await api.get('/orders/subscriptions/');
+        const normalized = response.data.map((subscription) => ({
+          subscription_id: `django-${subscription.id}`,
+          farmer_id: String(user.id),
+          buyer_profile: {
+            buyer_id: String(subscription.buyer),
+            name: subscription.buyer_username || `Buyer #${subscription.buyer}`,
+          },
+          schedule_matrix: {
+            recurring_days: [subscription.delivery_day],
+          },
+          items_breakdown: (subscription.items || []).map((item) => ({
+            commodity_name: item.product_details?.name || 'Produce',
+            quantity: Number(item.quantity),
+            unit: item.product_details?.unit || 'kg',
+            price_per_unit: Number(item.price),
+          })),
+          billing_summary: {
+            weekly_estimate: Number(subscription.per_delivery_total || subscription.per_delivery_subtotal || 0),
+            discount_applied_pct: Number(subscription.discount_percentage || 0),
+          },
+          is_active: subscription.status === 'active',
+          approval_status: subscription.status === 'cancelled' ? 'REJECTED' : 'ACCEPTED',
+          buyer_role: subscription.buyer_role,
+        }));
+        setSubscriptions(buyerRole ? normalized.filter((item) => item.buyer_role === buyerRole) : normalized);
       }
     } catch (err) {
       console.error('Failed to fetch subscriptions', err);
@@ -50,7 +84,7 @@ const SubscriptionWidget = ({ role = 'buyer' }) => {
   useEffect(() => {
     fetchSubscriptions();
     fetchProducts();
-  }, [user]);
+  }, [user, role, buyerRole]);
 
   const handleCreateSubscription = async (e) => {
     e.preventDefault();
@@ -197,7 +231,13 @@ const SubscriptionWidget = ({ role = 'buyer' }) => {
         {subscriptions.length === 0 ? (
           <div className="bg-white rounded-3xl border border-slate-100 p-12 text-center text-slate-400">
             <Calendar className="h-12 w-12 mx-auto mb-3 opacity-20" />
-            <p>{role === 'farmer' ? 'No subscription requests received yet.' : 'No recurring subscriptions found.'}</p>
+            <p>
+              {role === 'farmer' && buyerRole === 'bulk_buyer'
+                ? 'No wholesale subscription requests received yet.'
+                : role === 'farmer'
+                ? 'No retail subscription requests received yet.'
+                : 'No recurring subscriptions found.'}
+            </p>
           </div>
         ) : (
           subscriptions.map(sub => {
