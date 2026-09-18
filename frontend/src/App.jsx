@@ -226,7 +226,7 @@ function MainLayout() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      {!isFarmer && !isConsumer && !isLogistics && (
+      {!isFarmer && !isConsumer && !isLogistics && !isBulkBuyer && (
         <Navbar
           landing={isLandingPage || isAuthPage}
           onCartToggle={() => setCartOpen(!cartOpen)}
@@ -250,7 +250,7 @@ function MainLayout() {
         </main>
       )}
 
-      {!isChatbotPage && !isConsumer && !isFarmer && !isLogistics && !isLandingPage && !isAuthPage && <Footer />}
+      {!isChatbotPage && !isConsumer && !isFarmer && !isLogistics && !isBulkBuyer && !isLandingPage && !isAuthPage && <Footer />}
       <FloatingCartButton onClick={() => setCartOpen(!cartOpen)} />
       <FloatingAssistantButton />
 

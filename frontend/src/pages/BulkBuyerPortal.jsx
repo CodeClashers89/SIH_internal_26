@@ -335,11 +335,45 @@ const BulkBuyerPortal = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="flex-1 w-full min-w-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-8 space-y-8 overflow-y-auto">
       
-
-
-
+      {/* Header and Refresh */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight">
+            {activeTab === 'dashboard' && 'Bulk Buyer Dashboard'}
+            {activeTab === 'quotes' && 'Single Crop Bids & Negotiations'}
+            {activeTab === 'reverse' && 'Reverse Sourcing Demands'}
+            {activeTab === 'contracts' && 'Pre-Harvest Forward Contracts'}
+            {activeTab === 'subscriptions' && 'Recurring Produce Subscriptions'}
+          </h1>
+          <p className="text-sm text-slate-500">
+            {activeTab === 'dashboard' && 'Manage crop bids, submit reverse sourcing tenders, monitor forward contracts, and track subscriptions.'}
+            {activeTab === 'quotes' && 'Submit and negotiate direct wholesale crop pricing with regional farmers & FPOs.'}
+            {activeTab === 'reverse' && 'Publish customized procurement specs for verified regional growers to quote.'}
+            {activeTab === 'contracts' && 'Lock guaranteed yield commitments before harvest with fixed price protections.'}
+            {activeTab === 'subscriptions' && 'Automate recurring deliveries with custom delivery cycles and volume discounts.'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2.5">
+          {activeTab !== 'dashboard' && (
+            <button
+              onClick={() => handleTabChange('dashboard')}
+              className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-100 px-3.5 py-2.5 rounded-xl transition-all border border-slate-200 shadow-2xs cursor-pointer"
+            >
+              ← Back to Overview
+            </button>
+          )}
+          <button
+            onClick={fetchPortalData}
+            disabled={loading}
+            className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 px-4 py-2.5 rounded-xl transition-all shadow-xs border border-emerald-100 cursor-pointer"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Sync Data
+          </button>
+        </div>
+      </div>
 
       {/* Tab: Dashboard Overview */}
       {activeTab === 'dashboard' && (
@@ -362,119 +396,6 @@ const BulkBuyerPortal = () => {
             >
               <PlusCircle className="h-4 w-4" /> Post New Requirement
             </button>
-          </div>
-
-          {/* 4 Feature Overview Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            
-            {/* Card 1: Single Crop Bids */}
-            <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs hover:shadow-md transition-all space-y-4 flex flex-col justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="h-10 w-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-                    <Handshake className="h-5 w-5" />
-                  </div>
-                  <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
-                    {quotes.length} Active
-                  </span>
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-base">Single Crop Bids</h3>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    Submit wholesale bids directly to independent farmers & FPOs with custom quantity & target prices.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => handleTabChange('quotes')}
-                className="w-full text-center py-2.5 bg-slate-50 hover:bg-emerald-50 text-emerald-700 font-extrabold text-xs rounded-xl border border-slate-200/80 transition-all flex items-center justify-center gap-1 cursor-pointer"
-              >
-                <span>Manage Bids</span>
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            {/* Card 2: Reverse Sourcing */}
-            <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs hover:shadow-md transition-all space-y-4 flex flex-col justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="h-10 w-10 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center font-bold">
-                    <Layers className="h-5 w-5" />
-                  </div>
-                  <span className="text-xs font-black text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full">
-                    {requirements.length} Requirements
-                  </span>
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-base">Reverse Sourcing</h3>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    Post your exact crop, grade, and volume specifications so verified regional farmers can offer quotes.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => handleTabChange('reverse')}
-                className="w-full text-center py-2.5 bg-slate-50 hover:bg-teal-50 text-teal-700 font-extrabold text-xs rounded-xl border border-slate-200/80 transition-all flex items-center justify-center gap-1 cursor-pointer"
-              >
-                <span>View Requirements</span>
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            {/* Card 3: Pre-Harvest Contracts */}
-            <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs hover:shadow-md transition-all space-y-4 flex flex-col justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="h-10 w-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
-                    <FileText className="h-5 w-5" />
-                  </div>
-                  <span className="text-xs font-black text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full">
-                    {preHarvestContracts.filter(c => c.status === 'proposed' || c.buyer === user?.id).length} Contracts
-                  </span>
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-base">Pre-Harvest Contracts</h3>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    Book upcoming crop yields before harvest with locked pricing & guaranteed quality standards.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => handleTabChange('contracts')}
-                className="w-full text-center py-2.5 bg-slate-50 hover:bg-purple-50 text-purple-700 font-extrabold text-xs rounded-xl border border-slate-200/80 transition-all flex items-center justify-center gap-1 cursor-pointer"
-              >
-                <span>Explore Contracts</span>
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            {/* Card 4: Recurring Subscriptions */}
-            <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs hover:shadow-md transition-all space-y-4 flex flex-col justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="h-10 w-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-                    <RefreshCw className="h-5 w-5" />
-                  </div>
-                  <span className="text-xs font-black text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full">
-                    {subscriptions.length} Active
-                  </span>
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800 text-base">Recurring Subscriptions</h3>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    Set up automated daily or weekly recurring produce deliveries with volume discounts.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => handleTabChange('subscriptions')}
-                className="w-full text-center py-2.5 bg-slate-50 hover:bg-amber-50 text-amber-700 font-extrabold text-xs rounded-xl border border-slate-200/80 transition-all flex items-center justify-center gap-1 cursor-pointer"
-              >
-                <span>Manage Subscriptions</span>
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
           </div>
 
           {/* Quick Shortcuts Grid */}
@@ -561,26 +482,27 @@ const BulkBuyerPortal = () => {
       {activeTab === 'quotes' && (
         <div className="space-y-6">
           {/* Quote Request Form */}
-          <div className="w-full bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-6">
+          <div className="w-full bg-white border border-slate-100 rounded-3xl p-6 sm:p-7 shadow-xs space-y-6">
             <div>
-              <h3 className="font-bold text-base text-slate-800">Negotiate Specific Listing</h3>
-              <p className="text-[10px] text-slate-500 mt-1">Submit wholesale bids directly to FPOs and independent farmers.</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600">Wholesale Channel</p>
+              <h3 className="font-black text-xl text-slate-800 mt-1">Negotiate Specific Listing</h3>
+              <p className="text-sm text-slate-500 mt-1">Submit wholesale bids directly to FPOs and independent regional farmers.</p>
             </div>
 
             {quoteError && (
-              <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 text-xs text-rose-600 font-semibold">
+              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs text-rose-700 font-semibold">
                 {quoteError}
               </div>
             )}
 
-            <form onSubmit={handleSubmitQuote} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <form onSubmit={handleSubmitQuote} className="space-y-5 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1 uppercase">Select Crop Yield</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Select Crop Yield</label>
                   <select
                     value={selectedProdId}
                     onChange={(e) => setSelectedProdId(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    className="w-full px-3.5 py-3 border border-slate-200 rounded-2xl bg-white text-sm text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs transition-all"
                   >
                     {products.map(p => (
                       <option key={p.id} value={p.id}>
@@ -591,7 +513,7 @@ const BulkBuyerPortal = () => {
                 </div>
 
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1 uppercase">Target Quantity</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Target Quantity</label>
                   <div className="flex gap-2">
                     <input
                       type="number"
@@ -600,18 +522,18 @@ const BulkBuyerPortal = () => {
                       placeholder="e.g. 500"
                       value={quantity}
                       onChange={(e) => setQuantity(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      className="w-full px-3.5 py-3 border border-slate-200 rounded-2xl bg-white text-sm text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs transition-all"
                     />
-                    <span className="bg-slate-100 border border-slate-200 text-slate-600 font-semibold px-4 py-2 rounded-xl flex items-center justify-center uppercase">
+                    <span className="bg-slate-50 border border-slate-200 text-slate-600 font-bold px-4 py-3 rounded-2xl flex items-center justify-center uppercase text-xs shrink-0">
                       {getSelectedProductDetails()?.unit || 'Units'}
                     </span>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1 uppercase">Target Bid Price (per unit)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Target Bid Price (per unit)</label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 font-semibold">₹</div>
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500 font-bold text-sm">₹</div>
                     <input
                       type="number"
                       step="0.01"
@@ -619,20 +541,22 @@ const BulkBuyerPortal = () => {
                       placeholder="e.g. 20.00"
                       value={targetPrice}
                       onChange={(e) => setTargetPrice(e.target.value)}
-                      className="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      className="w-full pl-8 pr-3.5 py-3 border border-slate-200 rounded-2xl bg-white text-sm text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs transition-all"
                     />
                   </div>
                 </div>
               </div>
 
               {selectedProdId && getSelectedProductDetails() && (
-                <div className="bg-emerald-50 rounded-2xl p-3 border border-emerald-100 flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs gap-2">
+                <div className="bg-emerald-50/70 rounded-2xl p-4 border border-emerald-100/80 flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs gap-2">
                   <div>
-                    <span className="font-bold text-[9px] uppercase tracking-wider text-emerald-800">Listing Price Reference</span>
-                    <p className="font-semibold text-slate-700">₹{parseFloat(getSelectedProductDetails().price_per_unit).toFixed(2)} per {getSelectedProductDetails().unit}</p>
+                    <span className="font-extrabold text-[10px] uppercase tracking-wider text-emerald-800 block">Listing Price Reference</span>
+                    <p className="font-bold text-slate-800 text-sm mt-0.5">₹{parseFloat(getSelectedProductDetails().price_per_unit).toFixed(2)} per {getSelectedProductDetails().unit}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-slate-500 font-medium">Farmer: {getSelectedProductDetails().farmer_details?.username} ({getSelectedProductDetails().farmer_details?.district})</p>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-emerald-200 text-emerald-800 font-bold text-xs shadow-2xs">
+                      👨‍🌾 {getSelectedProductDetails().farmer_details?.username || 'Verified Farmer'} ({getSelectedProductDetails().farmer_details?.district || 'Regional'})
+                    </span>
                   </div>
                 </div>
               )}
@@ -640,12 +564,12 @@ const BulkBuyerPortal = () => {
               <button
                 type="submit"
                 disabled={submittingQuote}
-                className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-bold py-3 rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm py-3.5 px-6 rounded-2xl shadow-md shadow-emerald-950/20 hover:shadow-lg hover:shadow-emerald-950/30 transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
               >
                 {submittingQuote ? <Loader2 className="h-5 w-5 animate-spin" /> : (
                   <>
                     <Handshake className="h-5 w-5" />
-                    Initiate Negotiation
+                    <span>Initiate Negotiation</span>
                   </>
                 )}
               </button>
@@ -653,44 +577,45 @@ const BulkBuyerPortal = () => {
           </div>
 
           {/* Negotiation Log Table */}
-          <div className="w-full bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-6">
+          <div className="w-full bg-white border border-slate-100 rounded-3xl p-6 sm:p-7 shadow-xs space-y-6">
             <div>
-              <h3 className="font-bold text-base text-slate-800">Negotiation Log</h3>
-              <p className="text-[10px] text-slate-500 mt-1">Review active, countered, or completed negotiations.</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-600">Negotiation Portfolio</p>
+              <h3 className="font-black text-xl text-slate-800 mt-1">Negotiation Log</h3>
+              <p className="text-sm text-slate-500 mt-1">Review active, countered, or completed negotiations.</p>
             </div>
 
             <div className="overflow-x-auto text-xs">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase">
-                    <th className="py-3 px-2">Crop Listing</th>
-                    <th className="py-3 px-2">Requested Qty</th>
-                    <th className="py-3 px-2">Your Bid</th>
-                    <th className="py-3 px-2">Farmer Counter</th>
-                    <th className="py-3 px-2">Status</th>
-                    <th className="py-3 px-2 text-right">Actions</th>
+                  <tr className="border-b border-slate-100 text-slate-600 text-xs font-bold uppercase tracking-wider">
+                    <th className="py-3.5 px-3">Crop Listing</th>
+                    <th className="py-3.5 px-3">Requested Qty</th>
+                    <th className="py-3.5 px-3">Your Bid</th>
+                    <th className="py-3.5 px-3">Farmer Counter</th>
+                    <th className="py-3.5 px-3">Status</th>
+                    <th className="py-3.5 px-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {quotes.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="py-8 text-center text-slate-400">No active quote negotiations.</td>
+                      <td colSpan="6" className="py-10 text-center text-slate-400 font-medium">No active quote negotiations.</td>
                     </tr>
                   ) : (
                     quotes.map((q) => (
-                      <tr key={q.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-4 px-2 font-semibold text-slate-800">{q.product_details?.name}</td>
-                        <td className="py-4 px-2 font-medium text-slate-600">{q.quantity} {q.product_details?.unit}</td>
-                        <td className="py-4 px-2 font-bold text-slate-900">₹{parseFloat(q.target_price).toFixed(2)}</td>
-                        <td className="py-4 px-2">
+                      <tr key={q.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-4 px-3 font-bold text-slate-800 text-sm">{q.product_details?.name}</td>
+                        <td className="py-4 px-3 font-semibold text-slate-600">{q.quantity} {q.product_details?.unit}</td>
+                        <td className="py-4 px-3 font-bold text-slate-900 text-sm">₹{parseFloat(q.target_price).toFixed(2)}</td>
+                        <td className="py-4 px-3">
                           {q.offered_price ? (
                             <div>
-                              <span className="font-bold text-slate-900 text-xs">₹{parseFloat(q.offered_price).toFixed(2)}</span>
-                              <div className="mt-1 space-y-0.5">
-                                <span className="inline-block bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                              <span className="font-bold text-emerald-800 text-sm">₹{parseFloat(q.offered_price).toFixed(2)}</span>
+                              <div className="mt-1 space-y-1">
+                                <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
                                   🌾 1 Farmer Pledged 100 {q.product_details?.unit || 'kg'}
                                 </span>
-                                <span className="block text-[10px] text-amber-700 font-medium">
+                                <span className="block text-[11px] text-amber-700 font-semibold">
                                   ⏳ Waiting for 2 more farmers ({Math.max(0, parseFloat(q.quantity) - 100).toFixed(0)} {q.product_details?.unit || 'kg'} remaining)
                                 </span>
                               </div>
@@ -698,42 +623,44 @@ const BulkBuyerPortal = () => {
                           ) : (
                             <div>
                               <span className="text-slate-400 font-bold">—</span>
-                              <span className="block text-[10px] text-slate-400 italic mt-0.5">Awaiting 3 farmer pool</span>
+                              <span className="block text-[11px] text-slate-400 italic mt-0.5">Awaiting 3 farmer pool</span>
                             </div>
                           )}
                         </td>
-                        <td className="py-4 px-2">
-                          <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
-                            q.status === 'accepted' ? 'bg-emerald-100 text-emerald-800' :
-                            q.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                            q.status === 'offered' ? 'bg-amber-100 text-amber-800 animate-pulse' :
-                            'bg-slate-100 text-slate-700'
+                        <td className="py-4 px-3">
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold border uppercase inline-flex items-center gap-1.5 ${
+                            q.status === 'accepted' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                            q.status === 'rejected' ? 'bg-rose-50 border-rose-200 text-rose-800' :
+                            q.status === 'offered' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+                            'bg-blue-50 border-blue-200 text-blue-800'
                           }`}>
                             {q.status === 'offered' ? '1 Offer (Waiting for 2)' : q.status.replace('_', ' ')}
                           </span>
                         </td>
-                        <td className="py-4 px-2 text-right">
+                        <td className="py-4 px-3 text-right">
                           {q.status === 'offered' && (
-                            <div className="flex gap-1 justify-end">
+                            <div className="flex gap-2 justify-end">
                               <button
                                 onClick={() => handleAcceptCounter(q.id)}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 rounded text-[10px] transition-colors"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-3.5 py-1.5 rounded-xl text-xs shadow-2xs hover:shadow-xs transition-all cursor-pointer"
                               >
                                 Accept
                               </button>
                               <button
                                 onClick={() => handleRejectOffer(q.id)}
-                                className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold px-2.5 py-1 rounded text-[10px] border border-rose-100 transition-colors"
+                                className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-3.5 py-1.5 rounded-xl text-xs border border-rose-200 transition-all cursor-pointer"
                               >
                                 Reject
                               </button>
                             </div>
                           )}
                           {q.status === 'accepted' && (
-                            <span className="text-[10px] text-emerald-600 font-semibold">Contract Locked</span>
+                            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 inline-flex items-center gap-1">
+                              <CheckCircle className="h-3.5 w-3.5 text-emerald-600" /> Contract Locked
+                            </span>
                           )}
                           {q.status === 'pending' && (
-                            <span className="text-[10px] text-slate-400 italic">Awaiting Farmer</span>
+                            <span className="text-xs text-slate-400 font-medium italic">Awaiting Farmer</span>
                           )}
                         </td>
                       </tr>
@@ -751,58 +678,59 @@ const BulkBuyerPortal = () => {
         <div className="space-y-6">
           
           {/* Post Bulk Requirement Form */}
-          <div className="w-full bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-6">
+          <div className="w-full bg-white border border-slate-100 rounded-3xl p-6 sm:p-7 shadow-xs space-y-6">
             <div>
-              <h3 className="font-bold text-base text-slate-800">Post Bulk Sourcing Order</h3>
-              <p className="text-[10px] text-slate-500 mt-1">Submit large buying requirements. Multiple farmers can contribute to fulfill the pool.</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-teal-600">Reverse Sourcing Channel</p>
+              <h3 className="font-black text-xl text-slate-800 mt-1">Post Bulk Sourcing Order</h3>
+              <p className="text-sm text-slate-500 mt-1">Submit large buying requirements. Multiple verified regional farmers can contribute to fulfill the pool.</p>
             </div>
 
             {reqError && (
-              <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 text-xs text-rose-600 font-semibold">
+              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs text-rose-700 font-semibold">
                 {reqError}
               </div>
             )}
 
-            <form onSubmit={handleSubmitRequirement} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <form onSubmit={handleSubmitRequirement} className="space-y-5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1 uppercase">Crop Name</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Crop Name</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. Tomato"
                     value={reqCrop}
                     onChange={(e) => setReqCrop(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                    className="w-full px-3.5 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white text-sm font-medium text-slate-800 shadow-2xs transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1 uppercase">Variety / Grade</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Variety / Grade</label>
                   <input
                     type="text"
                     placeholder="e.g. Hybrid / A Grade"
                     value={reqVariety}
                     onChange={(e) => setReqVariety(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                    className="w-full px-3.5 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white text-sm font-medium text-slate-800 shadow-2xs transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1 uppercase">Req. Quantity</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Req. Quantity</label>
                   <input
                     type="number"
                     required
                     placeholder="e.g. 1000"
                     value={reqQty}
                     onChange={(e) => setReqQty(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                    className="w-full px-3.5 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white text-sm font-medium text-slate-800 shadow-2xs transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1 uppercase">Unit</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Unit</label>
                   <select
                     value={reqUnit}
                     onChange={(e) => setReqUnit(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                    className="w-full px-3.5 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white text-sm font-medium text-slate-800 shadow-2xs transition-all"
                   >
                     <option value="kg">Kilogram (kg)</option>
                     <option value="quintal">Quintal (100 kg)</option>
@@ -811,48 +739,48 @@ const BulkBuyerPortal = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1 uppercase">Min Price (₹/unit)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Min Price (₹/unit)</label>
                   <input
                     type="number"
                     required
                     placeholder="e.g. 18"
                     value={reqPriceMin}
                     onChange={(e) => setReqPriceMin(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                    className="w-full px-3.5 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white text-sm font-medium text-slate-800 shadow-2xs transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1 uppercase">Max Price (₹/unit)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Max Price (₹/unit)</label>
                   <input
                     type="number"
                     required
                     placeholder="e.g. 25"
                     value={reqPriceMax}
                     onChange={(e) => setReqPriceMax(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                    className="w-full px-3.5 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white text-sm font-medium text-slate-800 shadow-2xs transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1 uppercase">Required Date</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Required Date</label>
                   <input
                     type="date"
                     required
                     value={reqDate}
                     onChange={(e) => setReqDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                    className="w-full px-3.5 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white text-sm font-medium text-slate-800 shadow-2xs transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1 uppercase">Delivery Location</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Delivery Location</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. APMC Mandi, Pune"
                     value={reqLocation}
                     onChange={(e) => setReqLocation(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                    className="w-full px-3.5 py-3 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white text-sm font-medium text-slate-800 shadow-2xs transition-all"
                   />
                 </div>
               </div>
@@ -860,12 +788,12 @@ const BulkBuyerPortal = () => {
               <button
                 type="submit"
                 disabled={submittingReq}
-                className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-bold py-3 rounded-xl shadow transition-all flex items-center justify-center gap-1.5"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm py-3.5 px-6 rounded-2xl shadow-md shadow-emerald-950/20 hover:shadow-lg hover:shadow-emerald-950/30 transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
               >
                 {submittingReq ? <Loader2 className="h-5 w-5 animate-spin" /> : (
                   <>
                     <PlusCircle className="h-5 w-5" />
-                    Publish Requirement
+                    <span>Publish Requirement</span>
                   </>
                 )}
               </button>
@@ -1061,9 +989,9 @@ const BulkBuyerPortal = () => {
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-center pt-2">
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                      contract.status === 'accepted' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                  <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold border uppercase ${
+                      contract.status === 'accepted' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-blue-50 border-blue-200 text-blue-800'
                     }`}>
                       {contract.status === 'accepted' ? 'Reserved' : 'Available'}
                     </span>
@@ -1071,14 +999,14 @@ const BulkBuyerPortal = () => {
                     {contract.status === 'proposed' ? (
                       <button
                         onClick={() => handleReserveContract(contract.id)}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4 py-2 rounded-xl text-xs shadow-2xs hover:shadow-xs transition-all cursor-pointer"
                       >
                         Reserve Contract
                       </button>
                     ) : (
                       contract.buyer === user?.id && (
-                        <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
-                          <CheckCircle className="h-4 w-4" />
+                        <span className="text-xs text-emerald-700 font-bold flex items-center gap-1.5 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-100">
+                          <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
                           Reserved by You
                         </span>
                       )
@@ -1094,36 +1022,37 @@ const BulkBuyerPortal = () => {
       {/* Tab: Recurring Subscriptions */}
       {activeTab === 'subscriptions' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-1 bg-white border border-slate-100 rounded-3xl p-6 shadow-xs h-fit space-y-6">
+          <div className="lg:col-span-1 bg-white border border-slate-100 rounded-3xl p-6 sm:p-7 shadow-xs h-fit space-y-6">
             <div>
-              <h3 className="font-bold text-base text-slate-800">New Subscription</h3>
-              <p className="text-[10px] text-slate-500 mt-1">Setup automated recurring orders for your restaurant/business.</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-600">Automated Procurement</p>
+              <h3 className="font-black text-xl text-slate-800 mt-1">New Subscription</h3>
+              <p className="text-sm text-slate-500 mt-1">Setup automated recurring orders for your business.</p>
             </div>
             
             {subError && (
-              <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 text-xs text-rose-600 font-semibold">
+              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs text-rose-700 font-semibold">
                 {subError}
               </div>
             )}
 
-            <form onSubmit={handleCreateSubscription} className="space-y-4 text-sm">
+            <form onSubmit={handleCreateSubscription} className="space-y-4 text-xs">
               <div>
-                <label className="block text-slate-600 font-bold mb-1 text-xs uppercase">Produce Name</label>
-                <input required type="text" value={subCrop} onChange={e => setSubCrop(e.target.value)} className="w-full px-3 py-2 border rounded-xl" placeholder="e.g. Tomatoes" />
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide">Produce Name</label>
+                <input required type="text" value={subCrop} onChange={e => setSubCrop(e.target.value)} className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs transition-all" placeholder="e.g. Tomatoes" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1 text-xs uppercase">Quantity (kg)</label>
-                  <input required type="number" min="1" value={subQty} onChange={e => setSubQty(e.target.value)} className="w-full px-3 py-2 border rounded-xl" />
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide">Quantity (kg)</label>
+                  <input required type="number" min="1" value={subQty} onChange={e => setSubQty(e.target.value)} className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs transition-all" />
                 </div>
                 <div>
-                  <label className="block text-slate-600 font-bold mb-1 text-xs uppercase">Est. Price/kg</label>
-                  <input required type="number" min="1" value={subPrice} onChange={e => setSubPrice(e.target.value)} className="w-full px-3 py-2 border rounded-xl" />
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide">Est. Price/kg</label>
+                  <input required type="number" min="1" value={subPrice} onChange={e => setSubPrice(e.target.value)} className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs transition-all" />
                 </div>
               </div>
               <div>
-                <label className="block text-slate-600 font-bold mb-1 text-xs uppercase">Schedule</label>
-                <select value={subDays} onChange={e => setSubDays(e.target.value)} className="w-full px-3 py-2 border rounded-xl">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide">Schedule</label>
+                <select value={subDays} onChange={e => setSubDays(e.target.value)} className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs transition-all">
                   <option value="Daily">Daily</option>
                   <option value="Monday">Every Monday</option>
                   <option value="Tuesday">Every Tuesday</option>
@@ -1134,7 +1063,7 @@ const BulkBuyerPortal = () => {
                   <option value="Sunday">Every Sunday</option>
                 </select>
               </div>
-              <button disabled={submittingSub} type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-all shadow-md">
+              <button disabled={submittingSub} type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm py-3.5 px-6 rounded-2xl shadow-md shadow-emerald-950/20 hover:shadow-lg transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer">
                 {submittingSub ? 'Setting up...' : 'Create Subscription'}
               </button>
             </form>
