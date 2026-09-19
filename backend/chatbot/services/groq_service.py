@@ -66,34 +66,49 @@ class GroqService:
                 'error_type': 'ConfigurationError',
             }
 
-        try:
-            kwargs = {
-                'model': self.model,
-                'messages': messages,
-                'temperature': temperature,
-                'max_tokens': max_tokens,
-            }
+        models_to_try = [self.model]
+        for fallback in ['openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-120b']:
+            if fallback not in models_to_try:
+                models_to_try.append(fallback)
 
-            if tools:
-                kwargs['tools'] = tools
-                if tool_choice:
-                    kwargs['tool_choice'] = tool_choice
+        last_error = None
+        for current_model in models_to_try:
+            try:
+                kwargs = {
+                    'model': current_model,
+                    'messages': messages,
+                    'temperature': temperature,
+                    'max_tokens': max_tokens,
+                }
 
-            response = self.client.chat.completions.create(**kwargs)
-            return {
-                'status': 'success',
-                'response': response,
-                'message': response.choices[0].message,
-                'finish_reason': response.choices[0].finish_reason,
-            }
+                if tools:
+                    kwargs['tools'] = tools
+                    if tool_choice:
+                        kwargs['tool_choice'] = tool_choice
 
-        except Exception as e:
-            logger.error(f"Error calling Groq API: {str(e)}")
-            return {
-                'status': 'error',
-                'error': str(e),
-                'error_type': type(e).__name__,
-            }
+                response = self.client.chat.completions.create(**kwargs)
+                return {
+                    'status': 'success',
+                    'response': response,
+                    'message': response.choices[0].message,
+                    'finish_reason': response.choices[0].finish_reason,
+                }
+
+            except Exception as e:
+                last_error = e
+                err_str = str(e).lower()
+                if '429' in err_str or 'rate_limit' in err_str:
+                    logger.warning(f"Groq model {current_model} hit rate limit, trying fallback model...")
+                    continue
+                else:
+                    logger.error(f"Error calling Groq API with model {current_model}: {str(e)}")
+                    break
+
+        return {
+            'status': 'error',
+            'error': str(last_error),
+            'error_type': type(last_error).__name__ if last_error else 'Unknown',
+        }
 
     def process_tool_call(
         self,

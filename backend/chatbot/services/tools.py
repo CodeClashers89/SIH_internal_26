@@ -105,11 +105,14 @@ class ToolExecutor:
         try:
             profile = FarmerProfile.objects.get(user=self.farmer_user)
             
-            # Get active listings
-            active_listings = Product.objects.filter(
-                farmer=self.farmer_user,
-                expiry_date__gte=timezone.now().date()
-            ).count()
+            # Get active listings (matching Crop Inventory active listings criteria)
+            active_listings = sum(
+                1 for p in Product.objects.filter(
+                    farmer=self.farmer_user,
+                    expiry_date__gte=timezone.now().date()
+                )
+                if p.stored_in_cold_storage or p.freshness_percentage != 0
+            )
 
             # Get pending orders (orders where farmer has products)
             pending_orders = Order.objects.filter(
@@ -144,10 +147,16 @@ class ToolExecutor:
         from products.models import Product
         from django.utils import timezone
 
-        listings = Product.objects.filter(
+        all_listings = Product.objects.filter(
             farmer=self.farmer_user,
             expiry_date__gte=timezone.now().date()
-        ).order_by('-created_at')[:20]  # Limit to 20 recent listings
+        ).order_by('-created_at')
+
+        # Only include active listings (match Crop Inventory: exclude items where freshness reached 0% unless in cold storage)
+        listings = [
+            p for p in all_listings
+            if p.stored_in_cold_storage or p.freshness_percentage != 0
+        ][:20]  # Limit to 20 recent active listings
 
         return [
             {
@@ -238,7 +247,10 @@ class ToolExecutor:
             ).first()
 
         if not product:
-            active = Product.objects.filter(farmer=self.farmer_user)
+            active = [
+                p for p in Product.objects.filter(farmer=self.farmer_user, expiry_date__gte=timezone.now().date())
+                if p.stored_in_cold_storage or p.freshness_percentage != 0
+            ]
             active_names = [f"#{p.id} ({p.name})" for p in active]
             return {
                 'status': 'error',
@@ -289,7 +301,10 @@ class ToolExecutor:
             ).first()
 
         if not product:
-            active = Product.objects.filter(farmer=self.farmer_user)
+            active = [
+                p for p in Product.objects.filter(farmer=self.farmer_user, expiry_date__gte=timezone.now().date())
+                if p.stored_in_cold_storage or p.freshness_percentage != 0
+            ]
             active_names = [f"#{p.id} ({p.name})" for p in active]
             return {
                 'status': 'error',
@@ -310,96 +325,391 @@ class ToolExecutor:
     # ========== ORDER TOOLS ==========
 
     def tool_get_farmer_orders(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Get all orders belonging to the farmer with real-time status and driver info."""
+        """Get all orders belonging to the farmer with real-time status, crops ordered, and driver info."""
         from orders.models import Order
 
         status_filter = args.get('status')
         queryset = Order.objects.filter(
             items__product__farmer=self.farmer_user
-        ).distinct().select_related('buyer', 'shipment', 'shipment__partner').order_by('-created_at')
+        ).distinct().select_related(
+            'buyer', 'shipment', 'shipment__partner'
+        ).prefetch_related('items__product').order_by('-created_at')
 
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 
-        orders = queryset[:20]
+        orders = queryset[:25]
 
         results = []
         for order in orders:
             shipment = getattr(order, 'shipment', None)
+            order_items = []
+            crops_list = []
+            my_earnings = 0.0
+            for it in order.items.all():
+                crop_name = it.product.name if it.product else 'Unknown Crop'
+                unit = it.product.unit if it.product else 'kg'
+                qty = float(it.quantity)
+                price = float(it.price)
+                is_mine = (it.product and it.product.farmer_id == self.farmer_user.id)
+                if is_mine:
+                    my_earnings += qty * price
+                order_items.append({
+                    'crop_name': crop_name,
+                    'quantity': qty,
+                    'unit': unit,
+                    'price_per_unit': price,
+                    'subtotal': qty * price,
+                    'is_my_crop': is_mine,
+                })
+                crops_list.append(f"{qty} {unit} {crop_name}")
+
+            buyer_full_name = f"{order.buyer.first_name} {order.buyer.last_name}".strip() or order.buyer.username
+
             results.append({
                 'id': order.id,
                 'status': order.status,
+                'crops_ordered': crops_list,
+                'crops_summary': ", ".join(crops_list),
+                'items': order_items,
+                'farmer_earnings': my_earnings,
+                'product_subtotal': float(order.product_subtotal),
+                'shipping_charge': float(order.shipping_charge),
                 'total_amount': float(order.total_amount),
-                'created_at': order.created_at.isoformat(),
+                'payment_status': order.payment_status,
+                'created_at': order.created_at.strftime('%Y-%m-%d %H:%M'),
                 'buyer': order.buyer.username,
-                'shipment_status': shipment.status if shipment else None,
+                'buyer_name': buyer_full_name,
+                'buyer_phone': getattr(order.buyer, 'phone', None),
+                'shipping_address': order.shipping_address,
+                'shipping_pincode': order.shipping_pincode,
+                'shipment_status': shipment.status if shipment else 'no_shipment',
                 'driver_name': shipment.partner.name if (shipment and shipment.partner) else None,
+                'driver_phone': shipment.partner.phone if (shipment and shipment.partner) else None,
+                'allowed_actions': (
+                    ['confirm', 'cancel'] if order.status == 'placed' else
+                    ['pack', 'cancel'] if order.status == 'confirmed' else []
+                ),
             })
         return results
 
     def tool_get_pending_orders(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Get active/pending/in-transit orders belonging to this farmer."""
+        """Get active/pending/in-transit orders belonging to this farmer with full crop details."""
         from orders.models import Order
 
         orders = Order.objects.filter(
             items__product__farmer=self.farmer_user,
             status__in=['placed', 'confirmed', 'packed', 'in_transit']
-        ).distinct().select_related('buyer', 'shipment', 'shipment__partner').order_by('-created_at')[:15]
+        ).distinct().select_related(
+            'buyer', 'shipment', 'shipment__partner'
+        ).prefetch_related('items__product').order_by('-created_at')[:20]
 
         results = []
         for order in orders:
             shipment = getattr(order, 'shipment', None)
+            order_items = []
+            crops_list = []
+            my_earnings = 0.0
+            for it in order.items.all():
+                crop_name = it.product.name if it.product else 'Unknown Crop'
+                unit = it.product.unit if it.product else 'kg'
+                qty = float(it.quantity)
+                price = float(it.price)
+                is_mine = (it.product and it.product.farmer_id == self.farmer_user.id)
+                if is_mine:
+                    my_earnings += qty * price
+                order_items.append({
+                    'crop_name': crop_name,
+                    'quantity': qty,
+                    'unit': unit,
+                    'price_per_unit': price,
+                    'subtotal': qty * price,
+                    'is_my_crop': is_mine,
+                })
+                crops_list.append(f"{qty} {unit} {crop_name}")
+
+            buyer_full_name = f"{order.buyer.first_name} {order.buyer.last_name}".strip() or order.buyer.username
+
             results.append({
                 'id': order.id,
                 'status': order.status,
+                'crops_ordered': crops_list,
+                'crops_summary': ", ".join(crops_list),
+                'items': order_items,
+                'farmer_earnings': my_earnings,
+                'product_subtotal': float(order.product_subtotal),
+                'shipping_charge': float(order.shipping_charge),
                 'total_amount': float(order.total_amount),
-                'created_at': order.created_at.isoformat(),
+                'payment_status': order.payment_status,
+                'created_at': order.created_at.strftime('%Y-%m-%d %H:%M'),
                 'buyer': order.buyer.username,
-                'shipment_status': shipment.status if shipment else None,
+                'buyer_name': buyer_full_name,
+                'buyer_phone': getattr(order.buyer, 'phone', None),
+                'shipping_address': order.shipping_address,
+                'shipping_pincode': order.shipping_pincode,
+                'shipment_status': shipment.status if shipment else 'no_shipment',
                 'driver_name': shipment.partner.name if (shipment and shipment.partner) else None,
+                'driver_phone': shipment.partner.phone if (shipment and shipment.partner) else None,
+                'allowed_actions': (
+                    ['confirm', 'cancel'] if order.status == 'placed' else
+                    ['pack', 'cancel'] if order.status == 'confirmed' else []
+                ),
             })
         return results
 
     def tool_get_order_details(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Get detailed real-time information about a specific order."""
+        """Get complete real-time information about a specific retail order including all ordered crops."""
         from orders.models import Order
+        from logistics.models import TransportOffer
 
-        if 'order_id' not in args:
+        raw_id = args.get('order_id')
+        if raw_id is None:
             return {'error': 'order_id is required'}
 
         try:
-            order = Order.objects.select_related('buyer', 'shipment', 'shipment__partner').get(
-                id=args['order_id'],
+            order_id = int(raw_id)
+        except (ValueError, TypeError):
+            return {'error': f'Invalid order_id: {raw_id}'}
+
+        try:
+            # Query order safely with distinct to avoid MultipleObjectsReturned join issue
+            order = Order.objects.filter(
+                id=order_id,
                 items__product__farmer=self.farmer_user
-            )
+            ).distinct().select_related(
+                'buyer', 'shipment', 'shipment__partner'
+            ).prefetch_related('items__product').first()
+
+            if not order:
+                if Order.objects.filter(id=order_id).exists():
+                    return {'error': f'Order #{order_id} does not contain any of your crops'}
+                return {'error': f'Order #{order_id} not found'}
+
             shipment = getattr(order, 'shipment', None)
+            buyer_full_name = f"{order.buyer.first_name} {order.buyer.last_name}".strip() or order.buyer.username
+
+            items_list = []
+            crops_summary = []
+            farmer_earnings = 0.0
+            for item in order.items.all():
+                is_my_crop = (item.product and item.product.farmer_id == self.farmer_user.id)
+                crop_name = item.product.name if item.product else 'Unknown Crop'
+                unit = item.product.unit if item.product else 'kg'
+                qty = float(item.quantity)
+                price = float(item.price)
+                subtotal = qty * price
+                if is_my_crop:
+                    farmer_earnings += subtotal
+                item_data = {
+                    'item_id': item.id,
+                    'product_id': item.product_id,
+                    'crop_name': crop_name,
+                    'category': item.product.category if item.product else 'produce',
+                    'quantity': qty,
+                    'unit': unit,
+                    'price_per_unit': price,
+                    'subtotal': subtotal,
+                    'is_my_crop': is_my_crop,
+                }
+                items_list.append(item_data)
+                crops_summary.append(f"{qty} {unit} {crop_name} (@ Rs.{price}/{unit} = Rs.{subtotal})")
 
             res = {
                 'id': order.id,
                 'status': order.status,
-                'total_amount': float(order.total_amount),
+                'crops_ordered': crops_summary,
+                'items': items_list,
+                'farmer_earnings_from_order': farmer_earnings,
                 'product_subtotal': float(order.product_subtotal),
                 'shipping_charge': float(order.shipping_charge),
+                'total_amount': float(order.total_amount),
+                'payment_status': order.payment_status,
+                'payment_id': order.payment_id,
+                'created_at': order.created_at.isoformat(),
+                'placed_date': order.created_at.strftime('%d %B %Y, %I:%M %p'),
+                'updated_at': order.updated_at.isoformat(),
+                'buyer': {
+                    'username': order.buyer.username,
+                    'name': buyer_full_name,
+                    'phone': getattr(order.buyer, 'phone', None),
+                    'email': order.buyer.email,
+                },
                 'shipping_address': order.shipping_address,
                 'shipping_pincode': order.shipping_pincode,
-                'payment_status': order.payment_status,
-                'created_at': order.created_at.isoformat(),
-                'updated_at': order.updated_at.isoformat(),
-                'buyer': order.buyer.username,
+                'cancellation_locked': order.cancellation_locked,
+                'cancellation_reason': order.cancellation_reason,
+                'allowed_actions': (
+                    ['confirm', 'cancel'] if order.status == 'placed' else
+                    ['pack', 'cancel'] if order.status == 'confirmed' else []
+                ),
             }
 
             if shipment:
-                res['shipment_id'] = shipment.id
+                res['shipment'] = {
+                    'id': shipment.id,
+                    'status': shipment.status,
+                    'pickup_address': shipment.pickup_address,
+                    'delivery_address': shipment.delivery_address,
+                    'distance_km': float(shipment.distance_km),
+                    'driver_name': shipment.partner.name if shipment.partner else None,
+                    'driver_phone': shipment.partner.phone if shipment.partner else None,
+                    'driver_district': shipment.partner.district if shipment.partner else None,
+                    'delivery_otp': shipment.delivery_otp,
+                    'assigned_at': shipment.assigned_at.isoformat() if shipment.assigned_at else None,
+                    'shipped_at': shipment.shipped_at.isoformat() if shipment.shipped_at else None,
+                    'delivered_at': shipment.delivered_at.isoformat() if shipment.delivered_at else None,
+                }
                 res['shipment_status'] = shipment.status
-                res['pickup_address'] = shipment.pickup_address
-                res['delivery_address'] = shipment.delivery_address
-                res['distance_km'] = float(shipment.distance_km)
                 res['driver_name'] = shipment.partner.name if shipment.partner else None
+                res['driver_phone'] = shipment.partner.phone if shipment.partner else None
                 res['delivery_otp'] = shipment.delivery_otp
+            else:
+                res['shipment'] = None
+                res['shipment_status'] = 'no_shipment'
+
+            # Check if there is an offer pending acceptance by a driver
+            pending_offer = TransportOffer.objects.filter(shipment__order=order, status='pending').select_related('partner').first()
+            if pending_offer and pending_offer.partner:
+                res['pending_transport_offer'] = {
+                    'driver_name': pending_offer.partner.name,
+                    'driver_phone': pending_offer.partner.phone,
+                    'message': 'Trip broadcast offered to driver, waiting for acceptance',
+                }
 
             return res
-        except Order.DoesNotExist:
-            return {'error': f'Order #{args["order_id"]} not found or does not belong to you'}
+        except Exception as e:
+            logger.error(f"Error fetching order {args.get('order_id')}: {str(e)}")
+            return {'error': f'Failed to fetch order details: {str(e)}'}
+
+    def tool_update_order_status(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Update the status of an order (confirm, pack, or cancel).
+        Args:
+            order_id (int): ID of the order to update
+            status (str): Target status ('confirmed', 'packed', or 'cancelled')
+            reason (str, optional): Cancellation reason if cancelling
+        """
+        from orders.models import Order
+        from products.models import Product
+        from django.db import transaction
+
+        order_id = args.get('order_id')
+        new_status = (args.get('status') or '').strip().lower()
+        reason = args.get('reason') or 'Cancelled by farmer via Assistant'
+
+        if not order_id or not new_status:
+            return {'error': 'order_id and status are required'}
+
+        try:
+            order_id = int(order_id)
+        except (ValueError, TypeError):
+            return {'error': f'Invalid order_id: {order_id}'}
+
+        valid_statuses = ['confirmed', 'packed', 'cancelled']
+        if new_status not in valid_statuses:
+            return {'error': f"Invalid status '{new_status}'. Allowed values for farmers: {', '.join(valid_statuses)}"}
+
+        try:
+            with transaction.atomic():
+                order = Order.objects.filter(
+                    id=order_id,
+                    items__product__farmer=self.farmer_user
+                ).distinct().select_for_update().first()
+
+                if not order:
+                    return {'error': f'Order #{order_id} not found or does not belong to you'}
+
+                farmer_allowed = {
+                    'placed': ['confirmed', 'cancelled'],
+                    'confirmed': ['packed', 'cancelled'],
+                }
+                allowed_next = farmer_allowed.get(order.status, [])
+                if new_status not in allowed_next:
+                    return {
+                        'error': f'Cannot move Order #{order_id} from "{order.status}" to "{new_status}". Allowed transitions from "{order.status}": {allowed_next if allowed_next else "None (handled by logistics partner)"}'
+                    }
+
+                if new_status == 'confirmed':
+                    order_items = list(order.items.select_related('product').all())
+                    locked_products = {}
+                    for item in order_items:
+                        product = Product.objects.select_for_update().get(pk=item.product_id)
+                        if product.farmer_id != self.farmer_user.id:
+                            return {'error': 'You can only confirm your own products.'}
+                        locked_products[product.id] = product
+
+                    insufficient = next(
+                        (item for item in order_items if locked_products[item.product_id].quantity < item.quantity),
+                        None,
+                    )
+                    if insufficient:
+                        order.status = 'cancelled'
+                        order.cancellation_reason = (
+                            f'Order cancelled because {insufficient.product.name} inventory ran out before confirmation.'
+                        )
+                        order.save(update_fields=['status', 'cancellation_reason', 'updated_at'])
+                        return {
+                            'error': order.cancellation_reason,
+                            'order_id': order.id,
+                            'status': 'cancelled'
+                        }
+
+                    for item in order_items:
+                        product = locked_products[item.product_id]
+                        product.quantity -= item.quantity
+                        product.save(update_fields=['quantity'])
+
+                    # Handle competing orders
+                    competing_orders = Order.objects.filter(
+                        status='placed',
+                        items__product_id__in=locked_products.keys(),
+                    ).exclude(pk=order.pk).distinct()
+                    for competing in competing_orders.prefetch_related('items__product'):
+                        for item in competing.items.all():
+                            product = locked_products.get(item.product_id)
+                            if product and product.quantity < item.quantity:
+                                competing.status = 'cancelled'
+                                competing.cancellation_reason = f'Cancelled because stock for {product.name} was confirmed for Order #{order.id}'
+                                competing.save(update_fields=['status', 'cancellation_reason', 'updated_at'])
+
+                    order.status = 'confirmed'
+                    order.save(update_fields=['status', 'updated_at'])
+                    return {
+                        'message': f'Order #{order.id} has been confirmed successfully! Inventory has been updated.',
+                        'order_id': order.id,
+                        'new_status': 'confirmed'
+                    }
+
+                elif new_status == 'packed':
+                    order.status = 'packed'
+                    order.save(update_fields=['status', 'updated_at'])
+                    return {
+                        'message': f'Order #{order.id} is now marked as packed. Logistics pickup will be dispatched.',
+                        'order_id': order.id,
+                        'new_status': 'packed'
+                    }
+
+                elif new_status == 'cancelled':
+                    # If previously confirmed, restore stock
+                    if order.status == 'confirmed':
+                        for item in order.items.select_related('product').all():
+                            if item.product and item.product.farmer_id == self.farmer_user.id:
+                                item.product.quantity += item.quantity
+                                item.product.save(update_fields=['quantity'])
+
+                    order.status = 'cancelled'
+                    order.cancellation_reason = reason
+                    order.save(update_fields=['status', 'cancellation_reason', 'updated_at'])
+                    return {
+                        'message': f'Order #{order.id} has been cancelled.',
+                        'order_id': order.id,
+                        'new_status': 'cancelled',
+                        'reason': reason
+                    }
+
+        except Exception as e:
+            logger.error(f"Error updating order status: {str(e)}")
+            return {'error': f'Failed to update order status: {str(e)}'}
 
     # ========== MARKET PRICE TOOLS ==========
 
@@ -889,11 +1199,11 @@ TOOL_DEFINITIONS = [
         'type': 'function',
         'function': {
             'name': 'get_farmer_orders',
-            'description': 'Get all orders belonging to the authenticated farmer (including placed, confirmed, packed, in_transit, delivered) with live real-time status and driver info.',
+            'description': 'Get all retail orders belonging to the authenticated farmer with full details: ordered crops, quantities, subtotal, earnings, buyer info, live status, and logistics driver info.',
             'parameters': {
                 'type': 'object',
                 'properties': {
-                    'status': {'type': ['string', 'null'], 'description': 'Optional status filter (placed, confirmed, packed, in_transit, delivered)'},
+                    'status': {'type': ['string', 'null'], 'description': 'Optional status filter: placed, confirmed, packed, in_transit, delivered, cancelled'},
                 },
                 'required': [],
             }
@@ -903,7 +1213,7 @@ TOOL_DEFINITIONS = [
         'type': 'function',
         'function': {
             'name': 'get_pending_orders',
-            'description': 'Get list of active/pending/in-transit orders that need farmer\'s attention',
+            'description': 'Get active/pending/in-transit retail orders that need farmer action (to confirm or pack), including crops ordered, quantities, buyer info, and current status.',
             'parameters': {
                 'type': 'object',
                 'properties': {},
@@ -915,13 +1225,29 @@ TOOL_DEFINITIONS = [
         'type': 'function',
         'function': {
             'name': 'get_order_details',
-            'description': 'Get detailed information about a specific order',
+            'description': 'Get complete detailed real-time information about a specific retail order by its order ID: all crops ordered, quantities, prices, subtotals, farmer earnings, buyer contact, delivery address, live shipment tracking, driver details, and allowed actions.',
             'parameters': {
                 'type': 'object',
                 'properties': {
-                    'order_id': {'type': 'integer', 'description': 'Order ID'},
+                    'order_id': {'type': 'integer', 'description': 'The numeric order ID (e.g., 15)'},
                 },
                 'required': ['order_id'],
+            }
+        }
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'update_order_status',
+            'description': 'Update the status of an order: confirm a placed order, mark a confirmed order as packed, or cancel an order. Farmers can only execute allowed transitions: placed -> confirmed or cancelled; confirmed -> packed or cancelled.',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'order_id': {'type': 'integer', 'description': 'The ID of the order to update'},
+                    'status': {'type': 'string', 'enum': ['confirmed', 'packed', 'cancelled'], 'description': 'The new status to set'},
+                    'reason': {'type': ['string', 'null'], 'description': 'Optional reason if cancelling'},
+                },
+                'required': ['order_id', 'status'],
             }
         }
     },

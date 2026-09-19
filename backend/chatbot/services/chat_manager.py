@@ -75,6 +75,21 @@ class ChatManager:
         )
         logger.info(f"Saved user message {user_msg_record.id}")
 
+        # Detect language selection
+        if not isinstance(conversation.state, dict):
+            conversation.state = {}
+        
+        lower_msg = user_message.lower()
+        if 'gujarati' in lower_msg or 'ગુજરાતી' in user_message:
+            conversation.state['language'] = 'Gujarati'
+            conversation.save(update_fields=['state', 'updated_at'])
+        elif 'hindi' in lower_msg or 'हिंदी' in user_message or 'हिन्दी' in user_message:
+            conversation.state['language'] = 'Hindi'
+            conversation.save(update_fields=['state', 'updated_at'])
+        elif 'english' in lower_msg:
+            conversation.state['language'] = 'English'
+            conversation.save(update_fields=['state', 'updated_at'])
+
         # 3. Build context
         context_builder = ContextBuilder(conversation, self.groq_service)
         messages = context_builder.build_messages(user_message)

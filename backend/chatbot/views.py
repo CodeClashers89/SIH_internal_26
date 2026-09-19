@@ -28,7 +28,11 @@ logger = logging.getLogger(__name__)
 class IsFarmerUser(permissions.BasePermission):
     """Permission check for farmer users only."""
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.role == 'farmer'
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and getattr(request.user, 'role', None) == 'farmer'
+        )
 
 
 class ChatAPIView(APIView):
