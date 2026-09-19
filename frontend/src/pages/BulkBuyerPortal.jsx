@@ -7,8 +7,25 @@ import {
   Handshake, AlertCircle, PlusCircle, CheckCircle, RefreshCw, Calendar, MapPin, Award,
   Layers, FileText
 } from 'lucide-react';
+import PaymentVerificationModal from '../components/PaymentVerificationModal';
 
 const B2B_API = import.meta.env.VITE_B2B_API_URL || 'http://localhost:8001/api/v1/subscription';
+
+// Dynamically load Razorpay SDK
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (document.getElementById('razorpay-script')) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.id = 'razorpay-script';
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
 
 const BulkBuyerPortal = () => {
   const { user } = useAuth();
@@ -61,6 +78,17 @@ const BulkBuyerPortal = () => {
   // Payment confirmation popup after accepting quote
   const [sandboxOrder, setSandboxOrder] = useState(null);
   const [showPayModal, setShowPayModal] = useState(false);
+
+  // Professional Payment Verification Screen State
+  const [verificationModal, setVerificationModal] = useState({
+    isOpen: false,
+    status: 'verifying',
+    orderId: null,
+    paymentId: null,
+    amount: 0,
+    title: 'Wholesale Payment',
+    description: '',
+  });
 
   // Subscriptions State
   const [subscriptions, setSubscriptions] = useState([]);
@@ -245,13 +273,100 @@ const BulkBuyerPortal = () => {
     }
   };
 
+  const verifyAndConfirmPayment = async (order, paymentResult, successCallback) => {
+    setShowPayModal(false);
+    setSandboxOrder(null);
+    setVerificationModal({
+      isOpen: true,
+      status: 'verifying',
+      orderId: order?.id,
+      paymentId: paymentResult.razorpay_payment_id,
+      amount: Number(order?.total_amount || 0),
+      title: 'Confirming Wholesale Payment...',
+      description: 'Verifying bank cryptographic signature and securing funds in escrow...',
+    });
+
+    try {
+      await api.post('/orders/payment-callback/', {
+        order_id: order?.id,
+        razorpay_order_id: paymentResult.razorpay_order_id || order?.razorpay_order_id,
+        razorpay_payment_id: paymentResult.razorpay_payment_id,
+        razorpay_signature: paymentResult.razorpay_signature,
+      });
+
+      // Smooth delay so the user clearly sees the verification steps finish
+      await new Promise(r => setTimeout(r, 900));
+
+      setVerificationModal({
+        isOpen: true,
+        status: 'success',
+        orderId: order?.id,
+        paymentId: paymentResult.razorpay_payment_id,
+        amount: Number(order?.total_amount || 0),
+        title: 'Wholesale Payment Confirmed! 🎉',
+        description: 'Payment secured in KisanConnect Escrow. Logistics shipment has been created and broadcast to regional transport partners.',
+      });
+
+      if (successCallback) successCallback();
+      fetchPortalData();
+    } catch (err) {
+      setVerificationModal({
+        isOpen: true,
+        status: 'failed',
+        orderId: order?.id,
+        paymentId: paymentResult.razorpay_payment_id,
+        amount: Number(order?.total_amount || 0),
+        title: 'Verification Incomplete',
+        description: 'We could not confirm the payment signature. If funds were debited, our logistics team will sync your order automatically.',
+      });
+    }
+  };
+
+  const handleInitiateBulkPayment = async (orderResponseData, customTitle, successCallback) => {
+    const order = orderResponseData.order;
+    const keyToUse = orderResponseData.razorpay_key || orderResponseData.razorpay_key_id || import.meta.env.VITE_RAZORPAY_KEY_ID;
+    const rzpOrderId = orderResponseData.razorpay_order_id || order?.razorpay_order_id;
+    const totalPaise = orderResponseData.amount || orderResponseData.amount_in_paise || Math.round(Number(order?.total_amount || 0) * 100);
+
+    const scriptLoaded = await loadRazorpayScript();
+    const isMock = !keyToUse || keyToUse.startsWith('rzp_test_KisanConnect') || !rzpOrderId || rzpOrderId.startsWith('rzp_mock_');
+
+    if (scriptLoaded && window.Razorpay && !isMock) {
+      const options = {
+        key: keyToUse,
+        amount: totalPaise,
+        currency: orderResponseData.currency || 'INR',
+        name: 'KisanConnect Wholesale',
+        description: customTitle || `Wholesale Order #${order.id}`,
+        order_id: rzpOrderId,
+        theme: { color: '#064e3b' },
+        prefill: {
+          name: user?.username || user?.business_name || 'B2B Buyer',
+          email: user?.email || '',
+          contact: user?.phone || '',
+        },
+        handler: async (paymentResult) => {
+          await verifyAndConfirmPayment(order, paymentResult, successCallback);
+        },
+      };
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (resp) {
+        alert('Payment failed: ' + (resp.error?.description || 'Transaction declined.'));
+      });
+      rzp.open();
+    } else {
+      // Open sandbox modal for testing or fallback
+      setSandboxOrder(orderResponseData);
+      setShowPayModal(true);
+    }
+  };
+
   const handleAcceptCounter = async (quoteId) => {
     try {
       const response = await api.post(`/orders/quotes/${quoteId}/accept-offer/`);
-      alert('Offer accepted successfully! Proceeding to simulated checkout.');
-      setSandboxOrder(response.data);
-      setShowPayModal(true);
-      fetchPortalData();
+      handleInitiateBulkPayment(response.data, 'Wholesale Single-Crop Bid Order', () => {
+        fetchPortalData();
+      });
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to accept offer.');
     }
@@ -270,10 +385,9 @@ const BulkBuyerPortal = () => {
   const handleAcceptFarmerOffer = async (offerId) => {
     try {
       const response = await api.post(`/orders/farmer-offers/${offerId}/accept/`);
-      alert('Farmer offer accepted successfully! Proceeding to simulated checkout.');
-      setSandboxOrder(response.data);
-      setShowPayModal(true);
-      fetchPortalData();
+      handleInitiateBulkPayment(response.data, 'Wholesale Reverse Sourcing Order', () => {
+        fetchPortalData();
+      });
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to accept farmer offer.');
     }
@@ -301,24 +415,16 @@ const BulkBuyerPortal = () => {
 
   const handleSimulatePayment = async (success) => {
     if (!sandboxOrder) return;
-    try {
-      if (success) {
-        await api.post('/orders/payment-callback/', {
-          order_id: sandboxOrder.order.id,
-          razorpay_order_id: sandboxOrder.order.razorpay_order_id,
-          razorpay_payment_id: `pay_bulk_mock_${Math.random().toString(36).substr(2, 9)}`,
-          razorpay_signature: 'mock_signature'
-        });
-        alert('Bulk transaction verified successfully! Logistics partner scheduled.');
-      } else {
-        alert('Payment failed simulation. Order status remains unpaid.');
-      }
-    } catch (err) {
-      alert('Error verifying payment callback');
-    } finally {
+    if (success) {
+      const mockPayId = `pay_bulk_sim_${Math.random().toString(36).substr(2, 9)}`;
+      await verifyAndConfirmPayment(sandboxOrder.order, {
+        razorpay_order_id: sandboxOrder.razorpay_order_id || sandboxOrder.order?.razorpay_order_id,
+        razorpay_payment_id: mockPayId,
+        razorpay_signature: 'mock_signature'
+      });
+    } else {
       setShowPayModal(false);
       setSandboxOrder(null);
-      fetchPortalData();
     }
   };
 
@@ -1115,34 +1221,41 @@ const BulkBuyerPortal = () => {
       {showPayModal && sandboxOrder && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 text-white shadow-2xl relative">
+            <button
+              onClick={() => { setShowPayModal(false); setSandboxOrder(null); }}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition cursor-pointer"
+              title="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
             <h3 className="text-lg font-bold mb-1">Razorpay Bulk Order Gateway Simulator</h3>
             <p className="text-xs text-slate-400 mb-6">Contract reference order verified in KisanConnect logistics.</p>
 
             <div className="bg-slate-950 rounded-2xl p-4 border border-slate-800 mb-6 space-y-3 text-xs">
               <div className="flex justify-between">
                 <span>Order ID</span>
-                <span className="font-semibold text-white">#{sandboxOrder.order.id}</span>
+                <span className="font-semibold text-white">#{sandboxOrder.order?.id}</span>
               </div>
               <div className="flex justify-between">
                 <span>Razorpay Reference</span>
-                <span className="font-semibold text-white">{sandboxOrder.order.razorpay_order_id}</span>
+                <span className="font-semibold text-white">{sandboxOrder.razorpay_order_id || sandboxOrder.order?.razorpay_order_id}</span>
               </div>
               <div className="border-t border-slate-800 my-2 pt-2 flex justify-between text-sm">
                 <span className="font-bold text-slate-200">Wholesale Total</span>
-                <span className="font-black text-amber-400 text-lg">₹{parseFloat(sandboxOrder.order.total_amount).toFixed(2)}</span>
+                <span className="font-black text-amber-400 text-lg">₹{parseFloat(sandboxOrder.order?.total_amount || 0).toFixed(2)}</span>
               </div>
             </div>
 
             <div className="space-y-3">
               <button
                 onClick={() => handleSimulatePayment(true)}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-all shadow-md"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-all shadow-md cursor-pointer"
               >
                 Simulate Successful Bulk Payment
               </button>
               <button
                 onClick={() => handleSimulatePayment(false)}
-                className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-xl transition-all shadow-md"
+                className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 rounded-xl transition-all shadow-md cursor-pointer"
               >
                 Simulate Cancelled
               </button>
@@ -1150,6 +1263,23 @@ const BulkBuyerPortal = () => {
           </div>
         </div>
       )}
+
+      {/* Professional Payment Verification Screen Modal */}
+      <PaymentVerificationModal
+        isOpen={verificationModal.isOpen}
+        status={verificationModal.status}
+        orderId={verificationModal.orderId}
+        paymentId={verificationModal.paymentId}
+        amount={verificationModal.amount}
+        title={verificationModal.title}
+        description={verificationModal.description}
+        onClose={() => setVerificationModal(prev => ({ ...prev, isOpen: false }))}
+        actionLabel="View Dashboard & Logistics"
+        onAction={() => {
+          setVerificationModal(prev => ({ ...prev, isOpen: false }));
+          handleTabChange('dashboard');
+        }}
+      />
     </div>
   );
 };

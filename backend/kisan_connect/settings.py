@@ -206,9 +206,15 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 
-# Sandbox Razorpay Config
-RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID', 'rzp_test_KisanConnectKey123')
-RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', 'KisanConnectSecretKeyValue')
+# Razorpay Configuration (Test or Live Gateway)
+RAZORPAY_KEY_ID = (os.environ.get('RAZORPAY_KEY_ID') or '').strip()
+RAZORPAY_KEY_SECRET = (os.environ.get('RAZORPAY_KEY_SECRET') or '').strip()
+
+# Fallback to test placeholder keys if not configured in .env
+if not RAZORPAY_KEY_ID:
+    RAZORPAY_KEY_ID = 'rzp_test_KisanConnectKey123'
+if not RAZORPAY_KEY_SECRET:
+    RAZORPAY_KEY_SECRET = 'KisanConnectSecretKeyValue'
 
 # Groq LLM Configuration (for Farmer AI Assistant)
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')

@@ -5,7 +5,8 @@ import api from '../utils/api';
 import { 
   X, Trash2, Plus, Minus, ArrowRight, ShoppingBag, 
   MapPin, CheckCircle, CreditCard, Loader2, Sparkles,
-  Repeat, Calendar, Clock, ShieldCheck, Sun, Sunrise, Sunset
+  Repeat, Calendar, Clock, ShieldCheck, Sun, Sunrise, Sunset,
+  Truck, Lock
 } from 'lucide-react';
 
 // Dynamically load Razorpay SDK
@@ -77,8 +78,9 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
   const [shippingPincode, setShippingPincode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [step, setStep] = useState('cart'); // 'cart' | 'paying' | 'success'
+  const [step, setStep] = useState('cart'); // 'cart' | 'verifying' | 'success'
   const [confirmedSubData, setConfirmedSubData] = useState(null);
+  const [confirmedOrderDetails, setConfirmedOrderDetails] = useState(null);
 
   // Sandbox simulation fallback state
   const [sandboxOrder, setSandboxOrder] = useState(null);
@@ -112,24 +114,28 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
   };
 
   const handlePaymentSuccess = async (orderData, paymentResult) => {
+    setStep('verifying');
+    setShowSandbox(false);
+    setError('');
     try {
-      await api.post('/orders/payment-callback/', {
-        order_id: orderData.order.id,
-        razorpay_order_id: orderData.order.razorpay_order_id,
+      const callbackRes = await api.post('/orders/payment-callback/', {
+        order_id: orderData.order?.id,
+        razorpay_order_id: paymentResult.razorpay_order_id || orderData.razorpay_order_id || orderData.order?.razorpay_order_id,
         razorpay_payment_id: paymentResult.razorpay_payment_id,
         razorpay_signature: paymentResult.razorpay_signature || 'mock_signature',
       });
       clearCart();
+      setConfirmedOrderDetails({
+        orderId: orderData.order?.id || callbackRes.data?.order?.id,
+        paymentId: paymentResult.razorpay_payment_id,
+        amount: orderData.order?.total_amount ? Number(orderData.order.total_amount).toFixed(2) : perDeliveryTotal.toFixed(2),
+      });
+      // Short delay so the user smoothly sees the verification progress finish
+      await new Promise(r => setTimeout(r, 900));
       setStep('success');
-      setTimeout(() => {
-        setStep('cart');
-        setShowSandbox(false);
-        setSandboxOrder(null);
-        onClose();
-        if (onOrderPlaced) onOrderPlaced();
-      }, 2500);
     } catch (err) {
-      setError('Payment verified but order confirmation failed. Contact support.');
+      setStep('cart');
+      setError('Payment verification failed. If money was deducted, our team will sync your order.');
     }
   };
 
@@ -172,26 +178,33 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
         };
 
         const response = await api.post('/orders/subscriptions/', subPayload);
-        const { subscription, initial_order, razorpay_order_id, razorpay_key, amount } = response.data;
+        const { subscription, initial_order, order, razorpay_order_id, razorpay_key, razorpay_key_id, amount, amount_in_paise } = response.data;
+        const currentOrder = initial_order || order;
         setConfirmedSubData(subscription);
 
+        const keyToUse = razorpay_key || razorpay_key_id || import.meta.env.VITE_RAZORPAY_KEY_ID;
+        const rzpOrderId = razorpay_order_id || currentOrder?.razorpay_order_id;
+        const totalPaise = amount || amount_in_paise || Math.round(Number(currentOrder?.total_amount || 0) * 100);
+
         const loaded = await loadRazorpayScript();
-        if (!loaded || !window.Razorpay || !razorpay_key) {
-          // Open simulated sandbox modal
-          setSandboxOrder({ order: initial_order, razorpay_order_id, subscription });
+        const isMock = !keyToUse || keyToUse.startsWith('rzp_test_KisanConnect') || !rzpOrderId || rzpOrderId.startsWith('rzp_mock_');
+
+        if (!loaded || !window.Razorpay || isMock) {
+          // Open simulated sandbox modal if keys are mock or not configured
+          setSandboxOrder({ order: currentOrder, razorpay_order_id: rzpOrderId, subscription });
           setShowSandbox(true);
           setLoading(false);
           return;
         }
 
         const options = {
-          key: razorpay_key,
-          amount: amount,
+          key: keyToUse,
+          amount: totalPaise,
           currency: 'INR',
           name: 'KisanConnect Subscriptions',
           description: `Auto-Delivery Subscription #${subscription.id} (1st Drop)`,
-          order_id: razorpay_order_id,
-          handler: (res) => handlePaymentSuccess({ order: initial_order }, res),
+          order_id: rzpOrderId,
+          handler: (res) => handlePaymentSuccess({ order: currentOrder, razorpay_order_id: rzpOrderId }, res),
           prefill: {
             name: user?.username || '',
             email: user?.email || '',
@@ -201,13 +214,15 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
           modal: {
             ondismiss: () => {
               setLoading(false);
-              setSandboxOrder({ order: initial_order, razorpay_order_id, subscription });
-              setShowSandbox(true);
             }
           }
         };
 
         const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', function (resp) {
+          setError('Payment failed: ' + (resp.error?.description || 'Transaction declined'));
+          setLoading(false);
+        });
         rzp.open();
         setLoading(false);
         return;
@@ -220,24 +235,29 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
         shipping_pincode: pin,
       });
 
-      const { order, razorpay_order_id, razorpay_key, amount } = response.data;
+      const { order, razorpay_order_id, razorpay_key, razorpay_key_id, amount, amount_in_paise } = response.data;
+      const keyToUse = razorpay_key || razorpay_key_id || import.meta.env.VITE_RAZORPAY_KEY_ID;
+      const rzpOrderId = razorpay_order_id || order?.razorpay_order_id;
+      const totalPaise = amount || amount_in_paise || Math.round(Number(order?.total_amount || 0) * 100);
 
       const loaded = await loadRazorpayScript();
-      if (!loaded || !window.Razorpay || !razorpay_key) {
-        setSandboxOrder({ order, razorpay_order_id });
+      const isMock = !keyToUse || keyToUse.startsWith('rzp_test_KisanConnect') || !rzpOrderId || rzpOrderId.startsWith('rzp_mock_');
+
+      if (!loaded || !window.Razorpay || isMock) {
+        setSandboxOrder({ order, razorpay_order_id: rzpOrderId });
         setShowSandbox(true);
         setLoading(false);
         return;
       }
 
       const options = {
-        key: razorpay_key,
-        amount: amount,
+        key: keyToUse,
+        amount: totalPaise,
         currency: 'INR',
         name: 'KisanConnect Marketplace',
         description: `Order #${order.id}`,
-        order_id: razorpay_order_id,
-        handler: (res) => handlePaymentSuccess({ order }, res),
+        order_id: rzpOrderId,
+        handler: (res) => handlePaymentSuccess({ order, razorpay_order_id: rzpOrderId }, res),
         prefill: {
           name: user?.username || '',
           email: user?.email || '',
@@ -247,13 +267,15 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
         modal: {
           ondismiss: () => {
             setLoading(false);
-            setSandboxOrder({ order, razorpay_order_id });
-            setShowSandbox(true);
           }
         }
       };
 
       const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (resp) {
+        setError('Payment failed: ' + (resp.error?.description || 'Transaction declined'));
+        setLoading(false);
+      });
       rzp.open();
       setLoading(false);
 
@@ -265,32 +287,15 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
 
   const handleSimulatePayment = async (success) => {
     if (!sandboxOrder) return;
-    setLoading(true);
-    try {
-      if (success) {
-        await api.post('/orders/payment-callback/', {
-          order_id: sandboxOrder.order.id,
-          razorpay_order_id: sandboxOrder.razorpay_order_id,
-          razorpay_payment_id: 'pay_simulated_' + Math.random().toString(36).substring(7),
-          razorpay_signature: 'sig_simulated_' + Math.random().toString(36).substring(7),
-        });
-        clearCart();
-        setStep('success');
-        setTimeout(() => {
-          setStep('cart');
-          setShowSandbox(false);
-          setSandboxOrder(null);
-          onClose();
-          if (onOrderPlaced) onOrderPlaced();
-        }, 2500);
-      } else {
-        setError('Simulated payment failed. You can retry anytime.');
-        setShowSandbox(false);
-      }
-    } catch (err) {
-      setError('Payment confirmation error. Contact support.');
-    } finally {
-      setLoading(false);
+    if (success) {
+      await handlePaymentSuccess(sandboxOrder, {
+        razorpay_payment_id: 'pay_sim_' + Math.random().toString(36).substring(7),
+        razorpay_signature: 'mock_signature',
+        razorpay_order_id: sandboxOrder.razorpay_order_id || sandboxOrder.order?.razorpay_order_id,
+      });
+    } else {
+      setError('Payment simulation was cancelled.');
+      setShowSandbox(false);
     }
   };
 
@@ -310,7 +315,7 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
             </div>
             <button 
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
             >
               <X className="h-5 w-5" />
             </button>
@@ -318,28 +323,134 @@ const CartDrawer = ({ isOpen, onClose, onOrderPlaced }) => {
 
           {/* Body Content */}
           <div className="flex-1 overflow-y-auto p-5 space-y-6">
-            {step === 'success' ? (
-              <div className="text-center py-12 space-y-4 animate-scaleUp">
-                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
-                  <CheckCircle className="h-10 w-10 stroke-[2.5]" />
+            {step === 'verifying' ? (
+              /* ── 1. CONFIRMING PAYMENT LOADING SCREEN ── */
+              <div className="text-center py-8 space-y-6 animate-fadeIn">
+                <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
+                  <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping"></div>
+                  <div className="absolute -inset-2 rounded-full bg-emerald-100/70 animate-pulse"></div>
+                  <div className="relative w-16 h-16 bg-gradient-to-tr from-emerald-600 to-teal-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-600/30">
+                    <ShieldCheck className="h-8 w-8 text-white animate-pulse" />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold">
+                    <Loader2 className="h-3 w-3 animate-spin text-emerald-600" />
+                    Banking Escrow Verification
+                  </span>
+                  <h3 className="text-xl font-black text-slate-800 tracking-tight">
+                    Confirming Your Payment...
+                  </h3>
+                  <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+                    Please keep this window open while we securely verify your payment and lock your farm allocation.
+                  </p>
+                </div>
+
+                {/* Step Verification Pipeline */}
+                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-left space-y-3 shadow-2xs">
+                  <div className="flex items-center gap-3 text-xs">
+                    <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                      <CheckCircle className="h-3.5 w-3.5" />
+                    </div>
+                    <span className="font-bold text-slate-700">Payment Authorized by Gateway</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs">
+                    <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    </div>
+                    <span className="font-bold text-emerald-700">Verifying Cryptographic Bank Signature...</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-slate-400">
+                    <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
+                      <span className="h-2 w-2 rounded-full bg-slate-400"></span>
+                    </div>
+                    <span className="font-medium">Locking Harvest &amp; Alerting Transport Partner</span>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-slate-400 font-medium flex items-center justify-center gap-1.5 pt-1">
+                  <Lock className="h-3 w-3 text-emerald-600" />
+                  <span>256-bit Bank-Grade SSL Encrypted Checkout</span>
+                </div>
+              </div>
+            ) : step === 'success' ? (
+              /* ── 2. CONFIRMED SUCCESS SCREEN ── */
+              <div className="text-center py-6 space-y-5 animate-scaleUp">
+                <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner ring-8 ring-emerald-50">
+                  <CheckCircle className="h-12 w-12 stroke-[2.5]" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-slate-800">
-                    {orderType === 'subscription' ? 'Auto-Delivery Activated!' : 'Order Placed Successfully!'}
+                  <span className="inline-block bg-emerald-100 text-emerald-800 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider mb-2">
+                    Payment Verified · Confirmed
+                  </span>
+                  <h3 className="text-2xl font-black text-slate-800 tracking-tight">
+                    {orderType === 'subscription' ? 'Subscription Activated! 🎉' : 'Order Confirmed! 🎉'}
                   </h3>
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
                     {orderType === 'subscription' 
-                      ? `Your weekly delivery every ${deliveryDay} has been scheduled.`
-                      : 'Farmer has been notified for harvesting and dispatch.'
+                      ? `Your weekly deliveries recurring every ${deliveryDay} have been scheduled directly with regional farmers.`
+                      : 'Your payment was successfully received. The farmer has been notified to harvest and prepare your package.'
                     }
                   </p>
                 </div>
+
+                {/* Receipt Details Card */}
+                <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-xs space-y-2 text-left shadow-2xs">
+                  <div className="flex justify-between items-center border-b border-slate-200/60 pb-2">
+                    <span className="text-slate-500 font-medium">Order Number:</span>
+                    <span className="font-mono font-bold text-slate-800">#{confirmedOrderDetails?.orderId || 'KC-ORDER'}</span>
+                  </div>
+                  {confirmedOrderDetails?.paymentId && (
+                    <div className="flex justify-between items-center border-b border-slate-200/60 pb-2">
+                      <span className="text-slate-500 font-medium">Razorpay Reference:</span>
+                      <span className="font-mono text-emerald-700 font-bold truncate max-w-[170px]" title={confirmedOrderDetails.paymentId}>
+                        {confirmedOrderDetails.paymentId}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500 font-medium">Total Paid:</span>
+                    <span className="font-black text-emerald-700 text-sm">₹{confirmedOrderDetails?.amount || perDeliveryTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+
                 {orderType === 'subscription' && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-xs text-emerald-800 space-y-1">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-xs text-emerald-800 space-y-1 text-left">
                     <p className="font-bold">✨ 5% Subscriber Savings Applied</p>
                     <p>First Drop Date: <strong>{getNextDeliveryDate(deliveryDay)} ({deliveryTimeSlot})</strong></p>
                   </div>
                 )}
+
+                {/* Action Buttons */}
+                <div className="space-y-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep('cart');
+                      setShowSandbox(false);
+                      setSandboxOrder(null);
+                      onClose();
+                      if (onOrderPlaced) onOrderPlaced();
+                    }}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 px-4 rounded-xl text-xs shadow-md shadow-emerald-200 transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Truck className="h-4 w-4" />
+                    Track Your Fresh Order
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep('cart');
+                      setShowSandbox(false);
+                      setSandboxOrder(null);
+                      onClose();
+                    }}
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl text-xs transition-colors cursor-pointer"
+                  >
+                    Continue Shopping
+                  </button>
+                </div>
               </div>
             ) : cartItems.length === 0 ? (
               <div className="text-center py-16 space-y-3">

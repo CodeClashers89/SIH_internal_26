@@ -15,6 +15,7 @@ import {
   AlertCircle, IndianRupee, Calendar, Clock3, LockKeyhole, Mail,
   ClipboardList, AlertTriangle
 } from 'lucide-react';
+import PaymentVerificationModal from '../components/PaymentVerificationModal';
 
 // Loads Razorpay SDK for retry-pay flow
 const loadRazorpayScript = () =>
@@ -78,9 +79,20 @@ const ConsumerMarketplace = () => {
   const [subLoading, setSubLoading] = useState(false);
   const [showWidget, setShowWidget] = useState(false);
 
-  // Retry payment sandbox modal
+  // Retry payment state
   const [retryOrder, setRetryOrder] = useState(null);
   const [retryLoading, setRetryLoading] = useState(false);
+
+  // Professional Payment Verification Screen State
+  const [verificationModal, setVerificationModal] = useState({
+    isOpen: false,
+    status: 'verifying',
+    orderId: null,
+    paymentId: null,
+    amount: 0,
+    title: 'Order Payment',
+    description: '',
+  });
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -308,33 +320,87 @@ const ConsumerMarketplace = () => {
     }
   };
 
+  const verifyAndConfirmRetryPayment = async (order, paymentResult) => {
+    setRetryOrder(null);
+    setVerificationModal({
+      isOpen: true,
+      status: 'verifying',
+      orderId: order?.id,
+      paymentId: paymentResult.razorpay_payment_id,
+      amount: Number(order?.total_amount || 0),
+      title: 'Confirming Payment...',
+      description: 'Verifying bank cryptographic signature and securing your order allocation...',
+    });
+
+    try {
+      await api.post('/orders/payment-callback/', {
+        order_id: order?.id,
+        razorpay_order_id: paymentResult.razorpay_order_id || order?.razorpay_order_id,
+        razorpay_payment_id: paymentResult.razorpay_payment_id,
+        razorpay_signature: paymentResult.razorpay_signature,
+      });
+
+      // Smooth delay so the user clearly sees the verification steps finish
+      await new Promise(r => setTimeout(r, 900));
+
+      setVerificationModal({
+        isOpen: true,
+        status: 'success',
+        orderId: order?.id,
+        paymentId: paymentResult.razorpay_payment_id,
+        amount: Number(order?.total_amount || 0),
+        title: 'Payment Confirmed! 🎉',
+        description: 'Your payment was successfully verified. The open delivery shipment has been created and broadcast to regional logistics drivers.',
+      });
+      fetchOrders();
+    } catch (err) {
+      setVerificationModal({
+        isOpen: true,
+        status: 'failed',
+        orderId: order?.id,
+        paymentId: paymentResult.razorpay_payment_id,
+        amount: Number(order?.total_amount || 0),
+        title: 'Verification Incomplete',
+        description: 'Could not verify payment signature. If funds were debited, our team will sync your order automatically.',
+      });
+    }
+  };
+
   const handleRetryPayment = async (order) => {
     setRetryLoading(true);
     try {
       const res = await api.post(`/orders/${order.id}/retry-payment/`);
       const orderData = res.data;
+      const keyToUse = orderData.razorpay_key || orderData.razorpay_key_id || import.meta.env.VITE_RAZORPAY_KEY_ID;
+      const rzpOrderId = orderData.razorpay_order_id || orderData.order?.razorpay_order_id;
+      const totalPaise = orderData.amount || orderData.amount_in_paise || Math.round(Number(order.total_amount || 0) * 100);
 
       const scriptLoaded = await loadRazorpayScript();
-      if (scriptLoaded && window.Razorpay && !orderData.order.razorpay_order_id?.startsWith('rzp_mock_')) {
+      const isMock = !keyToUse || keyToUse.startsWith('rzp_test_KisanConnect') || !rzpOrderId || rzpOrderId.startsWith('rzp_mock_');
+
+      if (scriptLoaded && window.Razorpay && !isMock) {
         const options = {
-          key: orderData.razorpay_key_id,
-          amount: orderData.amount_in_paise,
-          currency: orderData.currency,
+          key: keyToUse,
+          amount: totalPaise,
+          currency: orderData.currency || 'INR',
           name: 'KisanConnect',
-          description: `Retry payment — Order #${orderData.order.id}`,
-          order_id: orderData.order.razorpay_order_id,
+          description: `Retry payment — Order #${orderData.order?.id || order.id}`,
+          order_id: rzpOrderId,
           theme: { color: '#059669' },
+          prefill: {
+            name: user?.username || '',
+            email: user?.email || '',
+            contact: user?.phone || '',
+          },
           handler: async (paymentResult) => {
-            await api.post('/orders/payment-callback/', {
-              order_id: orderData.order.id,
-              razorpay_order_id: orderData.order.razorpay_order_id,
-              razorpay_payment_id: paymentResult.razorpay_payment_id,
-              razorpay_signature: paymentResult.razorpay_signature,
-            });
-            fetchOrders();
+            await verifyAndConfirmRetryPayment(orderData.order || order, paymentResult);
           },
         };
-        new window.Razorpay(options).open();
+        const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', function (resp) {
+          alert('Payment failed: ' + (resp.error?.description || 'Transaction declined.'));
+        });
+        rzp.open();
       } else {
         // Sandbox mode
         setRetryOrder(orderData);
@@ -349,17 +415,15 @@ const ConsumerMarketplace = () => {
   const handleRetrySimulate = async (success) => {
     if (!retryOrder) return;
     if (success) {
-      try {
-        await api.post('/orders/payment-callback/', {
-          order_id: retryOrder.order.id,
-          razorpay_order_id: retryOrder.order.razorpay_order_id,
-          razorpay_payment_id: `pay_retry_${Math.random().toString(36).substr(2, 9)}`,
-          razorpay_signature: 'mock_signature',
-        });
-        fetchOrders();
-      } catch (err) { alert('Payment callback failed.'); }
+      const mockPayId = `pay_retry_${Math.random().toString(36).substr(2, 9)}`;
+      await verifyAndConfirmRetryPayment(retryOrder.order, {
+        razorpay_order_id: retryOrder.razorpay_order_id || retryOrder.order?.razorpay_order_id,
+        razorpay_payment_id: mockPayId,
+        razorpay_signature: 'mock_signature',
+      });
+    } else {
+      setRetryOrder(null);
     }
-    setRetryOrder(null);
   };
 
   return (
@@ -984,6 +1048,23 @@ const ConsumerMarketplace = () => {
           addToCart(orderModalProduct, 1, config);
           setSelectedProduct(null);
           setCartOpen(true);
+        }}
+      />
+
+      {/* Professional Payment Verification Screen Modal */}
+      <PaymentVerificationModal
+        isOpen={verificationModal.isOpen}
+        status={verificationModal.status}
+        orderId={verificationModal.orderId}
+        paymentId={verificationModal.paymentId}
+        amount={verificationModal.amount}
+        title={verificationModal.title}
+        description={verificationModal.description}
+        onClose={() => setVerificationModal(prev => ({ ...prev, isOpen: false }))}
+        actionLabel="View Order Tracking"
+        onAction={() => {
+          setVerificationModal(prev => ({ ...prev, isOpen: false }));
+          setActiveTab('tracking');
         }}
       />
     </div>

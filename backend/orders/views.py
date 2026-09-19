@@ -180,7 +180,10 @@ class OrderViewSet(viewsets.ModelViewSet):
             'message': 'Payment session ready. Complete payment to confirm your order.',
             'order': OrderSerializer(order).data,
             'razorpay_key_id': settings.RAZORPAY_KEY_ID,
-            'amount_in_paise': int(float(order.total_amount) * 100),
+            'razorpay_key': settings.RAZORPAY_KEY_ID,
+            'razorpay_order_id': razorpay_order_id,
+            'amount': int(round(float(order.total_amount) * 100)),
+            'amount_in_paise': int(round(float(order.total_amount) * 100)),
             'currency': 'INR',
         })
 
@@ -286,7 +289,10 @@ class OrderCreateView(APIView):
             'message': 'Order placed. Complete payment to confirm (includes shipping charge).',
             'order': OrderSerializer(order).data,
             'razorpay_key_id': settings.RAZORPAY_KEY_ID,
-            'amount_in_paise': int(total_amount * 100),
+            'razorpay_key': settings.RAZORPAY_KEY_ID,
+            'razorpay_order_id': razorpay_order_id,
+            'amount': int(round(total_amount * 100)),
+            'amount_in_paise': int(round(total_amount * 100)),
             'currency': 'INR',
             'bill_breakdown': {
                 'product_subtotal': float(product_subtotal),
@@ -308,12 +314,16 @@ class PaymentCallbackView(APIView):
         if not razorpay_order_id or not razorpay_payment_id:
             return Response({'error': 'Missing payment credentials'}, status=status.HTTP_400_BAD_REQUEST)
             
-        try:
-            order = Order.objects.get(razorpay_order_id=razorpay_order_id)
-        except Order.DoesNotExist:
+        order = None
+        if razorpay_order_id:
+            order = Order.objects.filter(razorpay_order_id=razorpay_order_id).first()
+        if not order and order_id:
+            order = Order.objects.filter(id=order_id).first()
+
+        if not order:
             return Response({'error': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        payment_record = PaymentRecord.objects.filter(razorpay_order_id=razorpay_order_id).first()
+        payment_record = PaymentRecord.objects.filter(razorpay_order_id=razorpay_order_id).first() or PaymentRecord.objects.filter(order=order).first()
         
         # Verify Razorpay signature or mock verify for sandbox
         is_valid = False
@@ -321,16 +331,26 @@ class PaymentCallbackView(APIView):
             is_valid = True
         else:
             try:
-                # Actual verification
-                msg = f"{razorpay_order_id}|{razorpay_payment_id}"
-                generated_signature = hmac.new(
-                    settings.RAZORPAY_KEY_SECRET.encode(),
-                    msg.encode(),
-                    hashlib.sha256
-                ).hexdigest()
-                is_valid = hmac.compare_digest(generated_signature, razorpay_signature)
+                # Official Razorpay verification
+                client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+                client.utility.verify_payment_signature({
+                    'razorpay_order_id': razorpay_order_id,
+                    'razorpay_payment_id': razorpay_payment_id,
+                    'razorpay_signature': razorpay_signature
+                })
+                is_valid = True
             except Exception:
-                is_valid = True # fallback for hackathon sandbox ease
+                try:
+                    # Fallback HMAC-SHA256 check
+                    msg = f"{razorpay_order_id}|{razorpay_payment_id}"
+                    generated_signature = hmac.new(
+                        settings.RAZORPAY_KEY_SECRET.encode(),
+                        msg.encode(),
+                        hashlib.sha256
+                    ).hexdigest()
+                    is_valid = hmac.compare_digest(generated_signature, razorpay_signature)
+                except Exception:
+                    is_valid = False
 
         if is_valid:
             order.payment_status = 'paid'
@@ -458,8 +478,25 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
             quote.offered_price = final_price
         quote.save()
 
-        # Setup mock razorpay checkout parameters
+        # Setup real or mock razorpay checkout parameters
         razorpay_order_id = f"rzp_mock_{order.id}_{random.randint(10000, 99999)}"
+        try:
+            client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+            rzp_order = client.order.create(data={
+                "amount": int(round(float(total_amount) * 100)),
+                "currency": "INR",
+                "receipt": f"bulk_quote_rcpt_{order.id}",
+                "payment_capture": 1,
+                "notes": {
+                    "quote_id": str(quote.id),
+                    "product_id": str(quote.product.id),
+                    "buyer_id": str(buyer_user.id),
+                }
+            })
+            razorpay_order_id = rzp_order['id']
+        except Exception as e:
+            print(f"[RAZORPAY WARNING] Bulk quote using mock order ID. Error: {str(e)}")
+
         order.razorpay_order_id = razorpay_order_id
         order.save()
 
@@ -473,7 +510,13 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
         return Response({
             'message': 'Offer accepted. Order created for payment.',
             'quote': QuoteRequestSerializer(quote).data,
-            'order': OrderSerializer(order).data
+            'order': OrderSerializer(order).data,
+            'razorpay_key_id': settings.RAZORPAY_KEY_ID,
+            'razorpay_key': settings.RAZORPAY_KEY_ID,
+            'razorpay_order_id': razorpay_order_id,
+            'amount': int(round(float(total_amount) * 100)),
+            'amount_in_paise': int(round(float(total_amount) * 100)),
+            'currency': 'INR',
         })
 
     @action(detail=True, methods=['post'], url_path='reject-offer', permission_classes=[permissions.IsAuthenticated])
@@ -663,8 +706,25 @@ class FarmerOfferViewSet(viewsets.ModelViewSet):
             price=offer.price_per_unit
         )
 
-        # Setup mock razorpay checkout parameters
+        # Setup real or mock razorpay checkout parameters
         razorpay_order_id = f"rzp_mock_{order.id}_{random.randint(10000, 99999)}"
+        try:
+            client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+            rzp_order = client.order.create(data={
+                "amount": int(round(float(total_amount) * 100)),
+                "currency": "INR",
+                "receipt": f"bulk_offer_rcpt_{order.id}",
+                "payment_capture": 1,
+                "notes": {
+                    "offer_id": str(offer.id),
+                    "requirement_id": str(requirement.id),
+                    "buyer_id": str(requirement.buyer.id),
+                }
+            })
+            razorpay_order_id = rzp_order['id']
+        except Exception as e:
+            print(f"[RAZORPAY WARNING] Bulk offer using mock order ID. Error: {str(e)}")
+
         order.razorpay_order_id = razorpay_order_id
         order.save()
 
@@ -678,7 +738,13 @@ class FarmerOfferViewSet(viewsets.ModelViewSet):
         return Response({
             'message': 'Offer accepted. Order created for payment.',
             'offer': FarmerOfferSerializer(offer).data,
-            'order': OrderSerializer(order).data
+            'order': OrderSerializer(order).data,
+            'razorpay_key_id': settings.RAZORPAY_KEY_ID,
+            'razorpay_key': settings.RAZORPAY_KEY_ID,
+            'razorpay_order_id': razorpay_order_id,
+            'amount': int(round(float(total_amount) * 100)),
+            'amount_in_paise': int(round(float(total_amount) * 100)),
+            'currency': 'INR',
         })
 
     @action(detail=True, methods=['post'])
@@ -872,6 +938,22 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
 
         # Setup Razorpay mock/live order for initial payment
         razorpay_order_id = f"rzp_mock_sub_{subscription.id}_{first_order.id}_{random.randint(10000, 99999)}"
+        try:
+            client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+            rzp_order = client.order.create(data={
+                "amount": int(round(float(per_delivery_total) * 100)),
+                "currency": "INR",
+                "receipt": f"sub_rcpt_{subscription.id}_{first_order.id}",
+                "payment_capture": 1,
+                "notes": {
+                    "subscription_id": str(subscription.id),
+                    "delivery_day": str(delivery_day),
+                }
+            })
+            razorpay_order_id = rzp_order['id']
+        except Exception as e:
+            print(f"[RAZORPAY WARNING] Subscription using mock order ID. Error: {str(e)}")
+
         first_order.razorpay_order_id = razorpay_order_id
         first_order.save()
 
@@ -886,8 +968,12 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             'message': 'Subscription created successfully. Schedule activated!',
             'subscription': SubscriptionSerializer(subscription).data,
             'order': OrderSerializer(first_order).data,
+            'initial_order': OrderSerializer(first_order).data,
             'razorpay_key_id': settings.RAZORPAY_KEY_ID,
-            'amount_in_paise': int(float(per_delivery_total) * 100),
+            'razorpay_key': settings.RAZORPAY_KEY_ID,
+            'razorpay_order_id': razorpay_order_id,
+            'amount': int(round(float(per_delivery_total) * 100)),
+            'amount_in_paise': int(round(float(per_delivery_total) * 100)),
             'currency': 'INR',
             'summary': {
                 'first_delivery_date': str(first_delivery_date),
