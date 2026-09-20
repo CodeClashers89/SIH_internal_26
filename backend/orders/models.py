@@ -137,6 +137,13 @@ class QuoteRequest(models.Model):
     target_price = models.DecimalField(max_digits=10, decimal_places=2) # requested price per unit
     offered_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True) # farmer counter-offer
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='quote_requests'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -192,6 +199,13 @@ class FarmerOffer(models.Model):
     delivery_date = models.DateField()
     notes = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='farmer_offers'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

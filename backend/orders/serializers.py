@@ -88,7 +88,11 @@ class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     buyer_username = serializers.ReadOnlyField(source='buyer.username')
     buyer_role = serializers.ReadOnlyField(source='buyer.role')
+    channel = serializers.SerializerMethodField()
     shipment = serializers.SerializerMethodField()
+
+    def get_channel(self, obj):
+        return 'wholesale' if obj.buyer and getattr(obj.buyer, 'role', '') == 'bulk_buyer' else 'retail'
 
     def get_shipment(self, obj):
         try:
@@ -101,7 +105,7 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = (
-            'id', 'buyer', 'buyer_username', 'buyer_role', 'subscription',
+            'id', 'buyer', 'buyer_username', 'buyer_role', 'channel', 'subscription',
             'product_subtotal', 'shipping_charge', 'total_amount',
             'status', 'shipping_address', 'shipping_pincode',
             'payment_status', 'payment_id', 'razorpay_order_id',
@@ -135,23 +139,53 @@ class CreateOrderSerializer(serializers.Serializer):
 
 class QuoteRequestSerializer(serializers.ModelSerializer):
     buyer_details = UserSerializer(source='buyer', read_only=True)
+    buyer_username = serializers.ReadOnlyField(source='buyer.username')
     product_details = ProductSerializer(source='product', read_only=True)
+    order_id = serializers.SerializerMethodField()
+    order_status = serializers.SerializerMethodField()
+    order_payment_status = serializers.SerializerMethodField()
+
+    def get_order_id(self, obj):
+        if obj.order_id:
+            return obj.order_id
+        order = Order.objects.filter(items__product=obj.product, buyer=obj.buyer).order_by('-created_at').first()
+        return order.id if order else None
+
+    def get_order_status(self, obj):
+        order = obj.order or Order.objects.filter(items__product=obj.product, buyer=obj.buyer).order_by('-created_at').first()
+        return order.status if order else None
+
+    def get_order_payment_status(self, obj):
+        order = obj.order or Order.objects.filter(items__product=obj.product, buyer=obj.buyer).order_by('-created_at').first()
+        return order.payment_status if order else None
 
     class Meta:
         model = QuoteRequest
         fields = (
-            'id', 'buyer', 'buyer_details', 'product', 'product_details', 
-            'quantity', 'target_price', 'offered_price', 'status', 
-            'created_at', 'updated_at'
+            'id', 'buyer', 'buyer_username', 'buyer_details', 'product', 'product_details', 
+            'quantity', 'target_price', 'offered_price', 'status', 'order', 'order_id',
+            'order_status', 'order_payment_status', 'created_at', 'updated_at'
         )
         read_only_fields = ('id', 'buyer', 'created_at', 'updated_at')
 
 class FarmerOfferSerializer(serializers.ModelSerializer):
     farmer_username = serializers.ReadOnlyField(source='farmer.username')
+    order_id = serializers.SerializerMethodField()
+    order_status = serializers.SerializerMethodField()
+
+    def get_order_id(self, obj):
+        if obj.order_id:
+            return obj.order_id
+        order = Order.objects.filter(items__product__farmer=obj.farmer, buyer=obj.requirement.buyer).order_by('-created_at').first()
+        return order.id if order else None
+
+    def get_order_status(self, obj):
+        order = obj.order or Order.objects.filter(items__product__farmer=obj.farmer, buyer=obj.requirement.buyer).order_by('-created_at').first()
+        return order.status if order else None
 
     class Meta:
         model = FarmerOffer
-        fields = ('id', 'requirement', 'farmer', 'farmer_username', 'quantity', 'price_per_unit', 'delivery_date', 'notes', 'status', 'created_at')
+        fields = ('id', 'requirement', 'farmer', 'farmer_username', 'quantity', 'price_per_unit', 'delivery_date', 'notes', 'status', 'order', 'order_id', 'order_status', 'created_at')
         read_only_fields = ('id', 'farmer', 'farmer_username', 'created_at')
 
 class BulkRequirementSerializer(serializers.ModelSerializer):

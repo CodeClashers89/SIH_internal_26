@@ -82,6 +82,7 @@ const ConsumerMarketplace = () => {
   // Retry payment state
   const [retryOrder, setRetryOrder] = useState(null);
   const [retryLoading, setRetryLoading] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState({});
 
   // Professional Payment Verification Screen State
   const [verificationModal, setVerificationModal] = useState({
@@ -307,9 +308,11 @@ const ConsumerMarketplace = () => {
   // ── Retry payment for unpaid orders ──────────────────────────────────────
   const handleCancelOrder = async (orderId) => {
     if (!window.confirm("Are you sure you want to cancel this order?")) return;
+    if (cancelLoading[orderId]) return;
+    setCancelLoading(prev => ({ ...prev, [orderId]: true }));
     try {
       await api.patch(`/orders/${orderId}/status/`, { status: 'cancelled' });
-      fetchOrders();
+      await fetchOrders();
       alert("Order cancelled successfully.");
     } catch (err) {
       if (err.response?.data?.error === 'CANCELLATION_LOCKED_AFTER_TRANSPORT_HANDOVER') {
@@ -317,6 +320,8 @@ const ConsumerMarketplace = () => {
       } else {
         alert(err.response?.data?.error || "Failed to cancel order.");
       }
+    } finally {
+      setCancelLoading(prev => ({ ...prev, [orderId]: false }));
     }
   };
 
@@ -717,10 +722,20 @@ const ConsumerMarketplace = () => {
                   <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
                     {!o.cancellation_locked && o.status !== 'cancelled' && o.status !== 'delivered' && (
                       <button 
+                        disabled={cancelLoading[o.id]}
                         onClick={() => handleCancelOrder(o.id)}
-                        className="px-4 py-2 bg-rose-50 text-rose-600 font-semibold text-xs rounded-xl hover:bg-rose-100 transition-colors"
+                        className={`px-4 py-2 bg-rose-50 text-rose-600 font-semibold text-xs rounded-xl hover:bg-rose-100 transition-colors flex items-center gap-1.5 ${
+                          cancelLoading[o.id] ? 'opacity-70 cursor-not-allowed pointer-events-none' : ''
+                        }`}
                       >
-                        Cancel Order
+                        {cancelLoading[o.id] ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-600" />
+                            <span>Cancelling...</span>
+                          </>
+                        ) : (
+                          <span>Cancel Order</span>
+                        )}
                       </button>
                     )}
                     {o.cancellation_locked && o.status !== 'delivered' && o.status !== 'cancelled' && (

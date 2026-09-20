@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { 
   ShoppingBag, Loader2, ArrowUpRight, DollarSign, 
   Handshake, AlertCircle, PlusCircle, CheckCircle, RefreshCw, Calendar, MapPin, Award,
-  Layers, FileText
+  Layers, FileText, Filter, Search, X, SlidersHorizontal, User
 } from 'lucide-react';
 import PaymentVerificationModal from '../components/PaymentVerificationModal';
 
@@ -61,6 +61,125 @@ const BulkBuyerPortal = () => {
   const [targetPrice, setTargetPrice] = useState('');
   const [submittingQuote, setSubmittingQuote] = useState(false);
   const [quoteError, setQuoteError] = useState('');
+  const [buyerCounterPrices, setBuyerCounterPrices] = useState({});
+  const [actionLoading, setActionLoading] = useState({});
+
+  // Filters for discovering crop listings and farmers (all optional)
+  const [filterFarmer, setFilterFarmer] = useState('');
+  const [filterProduct, setFilterProduct] = useState('');
+  const [filterMinQty, setFilterMinQty] = useState('');
+  const [filterMaxPrice, setFilterMaxPrice] = useState('');
+
+  // Extract unique farmers from products list
+  const uniqueFarmers = useMemo(() => {
+    const map = new Map();
+    products.forEach(p => {
+      const farmerId = p.farmer_details?.id || p.farmer;
+      const farmerName = p.farmer_details?.username;
+      if (farmerId && farmerName && !map.has(farmerId)) {
+        map.set(farmerId, {
+          id: farmerId,
+          username: farmerName,
+          district: p.farmer_details?.district || 'Regional',
+          state: p.farmer_details?.state || ''
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [products]);
+
+  // Filtered products list (none of the filters are compulsory!)
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      // 1. Farmer filter (optional)
+      if (filterFarmer) {
+        const farmerId = String(p.farmer_details?.id || p.farmer);
+        const farmerName = p.farmer_details?.username;
+        if (farmerId !== String(filterFarmer) && farmerName !== filterFarmer) {
+          return false;
+        }
+      }
+      // 2. Product / Crop name filter (optional)
+      if (filterProduct && filterProduct.trim()) {
+        const term = filterProduct.toLowerCase().trim();
+        const pName = (p.name || '').toLowerCase();
+        const pCat = (p.category || '').toLowerCase();
+        if (!pName.includes(term) && !pCat.includes(term)) {
+          return false;
+        }
+      }
+      // 3. Min Quantity (Stock) filter (optional)
+      if (filterMinQty && !isNaN(parseFloat(filterMinQty))) {
+        if (parseFloat(p.quantity) < parseFloat(filterMinQty)) {
+          return false;
+        }
+      }
+      // 4. Max Price filter (optional)
+      if (filterMaxPrice && !isNaN(parseFloat(filterMaxPrice))) {
+        if (parseFloat(p.price_per_unit) > parseFloat(filterMaxPrice)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [products, filterFarmer, filterProduct, filterMinQty, filterMaxPrice]);
+
+  // Auto-sync selectedProdId with filteredProducts
+  useEffect(() => {
+    if (filteredProducts.length > 0) {
+      const currentSelectedExists = filteredProducts.some(p => p.id === parseInt(selectedProdId));
+      if (!currentSelectedExists) {
+        setSelectedProdId(filteredProducts[0].id);
+      }
+    } else {
+      setSelectedProdId('');
+    }
+  }, [filteredProducts]);
+
+  const isAnyFilterActive = Boolean(filterFarmer || filterProduct || filterMinQty || filterMaxPrice);
+
+  // YouTube-style Autocomplete Dropdown State & Ref
+  const [showProductSuggestions, setShowProductSuggestions] = useState(false);
+  const searchContainerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
+        setShowProductSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Matching products for the YouTube-style search dropdown
+  const searchMatchingProducts = useMemo(() => {
+    if (!filterProduct || !filterProduct.trim()) {
+      return products.slice(0, 8);
+    }
+    const term = filterProduct.toLowerCase().trim();
+    return products.filter(p => 
+      (p.name && p.name.toLowerCase().includes(term)) ||
+      (p.category && p.category.toLowerCase().includes(term)) ||
+      (p.farmer_details?.username && p.farmer_details.username.toLowerCase().includes(term))
+    );
+  }, [products, filterProduct]);
+
+  const handleSelectProductSuggestion = (prod) => {
+    setFilterProduct(prod.name);
+    setSelectedProdId(prod.id);
+    setShowProductSuggestions(false);
+  };
+
+  const handleResetFilters = () => {
+    setFilterFarmer('');
+    setFilterProduct('');
+    setFilterMinQty('');
+    setFilterMaxPrice('');
+    setShowProductSuggestions(false);
+  };
 
   // Bulk Requirement Form State
   const [reqCrop, setReqCrop] = useState('');
@@ -219,6 +338,19 @@ const BulkBuyerPortal = () => {
     setSubmittingQuote(true);
     setQuoteError('');
 
+    const prod = getSelectedProductDetails();
+    if (!prod) {
+      setQuoteError('Please select an available crop listing from a farmer.');
+      setSubmittingQuote(false);
+      return;
+    }
+
+    if (parseFloat(quantity) > parseFloat(prod.quantity)) {
+      setQuoteError(`Requested quantity (${quantity} ${prod.unit}) exceeds farmer's available inventory stock (${prod.quantity} ${prod.unit}). Please adjust your quantity or post a Reverse Sourcing Requirement to pool multiple farmers.`);
+      setSubmittingQuote(false);
+      return;
+    }
+
     const payload = {
       product: parseInt(selectedProdId),
       quantity: parseFloat(quantity),
@@ -361,7 +493,33 @@ const BulkBuyerPortal = () => {
     }
   };
 
+  const handleBuyerCounter = async (quoteId) => {
+    const actionKey = `buyer-counter-${quoteId}`;
+    if (actionLoading[actionKey]) return;
+    const price = buyerCounterPrices[quoteId];
+    if (!price || isNaN(parseFloat(price)) || parseFloat(price) <= 0) {
+      alert('Please enter a valid counter bid price.');
+      return;
+    }
+    setActionLoading(prev => ({ ...prev, [actionKey]: true }));
+    try {
+      await api.post(`/orders/quotes/${quoteId}/counter-offer/`, {
+        target_price: parseFloat(price)
+      });
+      setBuyerCounterPrices(prev => ({ ...prev, [quoteId]: '' }));
+      alert('Counter-offer submitted to the farmer. Status updated to Pending.');
+      await fetchPortalData();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to submit counter-offer.');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [actionKey]: false }));
+    }
+  };
+
   const handleAcceptCounter = async (quoteId) => {
+    const actionKey = `buyer-accept-${quoteId}`;
+    if (actionLoading[actionKey]) return;
+    setActionLoading(prev => ({ ...prev, [actionKey]: true }));
     try {
       const response = await api.post(`/orders/quotes/${quoteId}/accept-offer/`);
       handleInitiateBulkPayment(response.data, 'Wholesale Single-Crop Bid Order', () => {
@@ -369,20 +527,30 @@ const BulkBuyerPortal = () => {
       });
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to accept offer.');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [actionKey]: false }));
     }
   };
 
   const handleRejectOffer = async (quoteId) => {
+    const actionKey = `buyer-reject-${quoteId}`;
+    if (actionLoading[actionKey]) return;
+    setActionLoading(prev => ({ ...prev, [actionKey]: true }));
     try {
       await api.post(`/orders/quotes/${quoteId}/reject-offer/`);
       alert('Offer rejected.');
-      fetchPortalData();
+      await fetchPortalData();
     } catch (err) {
       alert('Error updating quote');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [actionKey]: false }));
     }
   };
 
   const handleAcceptFarmerOffer = async (offerId) => {
+    const actionKey = `buyer-offer-accept-${offerId}`;
+    if (actionLoading[actionKey]) return;
+    setActionLoading(prev => ({ ...prev, [actionKey]: true }));
     try {
       const response = await api.post(`/orders/farmer-offers/${offerId}/accept/`);
       handleInitiateBulkPayment(response.data, 'Wholesale Reverse Sourcing Order', () => {
@@ -390,26 +558,38 @@ const BulkBuyerPortal = () => {
       });
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to accept farmer offer.');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [actionKey]: false }));
     }
   };
 
   const handleRejectFarmerOffer = async (offerId) => {
+    const actionKey = `buyer-offer-reject-${offerId}`;
+    if (actionLoading[actionKey]) return;
+    setActionLoading(prev => ({ ...prev, [actionKey]: true }));
     try {
       await api.post(`/orders/farmer-offers/${offerId}/reject/`);
       alert('Farmer offer rejected.');
-      fetchPortalData();
+      await fetchPortalData();
     } catch (err) {
       alert('Failed to reject farmer offer.');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [actionKey]: false }));
     }
   };
 
   const handleReserveContract = async (contractId) => {
+    const actionKey = `buyer-contract-reserve-${contractId}`;
+    if (actionLoading[actionKey]) return;
+    setActionLoading(prev => ({ ...prev, [actionKey]: true }));
     try {
       await api.post(`/orders/pre-harvest-contracts/${contractId}/reserve/`);
       alert('Pre-harvest contract reserved successfully!');
-      fetchPortalData();
+      await fetchPortalData();
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to reserve pre-harvest contract.');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [actionKey]: false }));
     }
   };
 
@@ -592,7 +772,178 @@ const BulkBuyerPortal = () => {
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600">Wholesale Channel</p>
               <h3 className="font-black text-xl text-slate-800 mt-1">Negotiate Specific Listing</h3>
-              <p className="text-sm text-slate-500 mt-1">Submit wholesale bids directly to FPOs and independent regional farmers.</p>
+              <p className="text-sm text-slate-500 mt-1">Filter by farmer, product, required stock, or target budget to submit direct wholesale bids.</p>
+            </div>
+
+            {/* Smart Filter & Farmer Discovery Bar (All filters optional) */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 sm:p-5 space-y-3.5">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                    <SlidersHorizontal className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-xs text-slate-800">Filter Farmers & Available Crops</h4>
+                    <p className="text-[11px] text-slate-500">None of these filters are mandatory. Use any combination to discover listings.</p>
+                  </div>
+                </div>
+                {isAnyFilterActive && (
+                  <button
+                    type="button"
+                    onClick={handleResetFilters}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-xl border border-rose-200 transition cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" /> Clear Filters
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                {/* 1. Filter by Farmer */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Select Farmer <span className="text-slate-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <select
+                    value={filterFarmer}
+                    onChange={(e) => setFilterFarmer(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs"
+                  >
+                    <option value="">👨‍🌾 All Farmers ({uniqueFarmers.length})</option>
+                    {uniqueFarmers.map(f => (
+                      <option key={f.id} value={f.id}>
+                        👨‍🌾 {f.username} ({f.district})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 2. Filter by Product / Crop with YouTube-style Autocomplete Dropdown */}
+                <div className="relative" ref={searchContainerRef}>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Crop / Product <span className="text-slate-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search crop or product..."
+                      value={filterProduct}
+                      onChange={(e) => {
+                        setFilterProduct(e.target.value);
+                        setShowProductSuggestions(true);
+                      }}
+                      onFocus={() => setShowProductSuggestions(true)}
+                      className="w-full pl-8 pr-7 py-2 border border-slate-200 rounded-xl bg-white text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs"
+                    />
+                    {filterProduct && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFilterProduct('');
+                          setShowProductSuggestions(false);
+                        }}
+                        className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* YouTube-style Search Autocomplete Dropdown */}
+                  {showProductSuggestions && (
+                    <div className="absolute left-0 sm:-left-6 w-[calc(100vw-3rem)] sm:w-80 top-full mt-1.5 z-50 bg-white rounded-2xl shadow-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden max-h-72 overflow-y-auto">
+                      <div className="px-3 py-1.5 bg-slate-50 flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        <span>Available Products ({searchMatchingProducts.length})</span>
+                        <span>Click to Select</span>
+                      </div>
+                      {searchMatchingProducts.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-slate-400 font-medium">
+                          No crops found matching "{filterProduct}"
+                        </div>
+                      ) : (
+                        searchMatchingProducts.map(p => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => handleSelectProductSuggestion(p)}
+                            className={`w-full px-3 py-2.5 text-left transition flex items-center justify-between gap-2 group cursor-pointer ${
+                              parseInt(selectedProdId) === p.id ? 'bg-emerald-50/90' : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <Search className="h-3 w-3 text-slate-400 group-hover:text-emerald-600 shrink-0" />
+                                <span className="font-bold text-xs text-slate-800 group-hover:text-emerald-900 truncate">
+                                  {p.name}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-500 pl-4.5 mt-0.5 truncate">
+                                👨‍🌾 {p.farmer_details?.username || 'Farmer'} ({p.farmer_details?.district || 'Regional'})
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className="text-xs font-black text-emerald-700 block">
+                                ₹{parseFloat(p.price_per_unit).toFixed(2)}/{p.unit}
+                              </span>
+                              <span className="text-[10px] text-slate-400 block font-medium">
+                                {p.quantity} {p.unit}
+                              </span>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Filter by Min Available Stock */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Min Stock Needed <span className="text-slate-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 500 (kg)"
+                    value={filterMinQty}
+                    onChange={(e) => setFilterMinQty(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs"
+                  />
+                </div>
+
+                {/* 4. Filter by Max Price */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                    Max Price Limit <span className="text-slate-400 font-normal lowercase">(optional)</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-slate-400 text-xs font-bold">₹</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      placeholder="e.g. 100"
+                      value={filterMaxPrice}
+                      onChange={(e) => setFilterMaxPrice(e.target.value)}
+                      className="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-xl bg-white text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Status counter */}
+              <div className="flex justify-between items-center text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
+                <span>
+                  Showing <strong className="text-emerald-700 font-bold">{filteredProducts.length}</strong> of {products.length} available crop listings
+                  {filterFarmer && ` • Filtered for selected farmer`}
+                </span>
+                {isAnyFilterActive && (
+                  <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 text-[10px]">
+                    Filters Active
+                  </span>
+                )}
+              </div>
             </div>
 
             {quoteError && (
@@ -603,23 +954,42 @@ const BulkBuyerPortal = () => {
 
             <form onSubmit={handleSubmitQuote} className="space-y-5 text-xs">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                {/* Select Crop Yield Dropdown */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Select Crop Yield</label>
-                  <select
-                    value={selectedProdId}
-                    onChange={(e) => setSelectedProdId(e.target.value)}
-                    className="w-full px-3.5 py-3 border border-slate-200 rounded-2xl bg-white text-sm text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs transition-all"
-                  >
-                    {products.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} (Stock: {p.quantity} {p.unit})
-                      </option>
-                    ))}
-                  </select>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                    Select Crop & Farmer Listing <span className="text-rose-500">*</span>
+                  </label>
+                  {filteredProducts.length === 0 ? (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-xs">
+                      <p className="font-bold">No farmer listings match your filters.</p>
+                      <button
+                        type="button"
+                        onClick={handleResetFilters}
+                        className="text-emerald-700 font-extrabold underline mt-1 block hover:text-emerald-800 cursor-pointer"
+                      >
+                        Reset filters to show all listings
+                      </button>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedProdId}
+                      onChange={(e) => setSelectedProdId(e.target.value)}
+                      className="w-full px-3.5 py-3 border border-slate-200 rounded-2xl bg-white text-sm text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs transition-all"
+                    >
+                      {filteredProducts.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} — Stock: {p.quantity} {p.unit} @ ₹{parseFloat(p.price_per_unit).toFixed(2)}/{p.unit} • 👨‍🌾 {p.farmer_details?.username || 'Farmer'} ({p.farmer_details?.district || 'Regional'})
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
+                {/* Target Quantity */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Target Quantity</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                    Target Quantity <span className="text-rose-500">*</span>
+                  </label>
                   <div className="flex gap-2">
                     <input
                       type="number"
@@ -628,16 +998,30 @@ const BulkBuyerPortal = () => {
                       placeholder="e.g. 500"
                       value={quantity}
                       onChange={(e) => setQuantity(e.target.value)}
-                      className="w-full px-3.5 py-3 border border-slate-200 rounded-2xl bg-white text-sm text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs transition-all"
+                      className={`w-full px-3.5 py-3 border rounded-2xl bg-white text-sm text-slate-800 font-medium focus:outline-none focus:ring-2 shadow-2xs transition-all ${
+                        quantity && getSelectedProductDetails() && parseFloat(quantity) > parseFloat(getSelectedProductDetails().quantity)
+                          ? 'border-amber-400 focus:ring-amber-500/20 focus:border-amber-500'
+                          : 'border-slate-200 focus:ring-emerald-500/20 focus:border-emerald-500'
+                      }`}
                     />
                     <span className="bg-slate-50 border border-slate-200 text-slate-600 font-bold px-4 py-3 rounded-2xl flex items-center justify-center uppercase text-xs shrink-0">
                       {getSelectedProductDetails()?.unit || 'Units'}
                     </span>
                   </div>
+                  {/* Real-time stock warning */}
+                  {quantity && getSelectedProductDetails() && parseFloat(quantity) > parseFloat(getSelectedProductDetails().quantity) && (
+                    <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 mt-1.5">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                      Requested ({quantity} {getSelectedProductDetails().unit}) exceeds stock ({getSelectedProductDetails().quantity} {getSelectedProductDetails().unit}).
+                    </p>
+                  )}
                 </div>
 
+                {/* Target Bid Price */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Target Bid Price (per unit)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                    Target Bid Price (per unit) <span className="text-rose-500">*</span>
+                  </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500 font-bold text-sm">₹</div>
                     <input
@@ -650,18 +1034,30 @@ const BulkBuyerPortal = () => {
                       className="w-full pl-8 pr-3.5 py-3 border border-slate-200 rounded-2xl bg-white text-sm text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 shadow-2xs transition-all"
                     />
                   </div>
+                  {targetPrice && getSelectedProductDetails() && (
+                    <p className="text-[10px] text-slate-500 mt-1 pl-1">
+                      Target total: <strong className="text-slate-800 font-bold">₹{(parseFloat(quantity || 0) * parseFloat(targetPrice || 0)).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>
+                    </p>
+                  )}
                 </div>
               </div>
 
+              {/* Selected Crop & Farmer Details Card */}
               {selectedProdId && getSelectedProductDetails() && (
-                <div className="bg-emerald-50/70 rounded-2xl p-4 border border-emerald-100/80 flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs gap-2">
-                  <div>
-                    <span className="font-extrabold text-[10px] uppercase tracking-wider text-emerald-800 block">Listing Price Reference</span>
-                    <p className="font-bold text-slate-800 text-sm mt-0.5">₹{parseFloat(getSelectedProductDetails().price_per_unit).toFixed(2)} per {getSelectedProductDetails().unit}</p>
+                <div className="bg-emerald-50/70 rounded-2xl p-4 border border-emerald-100/80 flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs gap-3">
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div>
+                      <span className="font-extrabold text-[10px] uppercase tracking-wider text-emerald-800 block">Listing Price</span>
+                      <p className="font-bold text-slate-800 text-sm mt-0.5">₹{parseFloat(getSelectedProductDetails().price_per_unit).toFixed(2)} per {getSelectedProductDetails().unit}</p>
+                    </div>
+                    <div className="border-l border-emerald-200/80 pl-4">
+                      <span className="font-extrabold text-[10px] uppercase tracking-wider text-emerald-800 block">Available Stock</span>
+                      <p className="font-bold text-emerald-900 text-sm mt-0.5">{getSelectedProductDetails().quantity} {getSelectedProductDetails().unit}</p>
+                    </div>
                   </div>
                   <div>
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-emerald-200 text-emerald-800 font-bold text-xs shadow-2xs">
-                      👨‍🌾 {getSelectedProductDetails().farmer_details?.username || 'Verified Farmer'} ({getSelectedProductDetails().farmer_details?.district || 'Regional'})
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-emerald-200 text-emerald-800 font-bold text-xs shadow-2xs">
+                      👨‍🌾 {getSelectedProductDetails().farmer_details?.username || 'Verified Farmer'} ({getSelectedProductDetails().farmer_details?.district || 'Regional'}{getSelectedProductDetails().farmer_details?.state ? `, ${getSelectedProductDetails().farmer_details.state}` : ''})
                     </span>
                   </div>
                 </div>
@@ -669,13 +1065,13 @@ const BulkBuyerPortal = () => {
 
               <button
                 type="submit"
-                disabled={submittingQuote}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm py-3.5 px-6 rounded-2xl shadow-md shadow-emerald-950/20 hover:shadow-lg hover:shadow-emerald-950/30 transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+                disabled={submittingQuote || filteredProducts.length === 0}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-sm py-3.5 px-6 rounded-2xl shadow-md shadow-emerald-950/20 hover:shadow-lg hover:shadow-emerald-950/30 transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
               >
                 {submittingQuote ? <Loader2 className="h-5 w-5 animate-spin" /> : (
                   <>
                     <Handshake className="h-5 w-5" />
-                    <span>Initiate Negotiation</span>
+                    <span>Initiate Negotiation with Farmer</span>
                   </>
                 )}
               </button>
@@ -713,50 +1109,88 @@ const BulkBuyerPortal = () => {
                         <td className="py-4 px-3 font-bold text-slate-800 text-sm">{q.product_details?.name}</td>
                         <td className="py-4 px-3 font-semibold text-slate-600">{q.quantity} {q.product_details?.unit}</td>
                         <td className="py-4 px-3 font-bold text-slate-900 text-sm">₹{parseFloat(q.target_price).toFixed(2)}</td>
-                        <td className="py-4 px-3">
+                        <td className="py-4 px-3 font-semibold text-slate-800 text-sm">
                           {q.offered_price ? (
-                            <div>
-                              <span className="font-bold text-emerald-800 text-sm">₹{parseFloat(q.offered_price).toFixed(2)}</span>
-                              <div className="mt-1 space-y-1">
-                                <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-                                  🌾 1 Farmer Pledged 100 {q.product_details?.unit || 'kg'}
-                                </span>
-                                <span className="block text-[11px] text-amber-700 font-semibold">
-                                  ⏳ Waiting for 2 more farmers ({Math.max(0, parseFloat(q.quantity) - 100).toFixed(0)} {q.product_details?.unit || 'kg'} remaining)
-                                </span>
-                              </div>
-                            </div>
+                            <span className="font-extrabold text-emerald-800 text-sm">₹{parseFloat(q.offered_price).toFixed(2)}</span>
                           ) : (
-                            <div>
-                              <span className="text-slate-400 font-bold">—</span>
-                              <span className="block text-[11px] text-slate-400 italic mt-0.5">Awaiting 3 farmer pool</span>
-                            </div>
+                            <span className="text-slate-400 font-bold">—</span>
                           )}
                         </td>
                         <td className="py-4 px-3">
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold border uppercase inline-flex items-center gap-1.5 ${
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold border uppercase inline-flex items-center gap-1.5 whitespace-nowrap ${
                             q.status === 'accepted' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
                             q.status === 'rejected' ? 'bg-rose-50 border-rose-200 text-rose-800' :
-                            q.status === 'offered' ? 'bg-amber-50 border-amber-200 text-amber-800' :
-                            'bg-blue-50 border-blue-200 text-blue-800'
+                            q.status === 'offered' ? 'bg-blue-50 border-blue-200 text-blue-800' :
+                            'bg-amber-50 border-amber-200 text-amber-800'
                           }`}>
-                            {q.status === 'offered' ? '1 Offer (Waiting for 2)' : q.status.replace('_', ' ')}
+                            {q.status === 'pending' ? 'Pending' :
+                             q.status === 'offered' ? 'Reviewing' :
+                             q.status === 'accepted' ? 'Accepted' :
+                             q.status === 'rejected' ? 'Rejected' : q.status.replace('_', ' ')}
                           </span>
                         </td>
                         <td className="py-4 px-3 text-right">
                           {q.status === 'offered' && (
-                            <div className="flex gap-2 justify-end">
+                            <div className="flex items-center justify-end gap-2 flex-wrap">
+                              {/* Counter offer input field for Bulk Buyer */}
+                              <div className="flex gap-1 items-center">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="Counter ₹"
+                                  disabled={actionLoading[`buyer-counter-${q.id}`]}
+                                  value={buyerCounterPrices[q.id] || ''}
+                                  onChange={(e) => setBuyerCounterPrices({ ...buyerCounterPrices, [q.id]: e.target.value })}
+                                  className="w-24 px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white shadow-2xs font-bold text-slate-800"
+                                />
+                                <button
+                                  disabled={actionLoading[`buyer-counter-${q.id}`]}
+                                  onClick={() => handleBuyerCounter(q.id)}
+                                  className={`bg-amber-500 hover:bg-amber-600 text-white font-extrabold px-3 py-1.5 rounded-xl text-xs shadow-2xs transition flex items-center gap-1 cursor-pointer ${
+                                    actionLoading[`buyer-counter-${q.id}`] ? 'opacity-70 cursor-not-allowed pointer-events-none' : ''
+                                  }`}
+                                >
+                                  {actionLoading[`buyer-counter-${q.id}`] ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                      <span>...</span>
+                                    </>
+                                  ) : (
+                                    <span>Counter</span>
+                                  )}
+                                </button>
+                              </div>
                               <button
+                                disabled={actionLoading[`buyer-accept-${q.id}`]}
                                 onClick={() => handleAcceptCounter(q.id)}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-3.5 py-1.5 rounded-xl text-xs shadow-2xs hover:shadow-xs transition-all cursor-pointer"
+                                className={`bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-3.5 py-1.5 rounded-xl text-xs shadow-2xs hover:shadow-xs transition-all flex items-center gap-1 cursor-pointer ${
+                                  actionLoading[`buyer-accept-${q.id}`] ? 'opacity-70 cursor-not-allowed pointer-events-none' : ''
+                                }`}
                               >
-                                Accept
+                                {actionLoading[`buyer-accept-${q.id}`] ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                    <span>Accepting...</span>
+                                  </>
+                                ) : (
+                                  <span>Accept</span>
+                                )}
                               </button>
                               <button
+                                disabled={actionLoading[`buyer-reject-${q.id}`]}
                                 onClick={() => handleRejectOffer(q.id)}
-                                className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-3.5 py-1.5 rounded-xl text-xs border border-rose-200 transition-all cursor-pointer"
+                                className={`bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold px-3.5 py-1.5 rounded-xl text-xs border border-rose-200 transition-all flex items-center gap-1 cursor-pointer ${
+                                  actionLoading[`buyer-reject-${q.id}`] ? 'opacity-70 cursor-not-allowed pointer-events-none' : ''
+                                }`}
                               >
-                                Reject
+                                {actionLoading[`buyer-reject-${q.id}`] ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 animate-spin text-rose-600" />
+                                    <span>...</span>
+                                  </>
+                                ) : (
+                                  <span>Reject</span>
+                                )}
                               </button>
                             </div>
                           )}
@@ -766,7 +1200,10 @@ const BulkBuyerPortal = () => {
                             </span>
                           )}
                           {q.status === 'pending' && (
-                            <span className="text-xs text-slate-400 font-medium italic">Awaiting Farmer</span>
+                            <span className="text-xs text-slate-400 font-medium italic">Awaiting Farmer Response</span>
+                          )}
+                          {q.status === 'rejected' && (
+                            <span className="text-xs text-slate-400 font-medium">Negotiation Closed</span>
                           )}
                         </td>
                       </tr>
@@ -1014,16 +1451,36 @@ const BulkBuyerPortal = () => {
                                 {offer.status === 'pending' ? (
                                   <>
                                     <button
+                                      disabled={actionLoading[`buyer-offer-accept-${offer.id}`]}
                                       onClick={() => handleAcceptFarmerOffer(offer.id)}
-                                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-xs transition"
+                                      className={`bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-xs transition flex items-center gap-1 ${
+                                        actionLoading[`buyer-offer-accept-${offer.id}`] ? 'opacity-70 cursor-not-allowed pointer-events-none' : ''
+                                      }`}
                                     >
-                                      Accept & Lock Qty
+                                      {actionLoading[`buyer-offer-accept-${offer.id}`] ? (
+                                        <>
+                                          <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                          <span>Accepting...</span>
+                                        </>
+                                      ) : (
+                                        <span>Accept & Lock Qty</span>
+                                      )}
                                     </button>
                                     <button
+                                      disabled={actionLoading[`buyer-offer-reject-${offer.id}`]}
                                       onClick={() => handleRejectFarmerOffer(offer.id)}
-                                      className="bg-rose-50 border border-rose-100 hover:bg-rose-100 text-rose-600 font-semibold px-3 py-1.5 rounded-xl text-xs transition"
+                                      className={`bg-rose-50 border border-rose-100 hover:bg-rose-100 text-rose-600 font-semibold px-3 py-1.5 rounded-xl text-xs transition flex items-center gap-1 ${
+                                        actionLoading[`buyer-offer-reject-${offer.id}`] ? 'opacity-70 cursor-not-allowed pointer-events-none' : ''
+                                      }`}
                                     >
-                                      Reject
+                                      {actionLoading[`buyer-offer-reject-${offer.id}`] ? (
+                                        <>
+                                          <Loader2 className="h-3 w-3 animate-spin text-rose-600" />
+                                          <span>...</span>
+                                        </>
+                                      ) : (
+                                        <span>Reject</span>
+                                      )}
                                     </button>
                                   </>
                                 ) : (
@@ -1104,10 +1561,20 @@ const BulkBuyerPortal = () => {
                     
                     {contract.status === 'proposed' ? (
                       <button
+                        disabled={actionLoading[`buyer-contract-reserve-${contract.id}`]}
                         onClick={() => handleReserveContract(contract.id)}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4 py-2 rounded-xl text-xs shadow-2xs hover:shadow-xs transition-all cursor-pointer"
+                        className={`bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4 py-2 rounded-xl text-xs shadow-2xs hover:shadow-xs transition-all flex items-center gap-1.5 cursor-pointer ${
+                          actionLoading[`buyer-contract-reserve-${contract.id}`] ? 'opacity-70 cursor-not-allowed pointer-events-none' : ''
+                        }`}
                       >
-                        Reserve Contract
+                        {actionLoading[`buyer-contract-reserve-${contract.id}`] ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-white" />
+                            <span>Reserving...</span>
+                          </>
+                        ) : (
+                          <span>Reserve Contract</span>
+                        )}
                       </button>
                     ) : (
                       contract.buyer === user?.id && (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
@@ -133,6 +133,19 @@ const FarmerDashboard = () => {
   const [markets, setMarkets] = useState([]);
   const [selectedMarket, setSelectedMarket] = useState(null);
   const [farmerProfile, setFarmerProfile] = useState(null);
+  const [orderChannelFilter, setOrderChannelFilter] = useState('all'); // 'all' | 'retail' | 'wholesale'
+  const [orderStatusFilter, setOrderStatusFilter] = useState('all');
+  const [actionLoading, setActionLoading] = useState({});
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter(o => {
+      const isWholesale = o.buyer_role === 'bulk_buyer' || o.channel === 'wholesale';
+      if (orderChannelFilter === 'retail' && isWholesale) return false;
+      if (orderChannelFilter === 'wholesale' && !isWholesale) return false;
+      if (orderStatusFilter !== 'all' && o.status !== orderStatusFilter) return false;
+      return true;
+    });
+  }, [orders, orderChannelFilter, orderStatusFilter]);
 
   // Route tracking states
   const [orderRoutes, setOrderRoutes] = useState({});
@@ -374,15 +387,20 @@ const FarmerDashboard = () => {
   });
 
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    const actionKey = `order-${orderId}-${newStatus}`;
+    if (actionLoading[actionKey]) return;
+    setActionLoading(prev => ({ ...prev, [actionKey]: true }));
     try {
       const response = await api.patch(`/orders/${orderId}/status/`, { status: newStatus });
       setOrders(orders.map(o => o.id === orderId ? { ...o, status: response.data.status } : o));
-      fetchDashboardData();
+      await fetchDashboardData();
     } catch (err) {
       if (err.response?.status === 409) {
-        fetchDashboardData();
+        await fetchDashboardData();
       }
       alert(err.response?.data?.error || 'Error updating order status');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [actionKey]: false }));
     }
   };
 
@@ -401,28 +419,38 @@ const FarmerDashboard = () => {
 
   // Wholesale Counter offer
   const handleCounterQuote = async (quoteId) => {
+    const actionKey = `quote-counter-${quoteId}`;
+    if (actionLoading[actionKey]) return;
     const price = counterPrices[quoteId];
     if (!price) {
       alert('Please enter a counter price.');
       return;
     }
+    setActionLoading(prev => ({ ...prev, [actionKey]: true }));
     try {
       await api.post(`/orders/quotes/${quoteId}/counter-offer/`, { offered_price: parseFloat(price) });
       alert('Counter price offer submitted to buyer.');
       setCounterPrices(prev => ({ ...prev, [quoteId]: '' }));
-      fetchDashboardData();
+      await fetchDashboardData();
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to submit counter offer.');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [actionKey]: false }));
     }
   };
 
   const handleAcceptQuote = async (quoteId) => {
+    const actionKey = `quote-accept-${quoteId}`;
+    if (actionLoading[actionKey]) return;
+    setActionLoading(prev => ({ ...prev, [actionKey]: true }));
     try {
       await api.post(`/orders/quotes/${quoteId}/accept-offer/`);
       alert('Quote accepted! Order is now created.');
-      fetchDashboardData();
+      await fetchDashboardData();
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to accept quote.');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [actionKey]: false }));
     }
   };
 
@@ -446,12 +474,17 @@ const FarmerDashboard = () => {
   };
 
   const handleRejectQuote = async (quoteId) => {
+    const actionKey = `quote-reject-${quoteId}`;
+    if (actionLoading[actionKey]) return;
+    setActionLoading(prev => ({ ...prev, [actionKey]: true }));
     try {
       await api.post(`/orders/quotes/${quoteId}/reject-offer/`);
       alert('Quote rejected.');
-      fetchDashboardData();
+      await fetchDashboardData();
     } catch (err) {
       alert('Failed to reject quote.');
+    } finally {
+      setActionLoading(prev => ({ ...prev, [actionKey]: false }));
     }
   };
 
@@ -784,34 +817,150 @@ const FarmerDashboard = () => {
         </div>
       )}
 
-      {/* 2. Retail Incoming Orders */}
+      {/* 2. Orders & Dispatch Queue */}
       {activeSection === 'orders' && (
         <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-6">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600">Retail channel</p>
-            <h3 className="font-black text-xl text-slate-800 mt-1">Retail Orders</h3>
-            <p className="text-sm text-slate-500 leading-relaxed mt-1">Consumer purchases for your listed produce. Wholesale negotiations appear under Wholesale Bids.</p>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600">Dispatch & Logistics Management</p>
+              <h3 className="font-black text-2xl text-slate-800 mt-1">Orders & Dispatch Queue</h3>
+              <p className="text-sm text-slate-500 leading-relaxed mt-1">
+                Manage customer retail orders and bulk wholesale contracts. Confirm orders to lock inventory and trigger logistics driver broadcast, then mark packed for pickup.
+              </p>
+            </div>
+            
+            {/* Quick Metrics */}
+            <div className="flex items-center gap-2">
+              <div className="bg-slate-50 border border-slate-200 px-3 py-2 rounded-2xl text-center">
+                <span className="block text-[11px] font-bold text-slate-400 uppercase">Total</span>
+                <span className="text-base font-black text-slate-800">{orders.length}</span>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 px-3 py-2 rounded-2xl text-center">
+                <span className="block text-[11px] font-bold text-amber-700 uppercase">Wholesale</span>
+                <span className="text-base font-black text-amber-800">
+                  {orders.filter(o => o.buyer_role === 'bulk_buyer' || o.channel === 'wholesale').length}
+                </span>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-2xl text-center">
+                <span className="block text-[11px] font-bold text-emerald-700 uppercase">Retail</span>
+                <span className="text-base font-black text-emerald-800">
+                  {orders.filter(o => o.buyer_role !== 'bulk_buyer' && o.channel !== 'wholesale').length}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Channel Filters & Status Pills */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl">
+              <button
+                type="button"
+                onClick={() => setOrderChannelFilter('all')}
+                className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                  orderChannelFilter === 'all'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                All Orders ({orders.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrderChannelFilter('wholesale')}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                  orderChannelFilter === 'wholesale'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                🏢 Wholesale B2B ({orders.filter(o => o.buyer_role === 'bulk_buyer' || o.channel === 'wholesale').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrderChannelFilter('retail')}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black transition-all ${
+                  orderChannelFilter === 'retail'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                🛒 Retail Consumers ({orders.filter(o => o.buyer_role !== 'bulk_buyer' && o.channel !== 'wholesale').length})
+              </button>
+            </div>
+
+            {/* Status Quick Filter */}
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="font-bold text-slate-400 mr-1">Status:</span>
+              {['all', 'placed', 'confirmed', 'packed', 'in_transit', 'delivered'].map(st => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setOrderStatusFilter(st)}
+                  className={`px-2.5 py-1 rounded-lg font-bold capitalize transition-colors ${
+                    orderStatusFilter === st
+                      ? 'bg-slate-800 text-white shadow-xs'
+                      : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  {st === 'all' ? 'All' : st.replace('_', ' ')}
+                </button>
+              ))}
+            </div>
           </div>
 
           {loading ? (
             <OrdersListSkeleton />
           ) : (
             <div className="space-y-6">
-              {orders.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-6">No orders received yet.</p>
+              {filteredOrders.length === 0 ? (
+                <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-3xl">
+                  <Package className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+                  <p className="text-sm font-bold text-slate-600">No {orderChannelFilter === 'all' ? '' : orderChannelFilter} orders found.</p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {orderChannelFilter === 'wholesale' 
+                      ? 'Accepted wholesale quotes and bids will appear here for packaging and dispatch.' 
+                      : 'Incoming customer orders will appear here for processing.'}
+                  </p>
+                </div>
               ) : (
-                orders.map((o) => {
+                filteredOrders.map((o) => {
+                  const isWholesale = o.buyer_role === 'bulk_buyer' || o.channel === 'wholesale';
                   const selectedTransportOffer = transportOffers.find(offer => offer.shipment_details?.order === o.id && offer.status === 'pending');
                   const assignedPartner = o.shipment?.partner_details || selectedTransportOffer?.partner_details;
 
                   return (
-                  <div key={o.id} className="border border-slate-100 rounded-3xl p-5 space-y-4">
+                  <div key={o.id} className={`border rounded-3xl p-5 space-y-4 ${
+                    isWholesale ? 'border-amber-200 bg-amber-50/20 shadow-xs' : 'border-slate-100 bg-white'
+                  }`}>
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-3 gap-2">
-                      <div>
-                        <span className="text-xs font-bold text-slate-800">Order Reference #{o.id}</span>
-                        <span className="text-[13px] text-slate-400 ml-2 font-medium">Placed: {new Date(o.created_at).toLocaleDateString('en-IN')}</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-black text-slate-800">Order Reference #{o.id}</span>
+                        <span className="text-[13px] text-slate-400 font-medium">Placed: {new Date(o.created_at).toLocaleDateString('en-IN')}</span>
+
+                        {/* Channel Badge */}
+                        {isWholesale ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-amber-100 text-amber-900 border border-amber-300 uppercase tracking-wide">
+                            🏢 Wholesale B2B Contract
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300 uppercase tracking-wide">
+                            🛒 Retail Consumer
+                          </span>
+                        )}
+
+                        {/* Payment Status Badge */}
+                        {o.payment_status === 'paid' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            ✅ Paid · Escrow Secured
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            ⏳ Payment Pending
+                          </span>
+                        )}
                       </div>
-                      <div className="flex gap-2 items-center">
+
+                      <div className="flex gap-2 items-center flex-wrap">
                         <span className={`px-2.5 py-1 rounded-full text-[13px] font-bold border uppercase ${
                           o.status === 'placed' ? 'bg-blue-50 border-blue-200 text-blue-800' :
                           o.status === 'confirmed' ? 'bg-amber-50 border-amber-200 text-amber-800' :
@@ -824,41 +973,71 @@ const FarmerDashboard = () => {
                         </span>
                         {o.status === 'placed' && (
                           <button
+                            disabled={actionLoading[`order-${o.id}-confirmed`]}
                             onClick={() => handleUpdateOrderStatus(o.id, 'confirmed')}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[15px] px-4 py-3 rounded-xl transition-all"
+                            className={`bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[14px] px-4 py-2.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 ${
+                              actionLoading[`order-${o.id}-confirmed`] ? 'opacity-70 cursor-not-allowed pointer-events-none' : ''
+                            }`}
                           >
-                            Confirm Order
+                            {actionLoading[`order-${o.id}-confirmed`] ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin text-white" />
+                                <span>Confirming...</span>
+                              </>
+                            ) : (
+                              <span>Confirm Order</span>
+                            )}
                           </button>
                         )}
                         {o.status === 'confirmed' && (
                           <button
+                            disabled={actionLoading[`order-${o.id}-packed`]}
                             onClick={() => handleUpdateOrderStatus(o.id, 'packed')}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[15px] px-4 py-3 rounded-xl transition-all"
+                            className={`bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[14px] px-4 py-2.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 ${
+                              actionLoading[`order-${o.id}-packed`] ? 'opacity-70 cursor-not-allowed pointer-events-none' : ''
+                            }`}
                           >
-                            Mark Packed
+                            {actionLoading[`order-${o.id}-packed`] ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin text-white" />
+                                <span>Packing...</span>
+                              </>
+                            ) : (
+                              <span>Mark Packed</span>
+                            )}
                           </button>
                         )}
                         {o.status === 'packed' && (
-                          <span className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 font-bold text-[15px] px-4 py-3 rounded-xl">
+                          <span className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-700 font-bold text-[14px] px-3.5 py-2 rounded-xl">
                             🚚 Awaiting Logistics Pickup
                           </span>
                         )}
                         {o.status === 'in_transit' && (
-                          <span className="flex items-center gap-1.5 bg-purple-50 border border-purple-200 text-purple-700 font-bold text-[15px] px-4 py-3 rounded-xl">
+                          <span className="flex items-center gap-1.5 bg-purple-50 border border-purple-200 text-purple-700 font-bold text-[14px] px-3.5 py-2 rounded-xl">
                             📦 In Transit — Logistics Handling
                           </span>
                         )}
                         {o.status === 'delivered' && (
-                          <span className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[15px] px-4 py-3 rounded-xl">
+                          <span className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[14px] px-3.5 py-2 rounded-xl">
                             ✅ Delivered via OTP
                           </span>
                         )}
                         {(o.status === 'placed' || o.status === 'confirmed') && (
                           <button
+                            disabled={actionLoading[`order-${o.id}-cancelled`]}
                             onClick={() => handleUpdateOrderStatus(o.id, 'cancelled')}
-                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[15px] px-4 py-3 rounded-xl border border-rose-100 transition-all"
+                            className={`bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[14px] px-3.5 py-2 rounded-xl border border-rose-100 transition-all flex items-center gap-1.5 ${
+                              actionLoading[`order-${o.id}-cancelled`] ? 'opacity-70 cursor-not-allowed pointer-events-none' : ''
+                            }`}
                           >
-                            Cancel
+                            {actionLoading[`order-${o.id}-cancelled`] ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin text-rose-600" />
+                                <span>Cancelling...</span>
+                              </>
+                            ) : (
+                              <span>Cancel</span>
+                            )}
                           </button>
                         )}
                       </div>
@@ -866,8 +1045,12 @@ const FarmerDashboard = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[15px]">
                       <div className="space-y-1 col-span-1">
-                        <span className="font-bold text-slate-400 uppercase text-[13px]">Shipping Details</span>
-                        <p className="font-semibold text-slate-700">Buyer: {o.buyer_username}</p>
+                        <span className="font-bold text-slate-400 uppercase text-[13px]">
+                          {isWholesale ? 'Wholesale Buyer Details' : 'Shipping Details'}
+                        </span>
+                        <p className="font-semibold text-slate-700">
+                          Buyer: {o.buyer_username} {isWholesale && <span className="text-amber-700 text-xs font-bold">(Bulk Wholesaler)</span>}
+                        </p>
                         <p className="text-slate-500 leading-relaxed">{o.shipping_address}</p>
                         <p className="text-slate-500">PIN: {o.shipping_pincode}</p>
                         <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2">
@@ -888,10 +1071,12 @@ const FarmerDashboard = () => {
                         <span className="font-bold text-slate-400 uppercase text-[13px]">Crops Ordered</span>
                         {o.items?.map((item) => (
                           <p key={item.id} className="font-medium text-slate-700">
-                            • {item.product_details?.name} (Qty: {item.quantity} {item.product_details?.unit})
+                            • {item.product_details?.name} (Qty: {item.quantity} {item.product_details?.unit} @ ₹{parseFloat(item.price).toFixed(2)})
                           </p>
                         ))}
-                        <p className="font-extrabold text-slate-900 mt-2">Total Value: ₹{parseFloat(o.total_amount).toFixed(2)}</p>
+                        <p className="font-extrabold text-slate-900 mt-2">
+                          Total Value: ₹{parseFloat(o.total_amount).toFixed(2)}
+                        </p>
                       </div>
 
                       {/* Order Status Stepper */}
@@ -1091,9 +1276,12 @@ const FarmerDashboard = () => {
                           q.status === 'accepted' ? 'bg-emerald-100 text-emerald-800' :
                           q.status === 'rejected' ? 'bg-red-100 text-red-800' :
                           q.status === 'offered' ? 'bg-amber-100 text-amber-800' :
-                          'bg-slate-100 text-slate-800'
+                          'bg-blue-100 text-blue-800'
                         }`}>
-                          {q.status === 'offered' ? 'Price Countered' : q.status.replace('_', ' ')}
+                          {q.status === 'pending' ? 'Reviewing' :
+                           q.status === 'offered' ? 'Pending' :
+                           q.status === 'accepted' ? 'Accepted' :
+                           q.status === 'rejected' ? 'Rejected' : q.status.replace('_', ' ')}
                         </span>
                       </td>
                       <td className="py-4 px-2 text-right">
@@ -1105,28 +1293,59 @@ const FarmerDashboard = () => {
                                 type="number"
                                 step="0.01"
                                 placeholder="Counter ₹"
+                                disabled={actionLoading[`quote-counter-${q.id}`]}
                                 value={counterPrices[q.id] || ''}
                                 onChange={(e) => setCounterPrices({ ...counterPrices, [q.id]: e.target.value })}
                                 className="w-20 px-2 py-1 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
                               />
                               <button
+                                disabled={actionLoading[`quote-counter-${q.id}`]}
                                 onClick={() => handleCounterQuote(q.id)}
-                                className="bg-amber-500 hover:bg-amber-600 text-white font-bold px-2 py-1 rounded text-[13px]"
+                                className={`bg-amber-500 hover:bg-amber-600 text-white font-bold px-2.5 py-1 rounded text-[13px] flex items-center gap-1 shadow-2xs transition-all ${
+                                  actionLoading[`quote-counter-${q.id}`] ? 'opacity-70 cursor-not-allowed pointer-events-none' : ''
+                                }`}
                               >
-                                Counter
+                                {actionLoading[`quote-counter-${q.id}`] ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                    <span>...</span>
+                                  </>
+                                ) : (
+                                  <span>Counter</span>
+                                )}
                               </button>
                             </div>
                             <button
+                              disabled={actionLoading[`quote-accept-${q.id}`]}
                               onClick={() => handleAcceptQuote(q.id)}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 rounded text-[13px]"
+                              className={`bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1 rounded text-[13px] flex items-center gap-1 shadow-2xs transition-all ${
+                                actionLoading[`quote-accept-${q.id}`] ? 'opacity-70 cursor-not-allowed pointer-events-none' : ''
+                              }`}
                             >
-                              Accept
+                              {actionLoading[`quote-accept-${q.id}`] ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                  <span>Accepting...</span>
+                                </>
+                              ) : (
+                                <span>Accept</span>
+                              )}
                             </button>
                             <button
+                              disabled={actionLoading[`quote-reject-${q.id}`]}
                               onClick={() => handleRejectQuote(q.id)}
-                              className="bg-rose-50 border border-rose-100 text-rose-600 font-semibold px-2.5 py-1 rounded text-[13px]"
+                              className={`bg-rose-50 border border-rose-100 text-rose-600 font-semibold px-2.5 py-1 rounded text-[13px] flex items-center gap-1 hover:bg-rose-100 transition-all ${
+                                actionLoading[`quote-reject-${q.id}`] ? 'opacity-70 cursor-not-allowed pointer-events-none' : ''
+                              }`}
                             >
-                              Reject
+                              {actionLoading[`quote-reject-${q.id}`] ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 animate-spin text-rose-600" />
+                                  <span>...</span>
+                                </>
+                              ) : (
+                                <span>Reject</span>
+                              )}
                             </button>
                           </div>
                         )}
@@ -1134,9 +1353,74 @@ const FarmerDashboard = () => {
                           <span className="text-[13px] text-slate-400 italic">Waiting for buyer response</span>
                         )}
                         {q.status === 'accepted' && (
-                          <span className="text-[13px] text-emerald-600 font-bold flex items-center justify-end gap-1">
-                            <CheckCircle className="h-3 w-3" /> Contract Locked
-                          </span>
+                          <div className="flex flex-col items-end gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                              {q.order_id && (
+                                <span className="text-xs font-black text-slate-800 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded">
+                                  Order #{q.order_id}
+                                </span>
+                              )}
+                              <span className={`px-2 py-0.5 rounded text-[12px] font-extrabold uppercase ${
+                                q.order_status === 'placed' ? 'bg-blue-100 text-blue-800' :
+                                q.order_status === 'confirmed' ? 'bg-amber-100 text-amber-800' :
+                                q.order_status === 'packed' ? 'bg-indigo-100 text-indigo-800' :
+                                q.order_status === 'in_transit' ? 'bg-purple-100 text-purple-800' :
+                                q.order_status === 'delivered' ? 'bg-emerald-100 text-emerald-800' :
+                                'bg-emerald-100 text-emerald-800'
+                              }`}>
+                                {q.order_status ? q.order_status.replace('_', ' ') : 'Contract Locked'}
+                              </span>
+                            </div>
+
+                            {/* Quick action buttons right on the quote row */}
+                            <div className="flex items-center gap-1.5 flex-wrap justify-end mt-1">
+                              {q.order_id && q.order_status === 'placed' && (
+                                <button
+                                  disabled={actionLoading[`order-${q.order_id}-confirmed`]}
+                                  onClick={() => handleUpdateOrderStatus(q.order_id, 'confirmed')}
+                                  className={`bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 rounded text-xs transition-all shadow-xs flex items-center gap-1 ${
+                                    actionLoading[`order-${q.order_id}-confirmed`] ? 'opacity-70 cursor-not-allowed pointer-events-none' : ''
+                                  }`}
+                                >
+                                  {actionLoading[`order-${q.order_id}-confirmed`] ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                      <span>Confirming...</span>
+                                    </>
+                                  ) : (
+                                    <span>Confirm Order</span>
+                                  )}
+                                </button>
+                              )}
+                              {q.order_id && q.order_status === 'confirmed' && (
+                                <button
+                                  disabled={actionLoading[`order-${q.order_id}-packed`]}
+                                  onClick={() => handleUpdateOrderStatus(q.order_id, 'packed')}
+                                  className={`bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2.5 py-1 rounded text-xs transition-all shadow-xs flex items-center gap-1 ${
+                                    actionLoading[`order-${q.order_id}-packed`] ? 'opacity-70 cursor-not-allowed pointer-events-none' : ''
+                                  }`}
+                                >
+                                  {actionLoading[`order-${q.order_id}-packed`] ? (
+                                    <>
+                                      <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                      <span>Packing...</span>
+                                    </>
+                                  ) : (
+                                    <span>Mark Packed</span>
+                                  )}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  handleTabChange('orders');
+                                  setOrderChannelFilter('wholesale');
+                                }}
+                                className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors underline"
+                              >
+                                View in Dispatch →
+                              </button>
+                            </div>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -1429,6 +1713,20 @@ const FarmerDashboard = () => {
                       </div>
                       <p className="text-slate-600">Qty Offered: {offer.quantity} | Bid Rate: ₹{offer.price_per_unit}</p>
                       <p className="text-slate-400 text-[13px]">Deliver Date: {offer.delivery_date}</p>
+                      {offer.status === 'accepted' && offer.order_id && (
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                          <span className="font-bold text-slate-700">Order #{offer.order_id} ({offer.order_status || 'placed'})</span>
+                          <button
+                            onClick={() => {
+                              handleTabChange('orders');
+                              setOrderChannelFilter('wholesale');
+                            }}
+                            className="font-bold text-blue-600 hover:text-blue-800 underline"
+                          >
+                            View in Dispatch Queue →
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

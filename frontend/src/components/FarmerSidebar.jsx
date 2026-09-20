@@ -27,7 +27,7 @@ const FarmerSidebar = () => {
     { key: 'overview', label: 'Dashboard', to: '/farmer-dashboard#overview', icon: Home },
     { key: 'profile', label: 'My Profile', to: '/farmer-profile', icon: User },
     { key: 'inventory', label: 'Crop Inventory', to: '/farmer-dashboard#inventory', icon: Package },
-    { key: 'orders', label: 'Retail Orders', to: '/farmer-dashboard#orders', icon: ShoppingBag },
+    { key: 'orders', label: 'Orders & Dispatch', to: '/farmer-dashboard#orders', icon: ShoppingBag },
     { key: 'quotes', label: 'Wholesale Bids', to: '/farmer-dashboard#quotes', icon: Handshake },
     { key: 'sourcing', label: 'Bulk Demands', to: '/farmer-dashboard#sourcing', icon: FileCheck },
     { key: 'contracts', label: 'Contracts', to: '/farmer-dashboard#contracts', icon: Calendar },

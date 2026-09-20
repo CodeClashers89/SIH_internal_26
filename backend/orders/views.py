@@ -40,12 +40,15 @@ class OrderViewSet(viewsets.ModelViewSet):
         if user.role == 'admin':
             return queryset
         elif user.role == 'farmer':
-            # Retail Orders contains only consumer purchases. Wholesale buyer
-            # activity is represented separately by QuoteRequest/Wholesale Bids.
-            return queryset.filter(
+            channel = self.request.query_params.get('channel')
+            qs = queryset.filter(
                 items__product__farmer=user,
-                buyer__role='consumer',
             ).exclude(status='cancelled').distinct()
+            if channel == 'retail':
+                return qs.filter(buyer__role='consumer')
+            elif channel == 'wholesale':
+                return qs.filter(buyer__role='bulk_buyer')
+            return qs
         else:
             # Consumer or Bulk Buyer sees their own orders
             return queryset.filter(buyer=user)
@@ -79,50 +82,58 @@ class OrderViewSet(viewsets.ModelViewSet):
                 )
 
             if new_status == 'confirmed':
-                order_items = list(order.items.select_related('product').all())
-                locked_products = {}
-                for item in order_items:
-                    product = Product.objects.select_for_update().get(pk=item.product_id)
-                    if product.farmer_id != user.id:
-                        return Response({'error': 'You can only confirm your own products.'}, status=status.HTTP_403_FORBIDDEN)
-                    locked_products[product.id] = product
+                # For retail consumer orders, deduct inventory and cancel competing orders.
+                # For bulk buyer orders, stock was already deducted upon quote/bid agreement.
+                if order.buyer.role == 'consumer':
+                    order_items = list(order.items.select_related('product').all())
+                    locked_products = {}
+                    for item in order_items:
+                        product = Product.objects.select_for_update().get(pk=item.product_id)
+                        if product.farmer_id != user.id:
+                            return Response({'error': 'You can only confirm your own products.'}, status=status.HTTP_403_FORBIDDEN)
+                        locked_products[product.id] = product
 
-                insufficient = next(
-                    (item for item in order_items if locked_products[item.product_id].quantity < item.quantity),
-                    None,
-                )
-                if insufficient:
-                    order.status = 'cancelled'
-                    order.cancellation_reason = (
-                        f'Order cancelled because {insufficient.product.name} inventory ran out before confirmation.'
+                    insufficient = next(
+                        (item for item in order_items if locked_products[item.product_id].quantity < item.quantity),
+                        None,
                     )
-                    order.save(update_fields=['status', 'cancellation_reason', 'updated_at'])
-                    return Response(
-                        {'error': order.cancellation_reason, 'order': OrderSerializer(order).data},
-                        status=status.HTTP_409_CONFLICT,
-                    )
+                    if insufficient:
+                        order.status = 'cancelled'
+                        order.cancellation_reason = (
+                            f'Order cancelled because {insufficient.product.name} inventory ran out before confirmation.'
+                        )
+                        order.save(update_fields=['status', 'cancellation_reason', 'updated_at'])
+                        return Response(
+                            {'error': order.cancellation_reason, 'order': OrderSerializer(order).data},
+                            status=status.HTTP_409_CONFLICT,
+                        )
 
-                for item in order_items:
-                    product = locked_products[item.product_id]
-                    product.quantity -= item.quantity
-                    product.save(update_fields=['quantity'])
+                    for item in order_items:
+                        product = locked_products[item.product_id]
+                        product.quantity -= item.quantity
+                        product.save(update_fields=['quantity'])
 
-                # Any other pending order for the same product that no longer fits
-                # is cancelled and remains visible to its buyer with an explanation.
-                competing_orders = Order.objects.filter(
-                    status='placed',
-                    items__product_id__in=locked_products.keys(),
-                ).exclude(pk=order.pk).distinct()
-                for competing in competing_orders.prefetch_related('items__product'):
-                    for item in competing.items.all():
-                        product = locked_products.get(item.product_id)
-                        if product and product.quantity < item.quantity:
-                            competing.status = 'cancelled'
-                            competing.cancellation_reason = (
-                                f'Order cancelled because {product.name} inventory ran out after another order was confirmed.'
-                            )
-                            competing.save(update_fields=['status', 'cancellation_reason', 'updated_at'])
-                            break
+                    # Any other pending order for the same product that no longer fits
+                    # is cancelled and remains visible to its buyer with an explanation.
+                    competing_orders = Order.objects.filter(
+                        status='placed',
+                        items__product_id__in=locked_products.keys(),
+                    ).exclude(pk=order.pk).distinct()
+                    for competing in competing_orders.prefetch_related('items__product'):
+                        for item in competing.items.all():
+                            product = locked_products.get(item.product_id)
+                            if product and product.quantity < item.quantity:
+                                competing.status = 'cancelled'
+                                competing.cancellation_reason = (
+                                    f'Order cancelled because {product.name} inventory ran out after another order was confirmed.'
+                                )
+                                competing.save(update_fields=['status', 'cancellation_reason', 'updated_at'])
+                                break
+                else:
+                    # For wholesale orders, verify that the confirming farmer owns the products
+                    for item in order.items.select_related('product').all():
+                        if item.product and item.product.farmer_id != user.id:
+                            return Response({'error': 'You can only confirm your own products.'}, status=status.HTTP_403_FORBIDDEN)
 
         if new_status == 'cancelled':
             if getattr(order, 'cancellation_locked', False):
@@ -404,17 +415,39 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(buyer=self.request.user, status='pending')
 
-    @action(detail=True, methods=['post'], url_path='counter-offer', permission_classes=[permissions.IsAuthenticated, IsFarmer])
+    @action(detail=True, methods=['post'], url_path='counter-offer', permission_classes=[permissions.IsAuthenticated])
     def make_offer(self, request, pk=None):
         quote = self.get_object()
-        offered_price = request.data.get('offered_price')
-        if not offered_price:
-            return Response({'error': 'Please provide an offered price'}, status=status.HTTP_400_BAD_REQUEST)
-            
-        quote.offered_price = offered_price
-        quote.status = 'offered'
-        quote.save()
-        return Response(QuoteRequestSerializer(quote).data)
+        user = request.user
+
+        # 1. Farmer submits counter-offer
+        if user.role == 'farmer':
+            if quote.product.farmer != user:
+                return Response({'error': 'You do not own this product.'}, status=status.HTTP_403_FORBIDDEN)
+            offered_price = request.data.get('offered_price')
+            if not offered_price:
+                return Response({'error': 'Please provide an offered price'}, status=status.HTTP_400_BAD_REQUEST)
+                
+            quote.offered_price = offered_price
+            quote.status = 'offered'
+            quote.save()
+            return Response(QuoteRequestSerializer(quote).data)
+
+        # 2. Bulk Buyer submits counter-offer
+        elif user.role == 'bulk_buyer':
+            if quote.buyer != user:
+                return Response({'error': 'You did not initiate this quote request.'}, status=status.HTTP_403_FORBIDDEN)
+            target_price = request.data.get('target_price') or request.data.get('offered_price')
+            if not target_price:
+                return Response({'error': 'Please provide your counter bid price.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            quote.target_price = target_price
+            quote.offered_price = None  # Reset farmer counter as buyer proposed a new counter
+            quote.status = 'pending'   # Moves back to pending (awaiting farmer review)
+            quote.save()
+            return Response(QuoteRequestSerializer(quote).data)
+
+        return Response({'error': 'Unauthorized role for counter offer.'}, status=status.HTTP_403_FORBIDDEN)
 
     @action(detail=True, methods=['post'], url_path='accept-offer', permission_classes=[permissions.IsAuthenticated])
     @transaction.atomic
@@ -473,6 +506,7 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
             price=final_price
         )
 
+        quote.order = order
         quote.status = 'accepted'
         if not quote.offered_price:
             quote.offered_price = final_price
@@ -705,6 +739,9 @@ class FarmerOfferViewSet(viewsets.ModelViewSet):
             quantity=offer.quantity,
             price=offer.price_per_unit
         )
+
+        offer.order = order
+        offer.save()
 
         # Setup real or mock razorpay checkout parameters
         razorpay_order_id = f"rzp_mock_{order.id}_{random.randint(10000, 99999)}"
