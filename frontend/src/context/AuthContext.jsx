@@ -46,9 +46,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const verifyOtp = async (phone, otp) => {
+  const verifyOtp = async (phone, otp, extraData = {}) => {
     try {
-      const response = await api.post('/auth/verify-otp/', { phone, otp });
+      const payload = {
+        phone,
+        otp,
+        ...(typeof extraData === 'string' ? { msg91_token: extraData } : extraData)
+      };
+      const response = await api.post('/auth/verify-otp/', payload);
       const { user: verifiedUser } = response.data;
       // update state if this is current user
       if (user && user.phone === phone) {
@@ -56,7 +61,7 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('user', JSON.stringify(updated));
         setUser(updated);
       }
-      return { success: true, message: response.data.message };
+      return { success: true, message: response.data.message, user: verifiedUser };
     } catch (error) {
       return { 
         success: false, 
@@ -83,8 +88,41 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const requestPasswordResetOtp = async (phone) => {
+    try {
+      const response = await api.post('/auth/password-reset/request-otp/', { phone });
+      return { success: true, message: response.data.message, phone: response.data.phone, username: response.data.username };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Failed to request reset OTP. Check mobile number.'
+      };
+    }
+  };
+
+  const confirmPasswordReset = async ({ phone, otp, newPassword, msg91Token, msg91Verified }) => {
+    try {
+      const response = await api.post('/auth/password-reset/confirm/', {
+        phone,
+        otp,
+        new_password: newPassword,
+        msg91_token: msg91Token,
+        msg91_verified: msg91Verified
+      });
+      return { success: true, message: response.data.message, username: response.data.username };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.error || 'Password reset failed. Invalid or expired OTP.'
+      };
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, login, register, verifyOtp, logout, submitKyc }}>
+    <AuthContext.Provider value={{
+      user, setUser, loading, login, register, verifyOtp, logout, submitKyc,
+      requestPasswordResetOtp, confirmPasswordReset
+    }}>
       {children}
     </AuthContext.Provider>
   );

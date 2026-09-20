@@ -54,10 +54,28 @@ class ContextBuilder:
         else:
             lang_instruction = "Respond in the language requested by the farmer (English, Hindi, or Gujarati)."
 
+        farmer_loc_desc = "Gharaunda, Karnal (Haryana)"
+        try:
+            from farmer_profile.models import FarmerProfile
+            prof = FarmerProfile.objects.get(user_id=self.farmer_id)
+            farmer_loc_desc = f"Village {prof.village}, Taluka/District {prof.taluka}, State {prof.state}"
+        except Exception:
+            pass
+
         return f"""You are KisanConnect's Farmer AI Assistant - a helpful partner for Indian farmers.
 
 Language Directive:
 {lang_instruction}
+
+Farmer Location & Mandi Grounding Directive:
+- The authenticated farmer is based in: {farmer_loc_desc}.
+- When the farmer asks for prices, rates, or mandis "near me", "nearby", or in their district (e.g. Karnal), ALWAYS ground your response in their local and neighboring mandis:
+  1. Karnal Grain Market (Karnal Mandi)
+  2. Gharaunda Mandi (Local mandi for Gharaunda)
+  3. Taraori Mandi (Karnal - world renowned for Basmati Rice & Grains)
+  4. Panipat Mandi (~30 km away)
+  5. Kurukshetra Mandi (~35 km away)
+- CRITICAL: NEVER substitute distant states or mandis (such as Ahmedabad, Anand, Vadodara, or Pune) when the farmer asks for prices near their location! Only mention distant markets if the farmer explicitly requests other states.
 
 Guidelines:
 1. Help farmers make better business decisions about crops, prices, orders, and logistics.
@@ -284,22 +302,34 @@ Summary:"""
 
     def _build_farmer_context(self) -> Optional[str]:
         """
-        Build context from farmer memories.
+        Build context from farmer profile and memories.
 
         Returns:
             Formatted farmer context or None
         """
+        context_lines = []
+        try:
+            from farmer_profile.models import FarmerProfile
+            prof = FarmerProfile.objects.get(user_id=self.farmer_id)
+            context_lines.append(f"- Farmer Name: {prof.full_name or prof.user.username}")
+            context_lines.append(f"- Farm Name: {prof.farm_name}")
+            context_lines.append(f"- Location: Village {prof.village}, Taluka/District {prof.taluka}, State {prof.state}")
+            context_lines.append(f"- Local Market Yards (Mandis): Karnal Grain Market, Gharaunda Mandi, Taraori Mandi, Panipat Mandi")
+        except Exception:
+            context_lines.append("- Location: Gharaunda, Karnal, Haryana")
+            context_lines.append("- Local Market Yards (Mandis): Karnal Grain Market, Gharaunda Mandi, Taraori Mandi, Panipat Mandi")
+
         from chatbot.models import FarmerMemory
 
         memories = FarmerMemory.objects.filter(farmer_id=self.farmer_id)
-        if not memories.exists():
-            return None
-
-        context_lines = ["Farmer Information:"]
         for memory in memories[:10]:  # Limit to 10 memories
             context_lines.append(f"- {memory.key}: {memory.value}")
 
-        return "\n".join(context_lines)
+        if not context_lines:
+            return None
+
+        return "Farmer Profile & Location Information:\n" + "\n".join(context_lines)
+
 
     def _build_task_context(self) -> Optional[str]:
         """

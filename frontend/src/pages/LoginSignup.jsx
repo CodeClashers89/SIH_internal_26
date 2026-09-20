@@ -1,10 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Sprout, Phone, Lock, User, Mail, MapPin, Loader2, ArrowRight } from 'lucide-react';
+import { Sprout, Phone, Lock, User, Mail, MapPin, Loader2, ArrowRight, ShieldCheck, RefreshCw, Smartphone, ExternalLink } from 'lucide-react';
+import {
+  launchMsg91DefaultWidget,
+  initMsg91CustomUI,
+  sendMsg91Otp,
+  verifyMsg91Otp,
+  retryMsg91Otp,
+  formatPhoneForMsg91
+} from '../utils/msg91Otp';
 
 const LoginSignup = () => {
-  const { login, register, verifyOtp } = useAuth();
+  const { login, register, verifyOtp, requestPasswordResetOtp, confirmPasswordReset } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialRole = searchParams.get('role') || 'consumer';
@@ -12,9 +20,18 @@ const LoginSignup = () => {
   // Toggle View
   const [isLogin, setIsLogin] = useState(true);
   const [showOtpScreen, setShowOtpScreen] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [forgotStep, setForgotStep] = useState(1); // 1: enter phone, 2: enter otp & new password
   const [authLoading, setAuthLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
+
+  // Password Reset Fields
+  const [resetPhone, setResetPhone] = useState('');
+  const [resetOtp, setResetOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [resetTargetUsername, setResetTargetUsername] = useState('');
 
   // Form Fields
   const [username, setUsername] = useState('');
@@ -40,6 +57,74 @@ const LoginSignup = () => {
   const [vehicleType, setVehicleType] = useState('tempo');
   const [capacity, setCapacity] = useState('');
   const [serviceArea, setServiceArea] = useState('');
+
+  // MSG91 State
+  const [msg91Loaded, setMsg91Loaded] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [widgetOpening, setWidgetOpening] = useState(false);
+
+  useEffect(() => {
+    // Helper to relocate any stray captcha rendered on document.body into #msg91-captcha-container
+    const relocateCaptcha = () => {
+      const container = document.getElementById("msg91-captcha-container");
+      if (!container) return;
+
+      const strayElements = Array.from(document.body.children).filter(el => {
+        if (el.id === 'root' || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return false;
+        const text = el.innerText || '';
+        const isHcaptcha = el.querySelector('iframe[src*="hcaptcha"]') ||
+                           el.classList?.contains('h-captcha') ||
+                           el.querySelector('iframe[data-hcaptcha-widget-id]') ||
+                           text.includes('I am human') ||
+                           text.includes('hCaptcha') ||
+                           text.includes('localhost detected');
+        return Boolean(isHcaptcha);
+      });
+
+      strayElements.forEach(stray => {
+        if (!container.contains(stray)) {
+          stray.style.display = '';
+          container.appendChild(stray);
+        }
+      });
+    };
+
+    if (showOtpScreen || isForgotPassword) {
+      initMsg91CustomUI({
+        onSuccess: (data) => {
+          console.log('[MSG91 Auth Init Success]', data);
+        },
+        failure: (err) => {
+          console.warn('[MSG91 Auth Init Note]', err);
+        }
+      }).then((loaded) => {
+        setMsg91Loaded(loaded);
+        setTimeout(relocateCaptcha, 200);
+        setTimeout(relocateCaptcha, 800);
+      });
+
+      const observer = new MutationObserver(() => {
+        relocateCaptcha();
+      });
+      observer.observe(document.body, { childList: true, subtree: false });
+      const interval = setInterval(relocateCaptcha, 400);
+
+      return () => {
+        observer.disconnect();
+        clearInterval(interval);
+      };
+    } else {
+      // Hide any stray captcha elements when on regular Login/Signup
+      const strayElements = Array.from(document.body.children).filter(el => {
+        if (el.id === 'root' || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return false;
+        const text = el.innerText || '';
+        return text.includes('I am human') || text.includes('localhost detected') || el.querySelector('iframe[src*="hcaptcha"]');
+      });
+      strayElements.forEach(el => {
+        el.style.display = 'none';
+      });
+    }
+  }, [showOtpScreen, isForgotPassword, forgotStep]);
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -92,8 +177,30 @@ const LoginSignup = () => {
     setAuthLoading(false);
 
     if (result.success) {
-      setInfoMessage(`Registration initiated. Please enter the OTP sent to ${phone}.`);
+      setInfoMessage(`Account initiated! Sending MSG91 verification SMS to ${phone}...`);
       setShowOtpScreen(true);
+
+      // Trigger MSG91 SMS OTP dispatch
+      const formatted = formatPhoneForMsg91(phone);
+      sendMsg91Otp(
+        formatted,
+        (data) => {
+          console.log('[MSG91 OTP Sent Successfully]', data);
+          setInfoMessage(`Verification code sent via MSG91 SMS to ${phone}.`);
+        },
+        (err) => {
+          console.warn('[MSG91 Send Notice]', err);
+          const errMsg = typeof err === 'object' ? (err.message || JSON.stringify(err)) : String(err);
+          if (errMsg.toLowerCase().includes('captcha')) {
+            setInfoMessage(`MSG91 requires Captcha completion for this widget. Opening verification popup now...`);
+            setTimeout(() => {
+              handleLaunchDefaultWidget();
+            }, 600);
+          } else {
+            setInfoMessage(`SMS request dispatched to ${phone}. If delayed, click 'Open MSG91 Verification Popup' below.`);
+          }
+        }
+      );
     } else {
       // Parse multi-field serializer error objects
       if (typeof result.error === 'object') {
@@ -112,17 +219,222 @@ const LoginSignup = () => {
     setErrorMessage('');
     setAuthLoading(true);
 
-    const result = await verifyOtp(phone, otp);
+    // Try MSG91 exposed verification method first if available
+    verifyMsg91Otp(
+      otp,
+      async (msg91Response) => {
+        console.log('[MSG91 Custom UI Verified]', msg91Response);
+        const result = await verifyOtp(phone, otp, {
+          msg91_token: msg91Response?.token || msg91Response?.access_token || msg91Response,
+          msg91_verified: true
+        });
+        setAuthLoading(false);
+        if (result.success) {
+          alert('Verification successful! You can now log into your account.');
+          setShowOtpScreen(false);
+          setIsLogin(true);
+          setInfoMessage('Account verified successfully via MSG91. Please log in.');
+        } else {
+          setErrorMessage(result.error);
+        }
+      },
+      async (err) => {
+        console.warn('[MSG91 verifyOtp fallback to direct verification]', err);
+        // Fallback to backend verification (which checks MSG91 server token or local OTP)
+        const result = await verifyOtp(phone, otp);
+        setAuthLoading(false);
+        if (result.success) {
+          alert('Verification successful! You can now log into your account.');
+          setShowOtpScreen(false);
+          setIsLogin(true);
+          setInfoMessage('Account verified successfully. Please log in.');
+        } else {
+          setErrorMessage(result.error);
+        }
+      }
+    );
+  };
+
+  const handleLaunchDefaultWidget = () => {
+    setWidgetOpening(true);
+    launchMsg91DefaultWidget({
+      phone,
+      onSuccess: async (data) => {
+        setWidgetOpening(false);
+        console.log('[MSG91 Widget Verified]', data);
+        setAuthLoading(true);
+        const result = await verifyOtp(phone, '123456', {
+          msg91_token: typeof data === 'string' ? data : data?.token || data?.access_token || 'verified',
+          msg91_verified: true
+        });
+        setAuthLoading(false);
+        if (result.success) {
+          alert('Verification completed via MSG91 Widget! You can now log in.');
+          setShowOtpScreen(false);
+          setIsLogin(true);
+          setInfoMessage('Account verified via MSG91! Please log in.');
+        } else {
+          setErrorMessage(result.error || 'Verification failed on server.');
+        }
+      },
+      onFailure: (err) => {
+        setWidgetOpening(false);
+        console.warn('[MSG91 Widget Closed/Failed]', err);
+      }
+    });
+  };
+
+  const handleResendOtp = () => {
+    setResending(true);
+    const formatted = formatPhoneForMsg91(phone);
+    
+    // Call MSG91 resend
+    retryMsg91Otp('1', 
+      () => {
+        setResending(false);
+        setInfoMessage(`New MSG91 OTP sent to ${phone}`);
+      },
+      () => {
+        // Fallback to direct send
+        sendMsg91Otp(formatted, 
+          () => {
+            setResending(false);
+            setInfoMessage(`OTP resent to ${phone}`);
+          },
+          () => {
+            setResending(false);
+            setInfoMessage(`SMS request dispatched. You can also use demo OTP: 123456`);
+          }
+        );
+      }
+    );
+  };
+
+  // Password Reset Handlers
+  const handleRequestResetOtp = async (e) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setInfoMessage('');
+    setAuthLoading(true);
+
+    const result = await requestPasswordResetOtp(resetPhone);
     setAuthLoading(false);
 
     if (result.success) {
-      alert('Verification successful! You can now log into your account.');
-      setShowOtpScreen(false);
-      setIsLogin(true);
-      setInfoMessage('Account verified successfully. Please log in.');
+      setResetTargetUsername(result.username || '');
+      setInfoMessage(`Password reset code generated. Sending SMS to ${resetPhone}...`);
+      setForgotStep(2);
+
+      // Trigger MSG91 SMS
+      const formatted = formatPhoneForMsg91(resetPhone);
+      sendMsg91Otp(
+        formatted,
+        (data) => {
+          console.log('[MSG91 Reset OTP Sent]', data);
+          setInfoMessage(`Verification code sent via MSG91 SMS to ${resetPhone}.`);
+        },
+        (err) => {
+          console.warn('[MSG91 Reset Send Notice]', err);
+          setInfoMessage(`SMS dispatched to ${resetPhone}. If delayed, you can use the verification popup or test code.`);
+        }
+      );
     } else {
-      setErrorMessage(result.error);
+      setErrorMessage(result.error || 'Failed to find an account with this phone number.');
     }
+  };
+
+  const handleConfirmResetPassword = async (e) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setInfoMessage('');
+
+    if (newPassword !== confirmNewPassword) {
+      setErrorMessage('Passwords do not match.');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setErrorMessage('Password must be at least 6 characters.');
+      return;
+    }
+
+    setAuthLoading(true);
+
+    const result = await confirmPasswordReset({
+      phone: resetPhone,
+      otp: resetOtp,
+      newPassword
+    });
+    setAuthLoading(false);
+
+    if (result.success) {
+      alert('Password has been successfully reset! You can now log in.');
+      setIsForgotPassword(false);
+      setIsLogin(true);
+      if (result.username) setUsername(result.username);
+      setPassword(newPassword);
+      setInfoMessage('Password updated successfully! Please log in.');
+      setResetPhone('');
+      setResetOtp('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } else {
+      setErrorMessage(result.error || 'Password reset failed. Invalid or expired OTP.');
+    }
+  };
+
+  const handleLaunchResetWidget = () => {
+    setWidgetOpening(true);
+    launchMsg91DefaultWidget({
+      phone: resetPhone,
+      onSuccess: async (data) => {
+        setWidgetOpening(false);
+        console.log('[MSG91 Reset Widget Verified]', data);
+        if (!newPassword || newPassword.length < 6) {
+          setInfoMessage('Phone verified via MSG91! Now enter your new password and click Save.');
+          setResetOtp('123456');
+          return;
+        }
+        setAuthLoading(true);
+        const result = await confirmPasswordReset({
+          phone: resetPhone,
+          otp: '123456',
+          newPassword,
+          msg91Verified: true
+        });
+        setAuthLoading(false);
+        if (result.success) {
+          alert('Password successfully reset via MSG91! You can now log in.');
+          setIsForgotPassword(false);
+          setIsLogin(true);
+          if (result.username) setUsername(result.username);
+          setPassword(newPassword);
+          setInfoMessage('Password updated! Please log in.');
+        } else {
+          setErrorMessage(result.error || 'Password reset failed.');
+        }
+      },
+      onFailure: (err) => {
+        setWidgetOpening(false);
+        console.warn('[MSG91 Reset Widget Closed/Failed]', err);
+      }
+    });
+  };
+
+  const handleResendResetOtp = () => {
+    setResending(true);
+    const formatted = formatPhoneForMsg91(resetPhone);
+    sendMsg91Otp(
+      formatted,
+      () => {
+        setResending(false);
+        setInfoMessage(`New OTP sent to ${resetPhone}`);
+      },
+      () => {
+        setResending(false);
+        setInfoMessage(`SMS request dispatched. Demo code: 123456`);
+      }
+    );
   };
 
   return (
@@ -135,10 +447,10 @@ const LoginSignup = () => {
             <Sprout className="h-10 w-10 text-emerald-600 animate-pulse-soft" />
           </div>
           <h2 className="text-3xl font-extrabold tracking-tight text-slate-800">
-            {showOtpScreen ? 'Account Verification' : isLogin ? 'Welcome Back' : 'Create Account'}
+            {showOtpScreen ? 'Account Verification' : isForgotPassword ? 'Reset Password' : isLogin ? 'Welcome Back' : 'Create Account'}
           </h2>
           <p className="text-slate-500 text-xs mt-1">
-            {showOtpScreen ? 'Direct Connection Verification Gateway' : 'Connecting rural producers directly with retail & bulk buyers'}
+            {showOtpScreen ? 'Direct Connection Verification Gateway' : isForgotPassword ? 'Phone-verified secure credentials recovery' : 'Connecting rural producers directly with retail & bulk buyers'}
           </p>
         </div>
 
@@ -156,32 +468,272 @@ const LoginSignup = () => {
 
         {showOtpScreen ? (
           /* OTP Screen */
-          <form onSubmit={handleOtpSubmit} className="space-y-4">
-            <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-[10px] text-slate-500">
-              <strong>💡 Demo Tip:</strong> Check your backend terminal for the generated mock OTP, or type the master test OTP <strong>123456</strong>.
+          <div className="space-y-5">
+            {/* Phone badge */}
+            <div className="flex items-center justify-between bg-emerald-50/70 border border-emerald-200/60 rounded-2xl p-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm">
+                  <Smartphone className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider">SMS Sent To</div>
+                  <div className="text-xs font-extrabold text-slate-800 tracking-wide">{phone || 'Your Mobile Number'}</div>
+                </div>
+              </div>
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-white text-emerald-700 border border-emerald-200 shadow-2xs">
+                MSG91 Active
+              </span>
             </div>
 
-            <div className="relative">
-              <label className="block text-xs font-bold text-slate-600 mb-1 uppercase">Enter 6-digit OTP</label>
-              <input
-                type="text"
-                required
-                maxLength="6"
-                placeholder="000000"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                className="w-full pl-3 pr-3 py-2.5 border border-slate-200 rounded-xl text-center font-bold tracking-[0.5em] text-lg bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white"
-              />
+            {/* Centered container for MSG91 reCAPTCHA / hCaptcha mount */}
+            <div id="msg91-captcha-container" className="flex justify-center my-3 min-h-0 overflow-hidden rounded-xl empty:hidden"></div>
+
+            {/* Custom In-App OTP Form */}
+            <form onSubmit={handleOtpSubmit} className="space-y-4">
+              <div className="relative">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">Enter 6-Digit OTP</label>
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={resending}
+                    className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${resending ? 'animate-spin' : ''}`} />
+                    {resending ? 'Sending...' : 'Resend SMS'}
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  required
+                  maxLength="6"
+                  placeholder="000000"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/[^\d]/g, ''))}
+                  className="w-full pl-3 pr-3 py-3 border-2 border-emerald-300/80 rounded-2xl text-center font-extrabold tracking-[0.5em] text-2xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white text-slate-800 transition-all shadow-inner"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-bold py-3.5 rounded-2xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 text-sm"
+              >
+                {authLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+                  <>
+                    <ShieldCheck className="h-5 w-5" />
+                    Verify & Activate Account
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Alternative: Launch Official MSG91 Modal Widget */}
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-slate-200"></div>
+              <span className="flex-shrink mx-3 text-[11px] font-semibold text-slate-400 uppercase">Or</span>
+              <div className="flex-grow border-t border-slate-200"></div>
             </div>
 
             <button
-              type="submit"
-              disabled={authLoading}
-              className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-bold py-3 rounded-xl shadow transition-all flex items-center justify-center gap-1"
+              type="button"
+              onClick={handleLaunchDefaultWidget}
+              disabled={widgetOpening}
+              className="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-3 rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2 text-xs"
             >
-              {authLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Verify Account'}
+              {widgetOpening ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                <>
+                  <ExternalLink className="h-4 w-4 text-emerald-400" />
+                  Open MSG91 Verification Popup
+                </>
+              )}
             </button>
-          </form>
+
+            {/* Explanation box for MSG91 Custom UI vs Default Popup */}
+            <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-3.5 text-xs text-amber-900 space-y-1.5">
+              <div className="flex items-center gap-1.5 font-bold text-amber-800">
+                <span>⚠️ Why is SMS OTP not arriving in Custom UI?</span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-amber-700">
+                By default, MSG91 enforces <strong>Google reCAPTCHA</strong> on your widget. In Custom UI mode, MSG91 blocks API requests until reCAPTCHA is verified.
+              </p>
+              <div className="pt-1 flex flex-col gap-1 text-[11px]">
+                <div>
+                  👉 <strong>To receive SMS right now:</strong> Click the dark button <strong>"Open MSG91 Verification Popup"</strong> above. The popup solves the reCAPTCHA and delivers your SMS instantly.
+                </div>
+                <div>
+                  👉 <strong>To use pure Custom UI without popup:</strong> Log in to your <a href="https://control.msg91.com" target="_blank" rel="noreferrer" className="underline font-bold text-amber-900">MSG91 Dashboard</a> &gt; <strong>OTP</strong> &gt; <strong>Widgets</strong> &gt; Edit Widget &gt; Turn <strong>OFF "reCAPTCHA Validation"</strong>.
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : isForgotPassword ? (
+          /* Forgot / Reset Password Screen */
+          forgotStep === 1 ? (
+            /* Step 1: Enter Phone Number */
+            <form onSubmit={handleRequestResetOtp} className="space-y-4">
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 text-[11px] text-slate-600 leading-relaxed">
+                Enter your registered mobile number. We will send a one-time verification code via SMS to reset your password.
+              </div>
+
+              <div className="relative">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">Registered Mobile Number</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                    <Phone className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="Enter 10-digit mobile number"
+                    value={resetPhone}
+                    onChange={(e) => setResetPhone(e.target.value)}
+                    className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* Captcha mount container right inside the card above the submit button */}
+              <div id="msg91-captcha-container" className="flex justify-center my-3 min-h-0 overflow-hidden rounded-xl empty:hidden"></div>
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-bold py-3 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-sm"
+              >
+                {authLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Send Verification OTP'}
+              </button>
+
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setIsForgotPassword(false); setErrorMessage(''); setInfoMessage(''); }}
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-800"
+                >
+                  ← Back to Log In
+                </button>
+              </div>
+            </form>
+          ) : (
+            /* Step 2: Verify OTP & Enter New Password */
+            <form onSubmit={handleConfirmResetPassword} className="space-y-4">
+              <div className="flex items-center justify-between bg-emerald-50/70 border border-emerald-200/60 rounded-2xl p-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs font-bold">
+                    <Smartphone className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-emerald-900 uppercase">Resetting for</div>
+                    <div className="text-xs font-extrabold text-slate-800">{resetPhone} {resetTargetUsername ? `(@${resetTargetUsername})` : ''}</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForgotStep(1)}
+                  className="text-[10px] text-emerald-700 font-bold hover:underline"
+                >
+                  Change
+                </button>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">Enter 6-Digit OTP</label>
+                  <button
+                    type="button"
+                    onClick={handleResendResetOtp}
+                    disabled={resending}
+                    className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${resending ? 'animate-spin' : ''}`} />
+                    {resending ? 'Sending...' : 'Resend SMS'}
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  required
+                  maxLength="6"
+                  placeholder="000000"
+                  value={resetOtp}
+                  onChange={(e) => setResetOtp(e.target.value.replace(/[^\d]/g, ''))}
+                  className="w-full pl-3 pr-3 py-2.5 border-2 border-emerald-300/80 rounded-xl text-center font-bold tracking-[0.4em] text-lg bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wide">New Password</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                    <Lock className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    placeholder="At least 6 characters"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wide">Confirm New Password</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                    <Lock className="h-4 w-4 text-slate-400" />
+                  </div>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    placeholder="Re-enter password"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-bold py-3 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 text-sm"
+              >
+                {authLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+                  <>
+                    <ShieldCheck className="h-5 w-5" />
+                    Reset Password & Log In
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLaunchResetWidget}
+                disabled={widgetOpening}
+                className="w-full bg-slate-800 hover:bg-slate-900 text-white font-semibold py-2.5 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 text-xs"
+              >
+                {widgetOpening ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                  <>
+                    <ExternalLink className="h-3.5 w-3.5 text-emerald-400" />
+                    Verify Phone via MSG91 Popup
+                  </>
+                )}
+              </button>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setIsForgotPassword(false); setErrorMessage(''); setInfoMessage(''); }}
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-800"
+                >
+                  Cancel & Back to Log In
+                </button>
+              </div>
+            </form>
+          )
         ) : isLogin ? (
           /* Login Form */
           <form onSubmit={handleLoginSubmit} className="space-y-4">
@@ -201,18 +753,35 @@ const LoginSignup = () => {
             </div>
 
             <div className="relative">
-              <label className="block text-xs font-bold text-slate-600 mb-1 uppercase">Password</label>
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none mt-5">
-                <Lock className="h-4 w-4 text-slate-400" />
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-600 uppercase">Password</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotPassword(true);
+                    setForgotStep(1);
+                    setResetPhone(phone || '');
+                    setErrorMessage('');
+                    setInfoMessage('');
+                  }}
+                  className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline"
+                >
+                  Forgot password?
+                </button>
               </div>
-              <input
-                type="password"
-                required
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <Lock className="h-4 w-4 text-slate-400" />
+                </div>
+                <input
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
             </div>
 
             <button
