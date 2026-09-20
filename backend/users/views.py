@@ -50,24 +50,145 @@ class VerifyOTPView(APIView):
     def post(self, request):
         phone = request.data.get('phone')
         otp = request.data.get('otp')
+        msg91_token = request.data.get('msg91_token') or request.data.get('access_token')
 
-        if not phone or not otp:
-            return Response({'error': 'Please provide both phone and otp'}, status=status.HTTP_400_BAD_REQUEST)
+        if not phone and not msg91_token:
+            return Response({'error': 'Please provide phone and OTP or MSG91 verification token.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            user = User.objects.get(phone=phone)
-            # Universal sandbox OTP: '123456'
-            if user.otp == otp or otp == '123456':
-                user.is_verified = True
-                user.save()
-                return Response({
-                    'message': 'OTP verification successful. Account verified.',
-                    'user': UserSerializer(user).data
-                }, status=status.HTTP_200_OK)
-            else:
-                return Response({'error': 'Invalid OTP'}, status=status.HTTP_400_BAD_REQUEST)
-        except User.DoesNotExist:
+        # Flexible phone matching (supports +91, 91, or raw 10 digits)
+        clean_phone = ''.join(c for c in str(phone) if c.isdigit())
+        last_10 = clean_phone[-10:] if len(clean_phone) >= 10 else clean_phone
+        
+        user = None
+        if last_10:
+            user = User.objects.filter(phone__icontains=last_10).first()
+        
+        if not user and phone:
+            user = User.objects.filter(phone=phone).first()
+
+        if not user:
             return Response({'error': 'User with this phone number does not exist'}, status=status.HTTP_404_NOT_FOUND)
+
+        # 1. Verify via MSG91 server-side access token
+        if msg91_token:
+            try:
+                import requests, os
+                authkey = os.environ.get('MSG91_AUTH_KEY', '564962TA0jersOB6a90124eP1')
+                headers = {'authkey': authkey, 'Content-Type': 'application/json'}
+                resp = requests.post(
+                    'https://api.msg91.com/api/v5/widget/verifyAccessToken',
+                    json={'access-token': msg91_token},
+                    headers=headers,
+                    timeout=8
+                )
+                if resp.status_code == 200:
+                    user.is_verified = True
+                    user.save()
+                    return Response({
+                        'message': 'MSG91 OTP verification successful. Account verified.',
+                        'user': UserSerializer(user).data
+                    }, status=status.HTTP_200_OK)
+            except Exception as e:
+                print(f"[MSG91 API WARNING] Failed to verify token with MSG91: {e}")
+
+        # 2. Verify via OTP code (or universal demo bypass 123456)
+        if otp and (user.otp == otp or otp == '123456'):
+            user.is_verified = True
+            user.save()
+            return Response({
+                'message': 'OTP verification successful. Account verified.',
+                'user': UserSerializer(user).data
+            }, status=status.HTTP_200_OK)
+
+        # 3. If MSG91 widget verified on frontend and passed as verified flag
+        if request.data.get('msg91_verified') is True:
+            user.is_verified = True
+            user.save()
+            return Response({
+                'message': 'MSG91 OTP verified successfully. Account activated.',
+                'user': UserSerializer(user).data
+            }, status=status.HTTP_200_OK)
+
+        return Response({'error': 'Invalid OTP or expired verification token.'}, status=status.HTTP_400_BAD_REQUEST)
+
+class PasswordResetRequestOTPView(APIView):
+    permission_classes = (permissions.AllowAny,)
+
+    def post(self, request):
+        phone = request.data.get('phone')
+        if not phone:
+            return Response({'error': 'Please provide a registered mobile number.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        clean_phone = ''.join(c for c in str(phone) if c.isdigit())
+        last_10 = clean_phone[-10:] if len(clean_phone) >= 10 else clean_phone
+        
+        user = User.objects.filter(phone__icontains=last_10).first() if last_10 else None
+        if not user:
+            return Response({'error': f'No account found registered with phone number: {phone}'}, status=status.HTTP_404_NOT_FOUND)
+
+        import random
+        otp = str(random.randint(100000, 999999))
+        user.otp = otp
+        user.save()
+        print(f"\n[PASSWORD RESET OTP] Generated OTP {otp} for user {user.username} ({user.phone})\n")
+
+        return Response({
+            'message': f'Password reset OTP sent to {user.phone}.',
+            'phone': user.phone,
+            'username': user.username
+        }, status=status.HTTP_200_OK)
+
+class PasswordResetConfirmView(APIView):
+    permission_classes = (permissions.AllowAny,)
+
+    def post(self, request):
+        phone = request.data.get('phone')
+        otp = request.data.get('otp')
+        new_password = request.data.get('new_password')
+        msg91_token = request.data.get('msg91_token') or request.data.get('access_token')
+        msg91_verified = request.data.get('msg91_verified')
+
+        if not phone:
+            return Response({'error': 'Phone number is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not new_password or len(new_password) < 6:
+            return Response({'error': 'Password must be at least 6 characters long.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        clean_phone = ''.join(c for c in str(phone) if c.isdigit())
+        last_10 = clean_phone[-10:] if len(clean_phone) >= 10 else clean_phone
+        user = User.objects.filter(phone__icontains=last_10).first() if last_10 else None
+        
+        if not user:
+            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # 1. Validate MSG91 token if provided
+        verified = False
+        if msg91_token and msg91_token != 'verified':
+            try:
+                import requests, os
+                authkey = os.environ.get('MSG91_AUTH_KEY', '564962TA0jersOB6a90124eP1')
+                headers = {'authkey': authkey, 'Content-Type': 'application/json'}
+                resp = requests.post(
+                    'https://api.msg91.com/api/v5/widget/verifyAccessToken',
+                    json={'access-token': msg91_token},
+                    headers=headers,
+                    timeout=8
+                )
+                if resp.status_code == 200:
+                    verified = True
+            except Exception as e:
+                print(f"[MSG91 RESET VERIFY WARNING] {e}")
+
+        # 2. Check local OTP or test code 123456 or msg91_verified
+        if verified or msg91_verified is True or (otp and (user.otp == otp or otp == '123456')):
+            user.set_password(new_password)
+            user.otp = ''
+            user.save()
+            return Response({
+                'message': 'Password reset successful! You can now log in with your new password.',
+                'username': user.username
+            }, status=status.HTTP_200_OK)
+
+        return Response({'error': 'Invalid or expired OTP. Please try again.'}, status=status.HTTP_400_BAD_REQUEST)
 
 class SubmitKYCView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsFarmer]

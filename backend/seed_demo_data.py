@@ -25,10 +25,58 @@ from logistics.models import LogisticsPartner, DeliveryShipment
 from reviews.models import Review
 from chatbot.models import Conversation, ChatMessage, FarmerMemory, ToolCallLog
 
+try:
+    from payments.models import Payment
+except ImportError:
+    Payment = None
+
+try:
+    from route_planning.models import RoutePlan, RouteAuditEvent
+except ImportError:
+    RoutePlan = None
+    RouteAuditEvent = None
+
 User = get_user_model()
 
 def seed_data():
     print("[START] Starting KisanConnect Demo Data Seeding on Supabase PostgreSQL...")
+
+    # --------------------------------------------------------------------------
+    # 0. REMOVE OLD DATA
+    # --------------------------------------------------------------------------
+    print("\n[0/10] Removing old data from Supabase PostgreSQL...")
+    try:
+        if RouteAuditEvent:
+            RouteAuditEvent.objects.all().delete()
+        if RoutePlan:
+            RoutePlan.objects.all().delete()
+        if Payment:
+            Payment.objects.all().delete()
+        Review.objects.all().delete()
+        DeliveryShipment.objects.all().delete()
+        PreHarvestContract.objects.all().delete()
+        FarmerOffer.objects.all().delete()
+        QuoteRequest.objects.all().delete()
+        BulkRequirement.objects.all().delete()
+        SubscriptionItem.objects.all().delete()
+        Subscription.objects.all().delete()
+        OrderItem.objects.all().delete()
+        Order.objects.all().delete()
+        Bid.objects.all().delete()
+        Auction.objects.all().delete()
+        GroupOrderParticipant.objects.all().delete()
+        GroupOrder.objects.all().delete()
+        FlashSale.objects.all().delete()
+        TraceabilityLot.objects.all().delete()
+        Product.objects.all().delete()
+        LogisticsPartner.objects.all().delete()
+        MarketPrice.objects.all().delete()
+        Market.objects.all().delete()
+        FarmerProfile.objects.all().delete()
+        User.objects.all().delete()
+        print("   Old database records cleared successfully.")
+    except Exception as e:
+        print(f"   [Warning] Error while clearing old records: {e}")
 
     # --------------------------------------------------------------------------
     # 1. USERS & PROFILES (3 Farmers, 3 Bulk Buyers, 3 Consumers, 3 Logistics, 1 Admin)
@@ -200,7 +248,7 @@ def seed_data():
             "first_name": "ITC",
             "last_name": "Agri",
             "email": "e-choupal@itc.in",
-            "phone": "+919876022222",
+            "phone": "9274482285",
             "role": "bulk_buyer",
             "business_name": "ITC ABD Limited (e-Choupal)",
             "business_type": "Food Processor & Exporter",
@@ -350,6 +398,26 @@ def seed_data():
         )
         logistics_partners.append(partner)
         print(f"   Created Logistics Partner: {user.username}")
+
+    # Admin User
+    admin_user, _ = User.objects.get_or_create(
+        username="admin",
+        defaults={
+            "email": "admin@kisanconnect.org",
+            "role": "admin",
+            "phone": "9999999999",
+            "is_verified": True,
+            "is_staff": True,
+            "is_superuser": True,
+            "kyc_status": "not_required",
+            "address": "Admin HQ, Pune",
+            "pincode": "411001",
+            "district": "Pune"
+        }
+    )
+    admin_user.set_password("Password123!")
+    admin_user.save()
+    print(f"   Created Admin User: {admin_user.username}")
 
     # --------------------------------------------------------------------------
     # 2. CROP INVENTORIES (PRODUCTS) (3+ per farmer)
@@ -1084,6 +1152,7 @@ def seed_data():
     print("\n[SUCCESS] DEMO DATA SEEDING COMPLETED SUCCESSFULLY!")
     print("--------------------------------------------------")
     print("Demo Credentials (Password for all: Password123!):")
+    print("  * Admin: admin")
     print("  * Farmers: ramesh_patel, suresh_kumar, anita_devi")
     print("  * Bulk Buyers: buyer_reliance, buyer_itc, buyer_zomato")
     print("  * Consumers: consumer_priya, consumer_rahul, consumer_vikram")
