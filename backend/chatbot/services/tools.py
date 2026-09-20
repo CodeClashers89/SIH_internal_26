@@ -168,7 +168,10 @@ class ToolExecutor:
                 'price_per_unit': float(listing.price_per_unit),
                 'harvest_date': listing.harvest_date.isoformat(),
                 'expiry_date': listing.expiry_date.isoformat(),
-                'freshness': listing.freshness_percentage,
+                'stored_in_cold_storage': listing.stored_in_cold_storage,
+                'storage_type': 'Cold Storage' if listing.stored_in_cold_storage else 'Standard Storage',
+                'freshness': 'Cold Storage' if listing.stored_in_cold_storage else (f"{listing.freshness_percentage}%" if listing.freshness_percentage is not None else 'N/A'),
+                'freshness_percentage': listing.freshness_percentage,
             }
             for listing in listings
         ]
@@ -745,7 +748,7 @@ class ToolExecutor:
                 params["filters[district]"] = location.capitalize()
             
             try:
-                response = requests.get(url, params=params, timeout=10)
+                response = requests.get(url, params=params, timeout=3)
                 response.raise_for_status()
                 data = response.json()
                 records = data.get("records", [])
@@ -755,19 +758,29 @@ class ToolExecutor:
         if not records:
             # Fallback to mock data if API fails or returns no records
             from pricing.services import MOCK_AGMARKNET_DATA
+            import re
             
             mock_records = MOCK_AGMARKNET_DATA["records"]
+            clean_tokens = [
+                w for w in re.findall(r'[a-z]+', crop.lower())
+                if w not in {'aged', 'raw', 'fresh', 'organic', 'traditional', 'grade', 'a', 'b', 'c', '1121', 'stemless'}
+                and len(w) > 2
+            ]
+
             records = [
                 r for r in mock_records 
-                if crop.lower() in r.get("commodity", "").lower()
+                if (clean_tokens and any(w in r.get("commodity", "").lower() or r.get("commodity", "").lower() in w for w in clean_tokens))
+                or crop.lower() in r.get("commodity", "").lower()
             ]
             
             if location:
-                records = [
+                loc_records = [
                     r for r in records
                     if location.lower() in r.get("district", "").lower() or 
                        location.lower() in r.get("market", "").lower()
                 ]
+                if loc_records:
+                    records = loc_records
             
             if not records:
                 return {
@@ -916,10 +929,53 @@ class ToolExecutor:
         }
 
     def tool_get_quote_requests(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        """Get incoming quote requests from buyers."""
+        """
+        Get ALL incoming wholesale bids / quote requests received by the farmer from buyers.
+        This maps to the "Wholesale Bids" section in the UI.
+        Returns bids of ALL statuses (pending, offered, accepted, rejected).
+        """
+        from orders.models import QuoteRequest
+
+        status_filter = (args.get('status') or '').strip().lower()
+
+        qs = QuoteRequest.objects.filter(
+            product__farmer=self.farmer_user
+        ).select_related('buyer', 'product').order_by('-created_at')[:20]
+
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        if not qs.exists():
+            return {
+                'quote_requests': [],
+                'message': 'No wholesale bids received yet.',
+            }
+
+        results = []
+        for q in qs:
+            results.append({
+                'id': q.id,
+                'buyer': q.buyer.username if q.buyer else 'Buyer',
+                'buyer_name': (q.buyer.get_full_name() or q.buyer.username) if q.buyer else 'Buyer',
+                'product_id': q.product.id if q.product else None,
+                'product_name': q.product.name if q.product else 'Crop',
+                'requested_quantity': float(q.quantity),
+                'buyers_bid_price': float(q.target_price),   # What buyer offered to pay
+                'your_counter_price': float(q.offered_price) if q.offered_price else None,  # Farmer's counter
+                'status': q.status,  # pending/offered/accepted/rejected
+                'created_at': q.created_at.isoformat(),
+                'note': (
+                    'Contract Locked — ACCEPTED' if q.status == 'accepted' else
+                    f'Awaiting buyer response to your counter of ₹{q.offered_price}/unit' if q.status == 'offered' else
+                    'Awaiting your response' if q.status == 'pending' else
+                    q.status.capitalize()
+                ),
+            })
+
         return {
-            'quote_requests': [],
-            'message': 'No active quote requests at this time',
+            'quote_requests': results,
+            'count': len(results),
+            'message': f'Found {len(results)} wholesale bids in total.',
         }
 
     def tool_get_shipment_status(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -988,12 +1044,33 @@ class ToolExecutor:
         requirements = query.order_by('-created_at')[:20]
         
         results = []
+        import re
+        def _get_crop_tokens(val):
+            ignored = {'fresh', 'organic', 'premium', 'natural', 'local', 'standard', 'grade', 'quality', 'a', 'b', 'c', 'raw'}
+            tokens = set()
+            for token in re.findall(r'[a-z0-9]+', (val or '').lower()):
+                if token in ignored or len(token) < 2:
+                    continue
+                if token.endswith('ies') and len(token) > 4:
+                    token = f'{token[:-3]}y'
+                elif token.endswith('es') and len(token) > 4:
+                    token = token[:-2]
+                elif token.endswith('s') and not token.endswith('ss') and len(token) > 3:
+                    token = token[:-1]
+                tokens.add(token)
+            return tokens
+
+        farmer_prods = list(Product.objects.filter(farmer=self.farmer_user, quantity__gt=0))
+
         for req in requirements:
-            prod = Product.objects.filter(
-                farmer=self.farmer_user,
-                name__icontains=req.crop_name
-            ).first()
-            available_qty = float(prod.quantity) if prod else 0.0
+            req_tokens = _get_crop_tokens(req.crop_name)
+            matching_prod = None
+            for p in farmer_prods:
+                p_tokens = _get_crop_tokens(p.name)
+                if req_tokens and req_tokens.issubset(p_tokens):
+                    matching_prod = p
+                    break
+            available_qty = float(matching_prod.quantity) if matching_prod else 0.0
 
             results.append({
                 'id': req.id,
@@ -1060,26 +1137,61 @@ class ToolExecutor:
             'status': offer.status
         }
 
-    def tool_get_farmer_offers(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def tool_get_farmer_offers(self, args: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Get all offers made by this farmer for bulk requirements.
+        Get all sourcing contributions (FarmerOffers) made by this farmer for reverse-marketplace
+        bulk pool demands (BulkRequirements). This maps to the "Sourcing Contributions" panel
+        in the Reverse Marketplace / Wholesale Buying Demands UI.
+        Each entry includes full context of the pool requirement the farmer bid into.
         """
         from orders.models import FarmerOffer
-        
-        offers = FarmerOffer.objects.filter(farmer=self.farmer_user).order_by('-created_at')[:20]
-        
-        return [
-            {
-                'id': offer.id,
-                'requirement_crop': offer.requirement.crop_name,
-                'quantity': float(offer.quantity),
-                'price_per_unit': float(offer.price_per_unit),
-                'delivery_date': offer.delivery_date.isoformat(),
-                'status': offer.status,
-                'created_at': offer.created_at.isoformat(),
+
+        offers = FarmerOffer.objects.filter(
+            farmer=self.farmer_user
+        ).select_related('requirement', 'requirement__buyer').order_by('-created_at')[:20]
+
+        if not offers.exists():
+            return {
+                'sourcing_contributions': [],
+                'message': 'You have not submitted any sourcing contributions yet.',
             }
-            for offer in offers
-        ]
+
+        results = []
+        for offer in offers:
+            req = offer.requirement
+            results.append({
+                'contribution_id': offer.id,
+                'pool_requirement_id': req.id,
+                'pool_label': f'Pool Requirement #{req.id}',
+                'crop_name': req.crop_name,
+                'variety': req.variety,
+                # Pool (BulkRequirement) details
+                'pool_total_quantity': float(req.quantity),
+                'pool_unit': req.unit,
+                'pool_target_price_range': f'₹{req.target_price_min}–₹{req.target_price_max}/{req.unit}',
+                'pool_target_price_min': float(req.target_price_min),
+                'pool_target_price_max': float(req.target_price_max),
+                'pool_required_date': req.required_date.isoformat(),
+                'pool_delivery_location': req.location,
+                'pool_buyer': req.buyer.username if req.buyer else 'Buyer',
+                'pool_status': req.status,
+                # This farmer's contribution
+                'your_offered_quantity': float(offer.quantity),
+                'your_bid_rate': float(offer.price_per_unit),
+                'your_deliver_date': offer.delivery_date.isoformat(),
+                'your_contribution_status': offer.status,  # pending/accepted/rejected/countered
+                'notes': offer.notes or '',
+                'submitted_at': offer.created_at.isoformat(),
+            })
+
+        return {
+            'sourcing_contributions': results,
+            'count': len(results),
+            'message': (
+                f'You have {len(results)} sourcing contribution(s) in the Reverse Marketplace. '
+                'Each shows your bid into a bulk buyer pool.'
+            ),
+        }
 
     def tool_get_preharvest_contracts(self, args: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
@@ -1301,10 +1413,22 @@ TOOL_DEFINITIONS = [
         'type': 'function',
         'function': {
             'name': 'get_quote_requests',
-            'description': 'Get incoming quote requests from buyers',
+            'description': (
+                'Get wholesale bids received from buyers for this farmer\'s crop listings. '
+                'This maps to the "Wholesale Bids" (WHOLESALE CHANNEL) section in the UI. '
+                'Returns bids with buyer name, crop, requested quantity, buyer\'s bid price, '
+                'farmer\'s counter price, and current status (pending/offered/accepted/rejected). '
+                'Use this tool when the farmer asks about their wholesale bids, quote requests, or direct buyer negotiations.'
+            ),
             'parameters': {
                 'type': 'object',
-                'properties': {},
+                'properties': {
+                    'status': {
+                        'type': ['string', 'null'],
+                        'description': 'Filter by bid status: pending, offered, accepted, or rejected. Leave null for all.',
+                        'enum': ['pending', 'offered', 'accepted', 'rejected', None],
+                    },
+                },
                 'required': [],
             }
         }
@@ -1354,7 +1478,14 @@ TOOL_DEFINITIONS = [
         'type': 'function',
         'function': {
             'name': 'get_farmer_offers',
-            'description': 'Get all offers/counter-offers made by the farmer to bulk requirements.',
+            'description': (
+                'Get the farmer\'s sourcing contributions to reverse-marketplace bulk pool demands. '
+                'This maps to the "Sourcing Contributions" panel in the "Wholesale Buying Demands" '
+                '(Reverse Marketplace) UI. Each contribution shows which pool (BulkRequirement) the '
+                'farmer bid into, the pool\'s total quantity, price range, delivery location, and the '
+                'farmer\'s own bid quantity, bid rate, and current status (pending/accepted/countered/rejected). '
+                'Use this tool when the farmer asks about their reverse marketplace bids, sourcing contributions, or pool requirements.'
+            ),
             'parameters': {
                 'type': 'object',
                 'properties': {},

@@ -26,12 +26,12 @@ logger = logging.getLogger(__name__)
 
 
 class IsFarmerUser(permissions.BasePermission):
-    """Permission check for farmer users only."""
+    """Permission check for farmer users and admin staff."""
     def has_permission(self, request, view):
         return bool(
             request.user
             and request.user.is_authenticated
-            and getattr(request.user, 'role', None) == 'farmer'
+            and (getattr(request.user, 'role', None) == 'farmer' or request.user.is_staff or request.user.is_superuser)
         )
 
 

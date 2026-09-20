@@ -1239,6 +1239,16 @@ const FarmerAIAssistant = () => {
     }
   };
 
+  const fetchBulkRequirements = async () => {
+    try {
+      const response = await api.get('/orders/bulk-requirements/');
+      return response.data.results || response.data || [];
+    } catch (err) {
+      console.error('Error querying bulk requirements:', err);
+      return [];
+    }
+  };
+
   const loadConversations = async () => {
     try {
       const response = await api.get('/chat/conversations/');
@@ -1618,7 +1628,10 @@ const FarmerAIAssistant = () => {
 
         // Multiple trackable shipments — disambiguate
         const shipmentOptions = trackable.map((o) => {
-          const driverInfo = o.shipment?.partner?.name || o.driver_name;
+          const driverInfo =
+            o.shipment?.partner_details?.name ||
+            (typeof o.shipment?.partner === 'object' ? o.shipment?.partner?.name : null) ||
+            o.driver_name;
           const sublabel = [
             o.buyer?.username || o.buyer || 'Buyer',
             o.status.replace('_', ' '),
@@ -1646,14 +1659,33 @@ const FarmerAIAssistant = () => {
       }
 
       if (option.type === 'select_bulk_requirement') {
+        const reqs = await fetchBulkRequirements();
+        
+        if (reqs.length === 0) {
+          await sendChatMessage(targetConversationId, lang === 'gujarati' ? 'બલ્ક ખરીદદારની જરૂરિયાતો બતાવો' : lang === 'hindi' ? 'थोक खरीदार आवश्यकताएं दिखाएं' : 'Show bulk buyer requirements');
+          return;
+        }
+
+        const reqOptions = reqs.map((r) => ({
+          label: lang === 'gujarati' 
+            ? `જરૂરિયાત #${r.id}: ${r.crop_name} (${r.quantity} ${r.unit})` 
+            : lang === 'hindi' 
+              ? `आवश्यकता #${r.id}: ${r.crop_name} (${r.quantity} ${r.unit})` 
+              : `Requirement #${r.id}: ${r.crop_name} (${r.quantity} ${r.unit})`,
+          sublabel: r.buyer?.username || r.buyer_name || 'Buyer',
+          prompt: lang === 'gujarati' 
+            ? `બલ્ક જરૂરિયાત #${r.id} માટે ઓફર સબમિટ કરવા માટે મારી મદદ કરો` 
+            : lang === 'hindi' 
+              ? `थोक आवश्यकता #${r.id} के लिए ऑफर भेजने में मेरी मदद करें` 
+              : `Help me submit an offer for Bulk Requirement #${r.id}`,
+          icon: Handshake,
+        }));
+
         flowPush({
           type: 'disambiguation',
           data: {
             title: lang === 'gujarati' ? 'તમે કઈ બલ્ક ખરીદદારની જરૂરિયાતનો જવાબ આપવા માંગો છો?' : lang === 'hindi' ? 'आप किस थोक खरीदार आवश्यकता का उत्तर देना चाहते हैं?' : 'Which bulk buyer requirement would you like to respond to?',
-            options: [
-              { label: lang === 'gujarati' ? 'જરૂરિયાત #1: ટામેટા (1,000 kg)' : lang === 'hindi' ? 'आवश्यकता #1: टमाटर (1,000 kg)' : 'Requirement #1: Tomato (1,000 kg)', sublabel: 'Retail Mart Pune', prompt: lang === 'gujarati' ? 'બલ્ક જરૂરિયાત #1 માટે ઓફર સબમિટ કરવા માટે મારી મદદ કરો' : lang === 'hindi' ? 'थोक आवश्यकता #1 के लिए ऑफर भेजने में मेरी मदद करें' : 'Help me submit an offer for Bulk Requirement #1', icon: Handshake },
-              { label: lang === 'gujarati' ? 'જરૂરિયાત #2: ડુંગળી (2,000 kg)' : lang === 'hindi' ? 'आवश्यकता #2: प्याज (2,000 kg)' : 'Requirement #2: Onion (2,000 kg)', sublabel: 'Agri Processing Co.', prompt: lang === 'gujarati' ? 'બલ્ક જરૂરિયાત #2 માટે ઓફર સબમિટ કરવા માટે મારી મદદ કરો' : lang === 'hindi' ? 'थोक आवश्यकता #2 के लिए ऑफर भेजने में मेरी मदद करें' : 'Help me submit an offer for Bulk Requirement #2', icon: Handshake },
-            ],
+            options: reqOptions,
           },
         });
         return;

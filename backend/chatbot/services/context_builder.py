@@ -22,7 +22,9 @@ class ContextBuilder:
     Builds the complete message context for LLM interactions.
     """
 
-    RECENT_MESSAGE_LIMIT = 15  # Number of recent messages to include
+    # Keep RECENT_MESSAGE_LIMIT small to avoid hitting the 8000 Tokens Per Minute (TPM) limit on Groq free tier.
+    # A limit of 3 means up to 6 recent messages (user + assistant) are included, keeping token count low.
+    RECENT_MESSAGE_LIMIT = 3  # Number of recent user-assistant interactions to include
     SUMMARY_THRESHOLD = 30     # Number of messages before summarization required
 
     def __init__(self, conversation, groq_service):
@@ -61,8 +63,25 @@ Guidelines:
 1. Help farmers make better business decisions about crops, prices, orders, and logistics.
 2. Be concise, friendly, and helpful.
 3. When presenting structured data (market rates, listings, orders), format them clearly using Markdown tables.
-4. Always use tools to query live data before answering about listings or orders. Never invent numbers.
-5. If details are ambiguous, ask a brief clarifying question."""
+4. MANDATORY: Always call the relevant tool(s) FIRST before answering ANY question about listings, orders, bids, or prices. NEVER fabricate, invent, assume, or estimate numbers, IDs, buyer names, prices, or quantities. Use ONLY data returned by tools.
+5. If a tool returns empty results, say so clearly. Do NOT invent data to fill the gap.
+6. If details are ambiguous, ask a brief clarifying question.
+7. CRITICAL RULE FOR INVENTORY & FRESHNESS:
+   If a crop or product is kept in cold storage (`stored_in_cold_storage` is True or `freshness` is 'Cold Storage'), ALWAYS state 'Cold Storage' under Freshness % / Storage in all tables and text. NEVER write '?', 'Unknown', or ask the farmer for freshness score for cold storage items, because cold storage preserves freshness.
+8. THE TWO WHOLESALE CHANNELS — keep these STRICTLY SEPARATE, NEVER mix their data:
+
+   CHANNEL A — "Wholesale Bids" (Direct Buyer Negotiations on farmer's listings):
+   Tool: `get_quote_requests` — Returns bids placed directly on the farmer's crop listings.
+   Fields: buyer username, crop listing, quantity, buyers_bid_price, your_counter_price, status.
+   Status: pending=awaiting your action | offered=you countered | accepted=contract locked | rejected=declined.
+
+   CHANNEL B — "Reverse Marketplace / Wholesale Buying Demands" (Bulk Pool Sourcing):
+   Tool: `get_farmer_offers` — Returns your "Sourcing Contributions" to buyer pool demands.
+   Tool: `get_bulk_requirements` — Returns open pool demands you could bid into.
+   Each pool (BulkRequirement) has: total pool quantity, target price RANGE, delivery location, required date.
+   Your contribution (FarmerOffer): your_offered_quantity, your_bid_rate, your_contribution_status.
+
+   CRITICAL: NEVER invent Bid IDs, Pool IDs, buyer names, prices, or quantities not returned by these tools."""
 
     def build_messages(self, current_message: str) -> List[Dict[str, str]]:
         """
@@ -114,11 +133,12 @@ Guidelines:
                 'content': task_context
             })
 
-        # 6. Current user message
-        messages.append({
-            'role': 'user',
-            'content': current_message
-        })
+        # 6. Current user message (only append if not already present at end of recent_messages)
+        if not (recent_messages and recent_messages[-1].get('role') == 'user' and recent_messages[-1].get('content') == current_message):
+            messages.append({
+                'role': 'user',
+                'content': current_message
+            })
 
         logger.info(f"Built context with {len(messages)} messages for conversation {self.conversation.id}")
         return messages
@@ -138,21 +158,32 @@ Guidelines:
             ).order_by('created_at')
         )
 
-        # Keep the newest messages without using negative queryset slicing,
-        # which SQLite rejects for Django querysets.
-        recent_window = max(self.RECENT_MESSAGE_LIMIT * 2, 1)
-        if len(messages) > recent_window:
-            messages = messages[-recent_window:]
-
-        result = []
+        # Filter out tool, system, and error messages
+        valid_messages = []
         for msg in messages:
-            # Skip tool and system messages in the main history
             if msg.role in ['tool', 'system']:
                 continue
+            meta = msg.metadata if isinstance(msg.metadata, dict) else {}
+            if meta.get('error'):
+                continue
+            content = (msg.content or '').strip()
+            if content.startswith('I am having trouble connecting') or content.startswith('Error code:'):
+                continue
+            valid_messages.append(msg)
 
+        recent_window = max(self.RECENT_MESSAGE_LIMIT * 2, 1)
+        if len(valid_messages) > recent_window:
+            valid_messages = valid_messages[-recent_window:]
+
+        result = []
+        for msg in valid_messages:
+            # Truncate older history items to max 600 chars to avoid TPM token bloat
+            content = msg.content
+            if len(content) > 600:
+                content = content[:600] + "..."
             result.append({
                 'role': msg.role,
-                'content': msg.content
+                'content': content
             })
 
         return result
