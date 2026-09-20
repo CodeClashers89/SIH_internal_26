@@ -70,7 +70,7 @@ class GroqService:
         effective_max_tokens = min(max_tokens, 750) if max_tokens else 750
 
         models_to_try = [self.model]
-        for fallback in ['qwen/qwen3.8-27b', 'groq/compound-mini', 'groq/compound']:
+        for fallback in ['openai/gpt-oss-120b', 'groq/compound']:
             if fallback not in models_to_try:
                 models_to_try.append(fallback)
 
