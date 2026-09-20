@@ -1536,28 +1536,6 @@ const FarmerAIAssistant = () => {
     window.speechSynthesis.speak(utterance);
   };
 
-  // Quick Starter Suggestions per language
-  const QUICK_SUGGESTIONS = {
-    english: [
-      { label: "🌾 Today's Mandi Rates", prompt: `What are the current mandi market prices for vegetables and grains near ${farmerLocation}?` },
-      { label: "📦 My Active Produce", prompt: "Show and analyze my active crop inventory in " + farmerLocation },
-      { label: "🤝 Wholesale Bids", prompt: "Show all incoming wholesale bids and compare them with mandi rates" },
-      { label: "🚚 Active Shipments", prompt: "Track live shipment and driver status for my orders" },
-    ],
-    hindi: [
-      { label: "🌾 आज के मंडी भाव", prompt: `${farmerLocation} के पास आज के ताज़ा मंडी भाव क्या हैं?` },
-      { label: "📦 मेरी फसल इन्वेंटरी", prompt: "मेरी सक्रिय फसल इन्वेंटरी और स्टॉक की स्थिति दिखाएं" },
-      { label: "🤝 थोक बोलियां", prompt: "खरीदारों से प्राप्त थोक बोलियां और कोट्स दिखाएं" },
-      { label: "🚚 लाइव शिपमेंट", prompt: "मेरे सक्रिय ऑर्डर की डिलीवरी और ड्राइवर स्थिति ट्रैक करें" },
-    ],
-    gujarati: [
-      { label: "🌾 આજના બજાર ભાવ", prompt: `${farmerLocation} નજીક આજના બજાર ભાવ શું છે?` },
-      { label: "📦 મારી પાક યાદી", prompt: "મારી સક્રિય પાક ઇન્વેન્ટરી અને સ્ટોક બતાવો" },
-      { label: "🤝 જથ્થાબંધ બિડ્સ", prompt: "મને મળેલી તમામ જથ્થાબંધ બિડ્સ બતાવો" },
-      { label: "🚚 લાઇવ શિપમેન્ટ", prompt: "મારા ઓર્ડરની ડિલિવરી સ્થિતિ ટ્રૅક કરો" },
-    ],
-  };
-
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
     if (!inputMessage.trim() || assistantThinking) return;
