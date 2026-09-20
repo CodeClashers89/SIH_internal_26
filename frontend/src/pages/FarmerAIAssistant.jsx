@@ -8,10 +8,12 @@ import {
   Send, Plus, Trash2, Bot, User, Sparkles,
   RefreshCw, AlertCircle, Check, MessageSquare,
   TrendingUp, Tag, Handshake, Package, Truck,
-  BarChart3, Users, Globe, ChevronRight, ShieldCheck,
+  BarChart3, Users, Globe, ChevronRight, ChevronLeft, ShieldCheck,
   Eye, MapPin, Clock, UserCheck, DollarSign, Search,
   MoreVertical, Pencil, Pin, X, Loader2, Minus,
-  ArrowLeft, Home, ShoppingBag, FileCheck, Calendar
+  ArrowLeft, Home, ShoppingBag, FileCheck, Calendar,
+  Mic, MicOff, Volume2, VolumeX, Copy, CheckCheck,
+  PanelLeftClose, PanelLeft, ArrowUpRight
 } from 'lucide-react';
 import './FarmerAIAssistant.css';
 
@@ -60,6 +62,17 @@ const CAPABILITIES_DATA = [
     desc: 'Find potential retail consumers and wholesale food processors',
   }
 ];
+
+// Helper to strip any leaked XML / tool calling tags from message content
+const cleanMessageContent = (content) => {
+  if (!content || typeof content !== 'string') return '';
+  return content
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
+    .replace(/<function_calls>[\s\S]*?<\/function_calls>/gi, '')
+    .replace(/<invoke[\s\S]*?<\/invoke>/gi, '')
+    .replace(/<\/?(?:tool_call|function_calls|invoke|parameter|function)[^>]*>/gi, '')
+    .trim();
+};
 
 // Helper to translate crop/product names into user's selected language
 const translateCropName = (cropName, selectedLanguage = 'english') => {
@@ -672,10 +685,16 @@ const StructuredActionForm = ({ action, initialData, onSubmit, onCancel, isSubmi
             Are you sure you want to permanently remove this listing? Buyers will no longer be able to discover or order this crop.
           </p>
           <div className="delete-item-preview">
-            <span className="font-bold text-slate-900">{initialData?.name}</span>
-            <span className="text-xs text-slate-500">
-              {initialData?.quantity} {initialData?.unit} @ ₹{initialData?.price_per_unit}/{initialData?.unit}
-            </span>
+            <div className="delete-item-icon-col">
+              <Trash2 className="h-5 w-5 text-red-500 stroke-[2]" />
+            </div>
+            <div className="delete-item-info">
+              <span className="delete-item-name">{initialData?.name || 'Produce Item'}</span>
+              <div className="delete-item-badges">
+                <span className="delete-item-badge">📦 {initialData?.quantity} {initialData?.unit || 'kg'}</span>
+                <span className="delete-item-badge">🏷️ ₹{initialData?.price_per_unit}/{initialData?.unit || 'kg'}</span>
+              </div>
+            </div>
           </div>
 
           <div className="form-actions-row">
@@ -835,7 +854,7 @@ const StructuredActionForm = ({ action, initialData, onSubmit, onCancel, isSubmi
               disabled={isSubmitting}
               onClick={onCancel}
             >
-              ← cancel
+              Cancel
             </button>
             <button
               type="submit"
@@ -1130,6 +1149,13 @@ const FarmerAIAssistant = () => {
   const [renameErrorConvId, setRenameErrorConvId] = useState(null);
   const [pinErrorConvId, setPinErrorConvId] = useState(null);
 
+  // Modern UI states
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [speakingMessageId, setSpeakingMessageId] = useState(null);
+  const [copiedMessageId, setCopiedMessageId] = useState(null);
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [convToDelete, setConvToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -1137,6 +1163,7 @@ const FarmerAIAssistant = () => {
   const messagesEndRef = useRef(null);
   const menuRef = useRef(null);
   const renameInputRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -1153,6 +1180,16 @@ const FarmerAIAssistant = () => {
 
   const farmerName = user?.first_name || user?.username || 'Farmer';
   const greetingText = getGreeting();
+
+  // Cleanup speech synthesis & audio on unmount
+  useEffect(() => {
+    return () => {
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+      }
+    };
+  }, []);
 
   // Scroll to bottom of messages
   useEffect(() => {
@@ -1419,6 +1456,84 @@ const FarmerAIAssistant = () => {
     } finally {
       setAssistantThinking(false);
     }
+  };
+
+  // Voice Input (Speech-to-Text via Web Speech API)
+  const toggleVoiceRecognition = () => {
+    if (isRecording) {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+      }
+      setIsRecording(false);
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Voice input is not supported in this browser. Please try using Google Chrome or Microsoft Edge.');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      const langMap = {
+        english: 'en-IN',
+        hindi: 'hi-IN',
+        gujarati: 'gu-IN',
+      };
+      recognition.lang = langMap[selectedLanguage] || 'en-IN';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => setIsRecording(true);
+      recognition.onresult = (event) => {
+        const transcript = event.results[0]?.[0]?.transcript;
+        if (transcript) {
+          setInputMessage((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        }
+      };
+      recognition.onerror = (err) => {
+        console.warn('Speech recognition notification:', err);
+        setIsRecording(false);
+      };
+      recognition.onend = () => setIsRecording(false);
+      recognition.start();
+    } catch (err) {
+      console.error('Failed to initialize speech recognition:', err);
+      setIsRecording(false);
+    }
+  };
+
+  // Copy Message to Clipboard
+  const handleCopyMessage = (id, text) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedMessageId(id);
+    setTimeout(() => setCopiedMessageId(null), 2000);
+  };
+
+  // Text-to-Speech Read Aloud (Web Speech API)
+  const handleReadAloud = (id, text) => {
+    if (!window.speechSynthesis) return;
+    if (speakingMessageId === id) {
+      window.speechSynthesis.cancel();
+      setSpeakingMessageId(null);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const plainText = text.replace(/[*#_`~[\]]/g, '');
+    const utterance = new SpeechSynthesisUtterance(plainText);
+    const langMap = {
+      english: 'en-IN',
+      hindi: 'hi-IN',
+      gujarati: 'gu-IN',
+    };
+    utterance.lang = langMap[selectedLanguage] || 'en-IN';
+    utterance.onend = () => setSpeakingMessageId(null);
+    utterance.onerror = () => setSpeakingMessageId(null);
+    setSpeakingMessageId(id);
+    window.speechSynthesis.speak(utterance);
   };
 
   const handleSendMessage = async (e) => {
@@ -1842,9 +1957,15 @@ const FarmerAIAssistant = () => {
     setConvToDelete(null);
   };
 
+  // Filtered conversations by search query
+  const filteredConversations = conversations.filter((c) => {
+    if (!searchQuery.trim()) return true;
+    return (c.title || '').toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
   // Group pinned and unpinned conversations
-  const pinnedConversations = conversations.filter((c) => c.is_pinned);
-  const unpinnedConversations = conversations.filter((c) => !c.is_pinned);
+  const pinnedConversations = filteredConversations.filter((c) => c.is_pinned);
+  const unpinnedConversations = filteredConversations.filter((c) => !c.is_pinned);
 
   // Render individual conversation row with rename, pin, and menu
   const renderConversationItem = (conv) => {
@@ -1910,7 +2031,7 @@ const FarmerAIAssistant = () => {
           ) : (
             <div className="conv-title-row">
               {conv.is_pinned && (
-                <Pin className="h-3 w-3 text-emerald-600 fill-emerald-600 shrink-0 inline-pin-icon" />
+                <Pin className="h-3 w-3 inline-pin-icon fill-emerald-600" />
               )}
               <span className="conv-title">{getTitle(conv.title)}</span>
               {(hasRenameError || hasPinError) && (
@@ -1921,8 +2042,10 @@ const FarmerAIAssistant = () => {
             </div>
           )}
           {!isEditing && (
-            <div className="conv-meta">
-              {conv.message_count} {messageUnit}
+            <div className="conv-meta-row">
+              <span className="conv-msg-badge">
+                {conv.message_count} {messageUnit}
+              </span>
             </div>
           )}
         </div>
@@ -1964,7 +2087,7 @@ const FarmerAIAssistant = () => {
                   className="context-menu-item delete-item"
                   onClick={() => handleDeleteConversation(conv.id)}
                 >
-                  <Trash2 className="h-3.5 w-3.5 text-slate-400 stroke-[2]" />
+                  <Trash2 className="h-3.5 w-3.5 stroke-[2]" />
                   <span>{lang === 'gujarati' ? 'કાઢી નાખો' : lang === 'hindi' ? 'हटाएं' : 'Delete'}</span>
                 </button>
               </div>
@@ -1980,33 +2103,70 @@ const FarmerAIAssistant = () => {
   return (
     <div className="farmer-ai-assistant">
       <div className="assistant-container">
-        {/* Sidebar - Conversations List */}
-        <div className="sidebar">
-          <div className="sidebar-nav-bar">
-            <Link to="/farmer-dashboard" className="btn-back-home-sidebar">
-              <ArrowLeft className="h-4 w-4 stroke-[2.2]" />
-              <span>{lang === 'gujarati' ? '← હોમ પર પાછા જાઓ' : lang === 'hindi' ? '← होम पर वापस जाएं' : 'Back to Home'}</span>
-            </Link>
-          </div>
-          <div className="sidebar-header">
-            <div className="sidebar-title-group">
-              <div className="icon-pulse-badge">
-                <Sparkles className="h-4 w-4 text-emerald-600 stroke-[2.2]" />
+        {/* Sidebar - Modern Workspace Navigation */}
+        <aside className={`sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
+          <div className="sidebar-brand-header">
+            <Link to="/farmer-dashboard" className="brand-link" title="Return to Farmer Dashboard">
+              <div className="brand-logo-icon">
+                <Sparkles className="h-5 w-5 text-white stroke-[2.4]" />
               </div>
-              <h2>{lang === 'gujarati' ? 'એઆઈ આસિસ્ટન્ટ' : lang === 'hindi' ? 'एआई सहायक' : 'AI Assistant'}</h2>
-            </div>
-            <button className="btn-new" onClick={handleNewConversation}>
-              <Plus className="h-4 w-4 stroke-[2.2]" />
-              <span>{lang === 'gujarati' ? '+ નવી ચેટ' : lang === 'hindi' ? '+ नई बातचीत' : '+ New Chat'}</span>
+              <div className="brand-text-col">
+                <span className="brand-title">KisanAI</span>
+                <span className="brand-subtitle">Smart Farm Copilot</span>
+              </div>
+            </Link>
+            <button
+              type="button"
+              className="btn-sidebar-collapse"
+              onClick={() => setSidebarOpen(false)}
+              title="Collapse sidebar"
+            >
+              <ChevronLeft className="h-4 w-4" />
             </button>
           </div>
 
+          <div className="sidebar-actions-bar">
+            <button className="btn-new-chat" onClick={handleNewConversation}>
+              <div className="new-chat-left">
+                <Plus className="h-4 w-4 stroke-[2.5]" />
+                <span>{lang === 'gujarati' ? 'નવી ચેટ' : lang === 'hindi' ? 'नई बातचीत' : 'New Chat'}</span>
+              </div>
+              <span className="new-chat-badge">+</span>
+            </button>
+            <Link to="/farmer-dashboard" className="btn-back-dashboard">
+              <ArrowLeft className="h-3.5 w-3.5 stroke-[2]" />
+              <span>{lang === 'gujarati' ? 'ડેશબોર્ડ પર પાછા જાઓ' : lang === 'hindi' ? 'डैशबोर्ड पर वापस जाएं' : 'Back to Dashboard'}</span>
+            </Link>
+          </div>
+
+          {/* Search Conversations Input */}
+          <div className="sidebar-search-container">
+            <div className="sidebar-search-box">
+              <Search className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+              <input
+                type="text"
+                placeholder={lang === 'gujarati' ? 'વાતચીત શોધો...' : lang === 'hindi' ? 'बातचीत खोजें...' : 'Search conversations...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="text-slate-400 hover:text-slate-600"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="conversations-list">
-            {conversations.length === 0 ? (
+            {filteredConversations.length === 0 ? (
               <div className="no-conversations">
                 <MessageSquare className="h-8 w-8 text-emerald-300 mx-auto mb-2 opacity-60" />
-                <p>{lang === 'gujarati' ? 'હજુ સુધી કોઈ વાતચીત નથી' : lang === 'hindi' ? 'अभी तक कोई बातचीत नहीं' : 'No conversations yet'}</p>
-                <span className="text-xs text-slate-400">{lang === 'gujarati' ? 'શરૂ કરવા માટે + નવી ચેટ પર ક્લિક કરો' : lang === 'hindi' ? 'शुरू करने के लिए + नई बातचीत पर क्लिक करें' : 'Click + New Chat to begin'}</span>
+                <p>{lang === 'gujarati' ? 'કોઈ વાતચીત મળી નથી' : lang === 'hindi' ? 'कोई बातचीत नहीं मिली' : 'No conversations found'}</p>
+                <span className="text-xs text-slate-400">{lang === 'gujarati' ? 'શરૂ કરવા માટે + નવી ચેટ પર ક્લિક કરો' : lang === 'hindi' ? 'शुरू करने के लिए + नई बातचीत पर क्लिक करें' : 'Click New Chat to begin'}</span>
               </div>
             ) : (
               <>
@@ -2038,106 +2198,143 @@ const FarmerAIAssistant = () => {
               </>
             )}
           </div>
-        </div>
+
+          {/* Farmer Profile Footer */}
+          <div className="sidebar-farmer-footer">
+            <div className="farmer-profile-badge">
+              <div className="farmer-avatar-circle">
+                {farmerName.charAt(0).toUpperCase()}
+              </div>
+              <div className="farmer-details-col">
+                <span className="farmer-display-name">{farmerName}</span>
+                <span className="farmer-location-tag">
+                  <MapPin className="h-3 w-3" />
+                  <span>{farmerLocation}</span>
+                </span>
+              </div>
+            </div>
+            <span className="text-[10.5px] font-extrabold px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200">
+              FARMER
+            </span>
+          </div>
+        </aside>
 
         {/* Main Chat Area */}
-        <div className="chat-area">
+        <main className="chat-area">
           {!selectedConvId ? (
             <div className="welcome-screen">
               <div className="welcome-container animate-fadeInUp">
-                {/* Personalized Greeting Header */}
-                <div className="welcome-header">
-                  <div className="greeting-line">
-                    <span className="leaf-motif">🌱</span>
-                    <h1>{greetingText}, {farmerName}</h1>
+                <div className="welcome-hero-banner">
+                  <div className="hero-icon-ring">
+                    <Sparkles className="h-8 w-8 text-white stroke-[2.4]" />
                   </div>
-                  <p className="welcome-subtext">Your AI assistant for KisanConnect ({farmerLocation})</p>
+                  <h1>{greetingText}, {farmerName} 🌱</h1>
+                  <p className="welcome-hero-sub">
+                    Your dedicated AI Agricultural Copilot for {farmerLocation} District
+                  </p>
                 </div>
 
-                {/* Contextual Action Rows List */}
-                <div className="welcome-actions-list">
-                  <div
-                    className="action-row animate-rowFade"
-                    style={{ animationDelay: '60ms' }}
-                    onClick={() => handleAreaClick('market')}
-                  >
-                    <div className="action-row-icon">
-                      <TrendingUp className="h-5 w-5 text-emerald-600 stroke-[2]" />
+                <div className="welcome-grid">
+                  <div className="welcome-card-prompt" onClick={() => handleAreaClick('market')}>
+                    <div className="welcome-card-icon-box">
+                      <TrendingUp className="h-5 w-5 stroke-[2.2]" />
                     </div>
-                    <div className="action-row-content">
-                      <span className="action-row-title">Check today's Mandi rates near {farmerLocation}</span>
-                      <span className="action-row-sub">Real-time arrival prices & smart selling recommendations</span>
+                    <div>
+                      <div className="welcome-card-title">Live Mandi Prices & Trends</div>
+                      <div className="welcome-card-desc">Check real-time arrival rates and price predictions for crops near {farmerLocation}.</div>
                     </div>
-                    <ChevronRight className="h-5 w-5 action-row-arrow" />
                   </div>
 
-                  <div
-                    className="action-row animate-rowFade"
-                    style={{ animationDelay: '120ms' }}
-                    onClick={() => handleAreaClick('orders')}
-                  >
-                    <div className="action-row-icon">
-                      <Package className="h-5 w-5 text-emerald-600 stroke-[2]" />
+                  <div className="welcome-card-prompt" onClick={() => handleAreaClick('inventory')}>
+                    <div className="welcome-card-icon-box">
+                      <Package className="h-5 w-5 stroke-[2.2]" />
                     </div>
-                    <div className="action-row-content">
-                      <span className="action-row-title">Track live status & driver on active orders</span>
-                      <span className="action-row-sub">See pickup, transit progression, and driver tracking</span>
+                    <div>
+                      <div className="welcome-card-title">Inventory & Produce Listings</div>
+                      <div className="welcome-card-desc">Check crop stock, update pricing, assess freshness, or list new harvests.</div>
                     </div>
-                    <ChevronRight className="h-5 w-5 action-row-arrow" />
                   </div>
 
-                  <div
-                    className="action-row animate-rowFade"
-                    style={{ animationDelay: '180ms' }}
-                    onClick={() => handleAreaClick('listings')}
-                  >
-                    <div className="action-row-icon">
-                      <Tag className="h-5 w-5 text-emerald-600 stroke-[2]" />
+                  <div className="welcome-card-prompt" onClick={() => handleAreaClick('orders')}>
+                    <div className="welcome-card-icon-box">
+                      <ShoppingBag className="h-5 w-5 stroke-[2.2]" />
                     </div>
-                    <div className="action-row-content">
-                      <span className="action-row-title">Create or manage crop listings for buyers</span>
-                      <span className="action-row-sub">Post tomatoes, onions, or grains with structured stepper controls</span>
+                    <div>
+                      <div className="welcome-card-title">Retail Orders & Logistics</div>
+                      <div className="welcome-card-desc">Track active shipments, driver assignments, delivery OTPs, and packing steps.</div>
                     </div>
-                    <ChevronRight className="h-5 w-5 action-row-arrow" />
                   </div>
 
-                  <div
-                    className="action-row animate-rowFade"
-                    style={{ animationDelay: '240ms' }}
-                    onClick={() => handleAreaClick('contracts')}
-                  >
-                    <div className="action-row-icon">
-                      <Handshake className="h-5 w-5 text-emerald-600 stroke-[2]" />
+                  <div className="welcome-card-prompt" onClick={() => handleAreaClick('contracts')}>
+                    <div className="welcome-card-icon-box">
+                      <Handshake className="h-5 w-5 stroke-[2.2]" />
                     </div>
-                    <div className="action-row-content">
-                      <span className="action-row-title">Explore bulk buyer requirements & submit offers</span>
-                      <span className="action-row-sub">Review volume demands and negotiate contract deals</span>
+                    <div>
+                      <div className="welcome-card-title">Buyer Bids & Bulk Demands</div>
+                      <div className="welcome-card-desc">Review institutional demand, negotiate contracts, and submit bulk offers.</div>
                     </div>
-                    <ChevronRight className="h-5 w-5 action-row-arrow" />
                   </div>
-                </div>
-
-                <div className="welcome-footer-hint">
-                  <span>Tip: Select any area above to open specific action options, or ask anything in chat.</span>
                 </div>
               </div>
             </div>
           ) : (
             <>
               {/* Chat Header */}
-              <div className="chat-header">
+              <header className="chat-header">
                 <div className="header-left">
-                  <div className="green-dot-active" />
-                  <h2>{activeConversation?.title || 'Active Conversation'}</h2>
+                  {!sidebarOpen && (
+                    <button
+                      type="button"
+                      className="btn-sidebar-toggle-main"
+                      onClick={() => setSidebarOpen(true)}
+                      title="Open sidebar"
+                    >
+                      <PanelLeft className="h-4.5 w-4.5" />
+                    </button>
+                  )}
+                  <div className="chat-title-wrapper">
+                    <h2>{activeConversation?.title || 'Active Conversation'}</h2>
+                    <div className="header-status-sub">
+                      <span className="green-pulse-indicator" />
+                      <span>KisanConnect Agri-LLM v2.4 • Live Mandi Grounded</span>
+                    </div>
+                  </div>
                 </div>
+
                 <div className="header-right">
-                  <span className="chat-info-badge">
-                    {activeConversation?.message_count ?? messages.length} messages
+                  {/* Language Switcher in Header */}
+                  <div className="lang-switcher-select-wrap">
+                    <Globe className="h-3.5 w-3.5" />
+                    <select
+                      className="lang-select-element"
+                      value={selectedLanguage}
+                      onChange={(e) => {
+                        const newLang = e.target.value;
+                        setSelectedLanguage(newLang);
+                        const prompts = {
+                          english: 'Please converse with me in English',
+                          hindi: 'कृपया मुझसे हिंदी में बात करें (Hindi)',
+                          gujarati: 'કૃપા કરીને મારી સાથે ગુજરાતીમાં વાત કરો (Gujarati)',
+                        };
+                        if (selectedConvId) {
+                          sendChatMessage(selectedConvId, prompts[newLang]);
+                        }
+                      }}
+                    >
+                      <option value="english">🇬🇧 English</option>
+                      <option value="hindi">🇮🇳 हिंदी</option>
+                      <option value="gujarati">🇮🇳 ગુજરાતી</option>
+                    </select>
+                  </div>
+
+                  <span className="header-msg-counter">
+                    <MessageSquare className="h-3.5 w-3.5 text-slate-400" />
+                    <span>{activeConversation?.message_count ?? messages.length}</span>
                   </span>
                 </div>
-              </div>
+              </header>
 
-              {/* Persistent Global Quick Action Shortcut Bar (Stuck Above Chat) */}
+              {/* Persistent Global Quick Action Shortcut Bar */}
               <QuickActionChips
                 activeArea={activeSubMenuArea}
                 onSelectArea={handleAreaClick}
@@ -2147,146 +2344,225 @@ const FarmerAIAssistant = () => {
 
               {/* Messages Display Area */}
               <div className="messages-container">
-                {messages.length === 0 && flowStack.length === 0 ? (
-                  <div className="empty-chat-wrapper">
-                    <div className="message message-assistant animate-fadeInUp mb-4">
-                      <div className="message-header-row">
-                        <span className="assistant-pulse-dot" />
-                        <span className="message-role">ASSISTANT</span>
+                <div className="messages-content-wrapper">
+                  {messages.length === 0 && flowStack.length === 0 ? (
+                    <div className="message-row message-row-assistant animate-fadeInUp">
+                      <div className="message-avatar avatar-assistant">
+                        <Sparkles className="h-4.5 w-4.5 stroke-[2.2]" />
                       </div>
-                      <LanguageSelectionMenu onSelectLanguage={handleSelectLanguage} />
-                    </div>
-                  </div>
-                ) : (
-                  messages.map((msg, idx) => {
-                    const isUser = msg.role === 'user';
-                    return (
-                      <div
-                        key={msg.id || idx}
-                        className={`message message-${msg.role} animate-fadeInUp`}
-                      >
-                        <div className="message-header-row">
-                          {!isUser && <span className="assistant-pulse-dot" />}
-                          <span className="message-role">
-                            {isUser ? 'YOU' : 'ASSISTANT'}
-                          </span>
+                      <div className="message-body-col" style={{ width: '100%' }}>
+                        <div className="message-meta-top">
+                          <span className="sender-name">KisanConnect AI</span>
+                          <span className="advisor-badge">Farm Advisor</span>
                         </div>
-                        <div className="message-bubble-wrapper">
-                          <div className={`message-content markdown-body ${isUser ? 'bubble-user' : 'bubble-assistant'}`}>
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {msg.content}
-                            </ReactMarkdown>
+                        <LanguageSelectionMenu onSelectLanguage={handleSelectLanguage} />
+                      </div>
+                    </div>
+                  ) : (
+                    messages.map((msg, idx) => {
+                      const isUser = msg.role === 'user';
+                      return (
+                        <div
+                          key={msg.id || idx}
+                          className={`message-row ${isUser ? 'message-row-user' : 'message-row-assistant'} animate-fadeInUp`}
+                        >
+                          <div className={`message-avatar ${isUser ? 'avatar-user' : 'avatar-assistant'}`}>
+                            {isUser ? (
+                              <User className="h-4.5 w-4.5 stroke-[2.2]" />
+                            ) : (
+                              <Sparkles className="h-4.5 w-4.5 stroke-[2.2]" />
+                            )}
+                          </div>
+                          <div className="message-body-col">
+                            <div className="message-meta-top">
+                              <span className="sender-name">{isUser ? farmerName : 'KisanConnect AI'}</span>
+                              {!isUser && <span className="advisor-badge">Farm Advisor</span>}
+                              <span className="message-timestamp">
+                                {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                              </span>
+                            </div>
+
+                            <div className={isUser ? 'bubble-user-card' : 'bubble-assistant-card'}>
+                              <div className="markdown-body">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                  {cleanMessageContent(msg.content)}
+                                </ReactMarkdown>
+                              </div>
+
+                              {!isUser && (
+                                <div className="assistant-action-bar">
+                                  <button
+                                    type="button"
+                                    className="btn-bubble-action"
+                                    onClick={() => handleCopyMessage(msg.id || idx, cleanMessageContent(msg.content))}
+                                    title="Copy response"
+                                  >
+                                    {copiedMessageId === (msg.id || idx) ? (
+                                      <>
+                                        <CheckCheck className="h-3.5 w-3.5 text-emerald-600" />
+                                        <span className="text-emerald-700 font-bold">Copied</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy className="h-3.5 w-3.5" />
+                                        <span>Copy</span>
+                                      </>
+                                    )}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className={`btn-bubble-action ${speakingMessageId === (msg.id || idx) ? 'speaking-active' : ''}`}
+                                    onClick={() => handleReadAloud(msg.id || idx, cleanMessageContent(msg.content))}
+                                    title={speakingMessageId === (msg.id || idx) ? 'Stop reading' : 'Read aloud'}
+                                  >
+                                    {speakingMessageId === (msg.id || idx) ? (
+                                      <>
+                                        <VolumeX className="h-3.5 w-3.5" />
+                                        <span>Stop</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Volume2 className="h-3.5 w-3.5" />
+                                        <span>Listen</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {isUser && (
+                              <div className="user-msg-status">
+                                {msg.status === 'error' ? (
+                                  <button
+                                    className="retry-btn text-rose-600 font-bold flex items-center gap-1"
+                                    onClick={() => handleSubMenuOptionSelect(msg.content)}
+                                  >
+                                    <AlertCircle className="h-3 w-3" />
+                                    <span>Retry</span>
+                                  </button>
+                                ) : (
+                                  <CheckCheck className="h-3.5 w-3.5 text-emerald-600 stroke-[2.5]" />
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <div className="message-time-row">
-                          <span>{msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                          {isUser && (
-                            msg.status === 'error' ? (
-                              <button
-                                className="retry-btn"
-                                title="Failed to send. Click to retry."
-                                onClick={() => handleSubMenuOptionSelect(msg.content)}
-                              >
-                                <AlertCircle className="h-3.5 w-3.5 text-slate-500 hover:text-emerald-700" />
-                                <span>Retry</span>
-                              </button>
-                            ) : (
-                              <Check className="h-3.5 w-3.5 text-emerald-200 ml-1 stroke-[2.5]" />
-                            )
-                          )}
+                      );
+                    })
+                  )}
+
+                  {/* Language Selection Menu Bubble */}
+                  {currentFlow?.type === 'language' && (
+                    <div className="message-row message-row-assistant animate-fadeInUp">
+                      <div className="message-avatar avatar-assistant">
+                        <Sparkles className="h-4.5 w-4.5 stroke-[2.2]" />
+                      </div>
+                      <div className="message-body-col" style={{ width: '100%' }}>
+                        <div className="message-meta-top">
+                          <span className="sender-name">KisanConnect AI</span>
+                          <span className="advisor-badge">Farm Advisor</span>
+                        </div>
+                        <LanguageSelectionMenu onSelectLanguage={handleSelectLanguage} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sub-Feature Selection Menu Bubble */}
+                  {activeSubMenuArea && (
+                    <div className="message-row message-row-assistant animate-fadeInUp">
+                      <div className="message-avatar avatar-assistant">
+                        <Sparkles className="h-4.5 w-4.5 stroke-[2.2]" />
+                      </div>
+                      <div className="message-body-col" style={{ width: '100%' }}>
+                        <div className="message-meta-top">
+                          <span className="sender-name">KisanConnect AI</span>
+                          <span className="advisor-badge">Farm Advisor</span>
+                        </div>
+                        <SubFeatureMenu
+                          areaKey={activeSubMenuArea}
+                          locationName={farmerLocation}
+                          onSelectOption={handleSubMenuOptionSelect}
+                          onBack={() => flowPop()}
+                          selectedLanguage={selectedLanguage}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Universal Disambiguation Prompt Menu Bubble */}
+                  {disambiguationState && (
+                    <div className="message-row message-row-assistant animate-fadeInUp">
+                      <div className="message-avatar avatar-assistant">
+                        <Sparkles className="h-4.5 w-4.5 stroke-[2.2]" />
+                      </div>
+                      <div className="message-body-col" style={{ width: '100%' }}>
+                        <div className="message-meta-top">
+                          <span className="sender-name">KisanConnect AI</span>
+                          <span className="advisor-badge">Farm Advisor</span>
+                        </div>
+                        <DisambiguationMenu
+                          title={disambiguationState.title}
+                          options={disambiguationState.options}
+                          showShowAll={disambiguationState.showShowAll}
+                          onSelectOption={handleSubMenuOptionSelect}
+                          onShowAll={() => handleSubMenuOptionSelect(disambiguationState.showAllPrompt)}
+                          onBack={() => flowPop()}
+                          selectedLanguage={selectedLanguage}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Structured Form Card (Create / Update / Delete) */}
+                  {activeForm && (
+                    <div className="message-row message-row-assistant animate-fadeInUp">
+                      <div className="message-avatar avatar-assistant">
+                        <Sparkles className="h-4.5 w-4.5 stroke-[2.2]" />
+                      </div>
+                      <div className="message-body-col" style={{ width: '100%' }}>
+                        <div className="message-meta-top">
+                          <span className="sender-name">KisanConnect AI</span>
+                          <span className="advisor-badge">Farm Advisor</span>
+                        </div>
+                        <StructuredActionForm
+                          action={activeForm.action}
+                          initialData={activeForm.initialData}
+                          onSubmit={handleFormSubmit}
+                          onCancel={() => flowPop()}
+                          isSubmitting={isFormSubmitting}
+                          error={formError}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Assistant Typing Indicator */}
+                  {assistantThinking && (
+                    <div className="message-row message-row-assistant animate-fadeInUp">
+                      <div className="message-avatar avatar-assistant">
+                        <Sparkles className="h-4.5 w-4.5 stroke-[2.2]" />
+                      </div>
+                      <div className="message-body-col">
+                        <div className="typing-bubble-card">
+                          <div className="typing-dots">
+                            <span className="dot dot-1" />
+                            <span className="dot dot-2" />
+                            <span className="dot dot-3" />
+                          </div>
+                          <span className="typing-status-text">KisanConnect AI is thinking...</span>
                         </div>
                       </div>
-                    );
-                  })
-                )}
-
-                {/* Language Selection Menu Bubble */}
-                {currentFlow?.type === 'language' && (
-                  <div className="message message-assistant animate-fadeInUp">
-                    <div className="message-header-row">
-                      <span className="assistant-pulse-dot" />
-                      <span className="message-role">ASSISTANT</span>
                     </div>
-                    <LanguageSelectionMenu onSelectLanguage={handleSelectLanguage} />
-                  </div>
-                )}
-
-                {/* Sub-Feature Selection Menu Bubble */}
-                {activeSubMenuArea && (
-                  <div className="message message-assistant animate-fadeInUp">
-                    <div className="message-header-row">
-                      <span className="assistant-pulse-dot" />
-                      <span className="message-role">ASSISTANT</span>
-                    </div>
-                    <SubFeatureMenu
-                      areaKey={activeSubMenuArea}
-                      locationName={farmerLocation}
-                      onSelectOption={handleSubMenuOptionSelect}
-                      onBack={() => flowPop()}
-                      selectedLanguage={selectedLanguage}
-                    />
-                  </div>
-                )}
-
-                {/* Universal Disambiguation Prompt Menu Bubble */}
-                {disambiguationState && (
-                  <div className="message message-assistant animate-fadeInUp">
-                    <div className="message-header-row">
-                      <span className="assistant-pulse-dot" />
-                      <span className="message-role">ASSISTANT</span>
-                    </div>
-                    <DisambiguationMenu
-                      title={disambiguationState.title}
-                      options={disambiguationState.options}
-                      showShowAll={disambiguationState.showShowAll}
-                      onSelectOption={handleSubMenuOptionSelect}
-                      onShowAll={() => handleSubMenuOptionSelect(disambiguationState.showAllPrompt)}
-                      onBack={() => flowPop()}
-                      selectedLanguage={selectedLanguage}
-                    />
-                  </div>
-                )}
-
-                {/* Structured Form Card (Create / Update / Delete) */}
-                {activeForm && (
-                  <div className="message message-assistant animate-fadeInUp">
-                    <div className="message-header-row">
-                      <span className="assistant-pulse-dot" />
-                      <span className="message-role">ASSISTANT</span>
-                    </div>
-                    <StructuredActionForm
-                      action={activeForm.action}
-                      initialData={activeForm.initialData}
-                      onSubmit={handleFormSubmit}
-                      onCancel={() => flowPop()}
-                      isSubmitting={isFormSubmitting}
-                      error={formError}
-                    />
-                  </div>
-                )}
-
-                {/* Assistant Typing Indicator (3 pulsing green dots) */}
-                {assistantThinking && (
-                  <div className="message message-assistant animate-fadeInUp">
-                    <div className="message-header-row">
-                      <span className="assistant-pulse-dot" />
-                      <span className="message-role">ASSISTANT</span>
-                    </div>
-                    <div className="message-content bubble-assistant typing-bubble">
-                      <div className="typing-dots">
-                        <span className="dot dot-1" />
-                        <span className="dot dot-2" />
-                        <span className="dot dot-3" />
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
               </div>
 
-              {/* Input Area */}
-              <form className="input-form" onSubmit={handleSendMessage}>
-                <div className="input-wrapper">
+              {/* Chat Input Dock */}
+              <div className="chat-input-dock">
+                <form className="input-container-main" onSubmit={handleSendMessage}>
                   <input
                     type="text"
                     placeholder={
@@ -2300,19 +2576,32 @@ const FarmerAIAssistant = () => {
                     onChange={(e) => setInputMessage(e.target.value)}
                     disabled={assistantThinking}
                   />
-                  <button
-                    type="submit"
-                    disabled={!inputMessage.trim() || assistantThinking}
-                    className="btn-send"
-                    title="Send Message"
-                  >
-                    <Send className="h-4 w-4 stroke-[2.2]" />
-                  </button>
+                  <div className="input-actions-right">
+                    <button
+                      type="button"
+                      className={`btn-mic-input ${isRecording ? 'recording-active' : ''}`}
+                      onClick={toggleVoiceRecognition}
+                      title={isRecording ? 'Stop listening' : 'Voice input (Speak)'}
+                    >
+                      {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!inputMessage.trim() || assistantThinking}
+                      className="btn-send-main"
+                      title="Send Message"
+                    >
+                      <Send className="h-4 w-4 stroke-[2.4]" />
+                    </button>
+                  </div>
+                </form>
+                <div className="input-disclaimer-sub">
+                  KisanConnect AI provides verified mandi data & farm advisory. Grounded in live farm database.
                 </div>
-              </form>
+              </div>
             </>
           )}
-        </div>
+        </main>
       </div>
 
       {/* Delete Confirmation Modal */}

@@ -5,6 +5,7 @@ Orchestrates the chat flow: context building, LLM calls, tool execution, and mes
 
 import logging
 import json
+import re
 from typing import Dict, Any, Optional, Tuple
 from django.utils import timezone
 
@@ -17,6 +18,50 @@ class ChatManager:
     """
 
     MAX_TOOL_CALLS_PER_TURN = 5
+
+    @staticmethod
+    def _extract_text_tool_calls(text: str) -> list:
+        """Parse pseudo XML tool calls from text content if emitted by the LLM."""
+        tool_calls = []
+        if not text:
+            return tool_calls
+
+        # Format A: <invoke name="func_name"><parameter name="param">val</parameter></invoke>
+        for m in re.finditer(r'<invoke\s+name=[\x22\x27]?([a-zA-Z0-9_]+)[\x22\x27]?\s*>([\s\S]*?)</invoke>', text):
+            name = m.group(1)
+            body = m.group(2)
+            params = {}
+            for pm in re.finditer(r'<parameter\s+name=[\x22\x27]?([a-zA-Z0-9_]+)[\x22\x27]?\s*>([\s\S]*?)</parameter>', body):
+                params[pm.group(1).strip()] = pm.group(2).strip()
+            tool_calls.append({'name': name, 'arguments': params})
+
+        if tool_calls:
+            return tool_calls
+
+        # Format B: <function=func_name> <parameter=key>val</parameter> </function>
+        for m in re.finditer(r'<function=([a-zA-Z0-9_]+)>([\s\S]*?)</function>', text):
+            name = m.group(1)
+            body = m.group(2)
+            params = {}
+            for pm in re.finditer(r'<parameter=([a-zA-Z0-9_]+)>([\s\S]*?)</parameter>', body):
+                params[pm.group(1).strip()] = pm.group(2).strip()
+            for pm in re.finditer(r'<parameter\s+name=[\x22\x27]?([a-zA-Z0-9_]+)[\x22\x27]?\s*>([\s\S]*?)</parameter>', body):
+                params[pm.group(1).strip()] = pm.group(2).strip()
+            tool_calls.append({'name': name, 'arguments': params})
+
+        return tool_calls
+
+    @staticmethod
+    def _sanitize_response_text(text: str) -> str:
+        """Remove any residual XML/tool_call tags from assistant text before saving or sending."""
+        if not text:
+            return ""
+        text = re.sub(r'<tool_call>[\s\S]*?</tool_call>', '', text)
+        text = re.sub(r'<function_calls>[\s\S]*?</function_calls>', '', text)
+        text = re.sub(r'<invoke[\s\S]*?</invoke>', '', text)
+        text = re.sub(r'</?(?:tool_call|function_calls|invoke|parameter|function)[^>]*>', '', text)
+        return text.strip()
+
 
     def __init__(self, farmer_user, groq_service):
         """
@@ -124,70 +169,111 @@ class ChatManager:
             # Tool-call loop: execute tools and feed results back to the LLM
             current_messages = list(messages)
             max_iterations = self.MAX_TOOL_CALLS_PER_TURN
+            tool_executor = ToolExecutor(self.farmer_user)
 
-            while (
-                hasattr(assistant_message, 'tool_calls')
-                and assistant_message.tool_calls
-                and tool_call_count < max_iterations
-            ):
-                logger.info(f"Processing {len(assistant_message.tool_calls)} tool calls")
-                tool_executor = ToolExecutor(self.farmer_user)
+            while tool_call_count < max_iterations:
+                has_native_tools = hasattr(assistant_message, 'tool_calls') and bool(assistant_message.tool_calls)
+                text_content = getattr(assistant_message, 'content', '') or ''
+                has_text_tools = bool('<tool_call>' in text_content or '<invoke' in text_content or '<function=' in text_content)
 
-                assistant_msg_dict = {
-                    'role': 'assistant',
-                    'content': assistant_message.content or '',
-                    'tool_calls': [
-                        {
-                            'id': tc.id,
-                            'type': 'function',
-                            'function': {
-                                'name': tc.function.name,
-                                'arguments': tc.function.arguments,
-                            },
-                        }
-                        for tc in assistant_message.tool_calls
-                    ],
-                }
-                current_messages.append(assistant_msg_dict)
+                if not has_native_tools and not has_text_tools:
+                    # Finished all tool calls
+                    break
 
-                for tool_call in assistant_message.tool_calls:
-                    tool_call_count += 1
-                    tool_result = self._execute_tool_call(
-                        tool_call,
-                        tool_executor,
-                        conversation,
-                        context_builder
-                    )
-                    tool_activity.append(tool_result)
+                if has_native_tools:
+                    logger.info(f"Processing {len(assistant_message.tool_calls)} native tool calls")
+                    assistant_msg_dict = {
+                        'role': 'assistant',
+                        'content': assistant_message.content or '',
+                        'tool_calls': [
+                            {
+                                'id': tc.id,
+                                'type': 'function',
+                                'function': {
+                                    'name': tc.function.name,
+                                    'arguments': tc.function.arguments,
+                                },
+                            }
+                            for tc in assistant_message.tool_calls
+                        ],
+                    }
+                    current_messages.append(assistant_msg_dict)
 
-                    result_content = json.dumps(
-                        tool_result.get('result') or {'error': tool_result.get('error', 'unknown')},
-                        default=str,
-                    )
+                    for tool_call in assistant_message.tool_calls:
+                        tool_call_count += 1
+                        tool_result = self._execute_tool_call(
+                            tool_call,
+                            tool_executor,
+                            conversation,
+                            context_builder
+                        )
+                        tool_activity.append(tool_result)
+
+                        result_content = json.dumps(
+                            tool_result.get('result') or {'error': tool_result.get('error', 'unknown')},
+                            default=str,
+                        )
+                        current_messages.append({
+                            'role': 'tool',
+                            'tool_call_id': tool_call.id,
+                            'content': result_content,
+                        })
+
+                elif has_text_tools:
+                    parsed_calls = self._extract_text_tool_calls(text_content)
+                    if not parsed_calls:
+                        break
+                    logger.info(f"Processing {len(parsed_calls)} parsed text tool calls")
+                    cleaned_content = self._sanitize_response_text(text_content)
                     current_messages.append({
-                        'role': 'tool',
-                        'tool_call_id': tool_call.id,
-                        'content': result_content,
+                        'role': 'assistant',
+                        'content': cleaned_content or 'Checking market and farm data...',
                     })
+                    for idx, tc in enumerate(parsed_calls):
+                        tool_call_count += 1
+                        t_name = tc.get('name')
+                        t_args = tc.get('arguments', {})
+                        res = tool_executor.execute_tool(t_name, t_args)
+                        tool_activity.append({
+                            'tool_name': t_name,
+                            'status': res.get('status', 'success'),
+                            'result': res.get('data') or {'error': res.get('error')},
+                        })
+                        current_messages.append({
+                            'role': 'user',
+                            'content': f"[System data for {t_name}]: {json.dumps(res.get('data') or {'error': res.get('error')}, default=str)}"
+                        })
 
-                # Call Groq without re-sending tool schema to save ~2400 tokens per call and prevent 8000 TPM rate limit
+                # Follow-up LLM call: provide tools if budget remains, else force text
+                tools_next = TOOL_DEFINITIONS if tool_call_count < max_iterations - 1 else None
+                choice_next = 'auto' if tool_call_count < max_iterations - 1 else None
+
                 followup_response = self.groq_service.send_message(
                     messages=current_messages,
-                    tools=None,
-                    tool_choice=None,
+                    tools=tools_next,
+                    tool_choice=choice_next,
                     temperature=0.7,
                     max_tokens=700,
                 )
 
                 if followup_response['status'] == 'error':
                     logger.error(f"Error in follow-up LLM call: {followup_response['error']}")
-                    final_response = "I found some information but encountered an error summarizing it. Please try again."
+                    # If error was tool_choice related, retry once without tools to get clean text
+                    retry = self.groq_service.send_message(
+                        messages=current_messages,
+                        tools=None,
+                        tool_choice=None,
+                        temperature=0.7,
+                        max_tokens=700,
+                    )
+                    if retry['status'] == 'success' and retry['message'].content:
+                        assistant_message = retry['message']
+                        final_response = assistant_message.content
                     break
 
                 assistant_message = followup_response['message']
                 if hasattr(assistant_message, 'content') and assistant_message.content:
                     final_response = assistant_message.content
-                    break
 
             # 6. Get final response from assistant
             if hasattr(assistant_message, 'content') and assistant_message.content:
@@ -243,6 +329,11 @@ class ChatManager:
                     final_response = "I'm sorry, I couldn't generate a response. Please try again."
             elif not final_response:
                 final_response = "I'm sorry, I couldn't generate a response. Please try again."
+
+            # Clean any leftover XML / tool call tags
+            final_response = self._sanitize_response_text(final_response)
+            if not final_response:
+                final_response = "I'm sorry, I couldn't complete that request. Please ask again."
 
             # 7. Save assistant message
             assistant_msg_record = ChatMessage.objects.create(

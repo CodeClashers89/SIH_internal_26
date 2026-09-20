@@ -30,6 +30,18 @@ class ToolExecutor:
         self.farmer_user = farmer_user
         self.farmer_id = farmer_user.id
 
+    TOOL_ALIASES = {
+        'get_mandi_prices': 'get_market_prices',
+        'get_market_rates': 'get_market_prices',
+        'get_mandi_rates': 'get_market_prices',
+        'get_crop_prices': 'get_market_prices',
+        'get_listings': 'get_active_listings',
+        'get_farmer_listings': 'get_active_listings',
+        'get_orders': 'get_farmer_orders',
+        'get_retail_orders': 'get_farmer_orders',
+        'get_bids': 'get_quote_requests',
+    }
+
     def execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute a tool with the given arguments.
@@ -41,9 +53,21 @@ class ToolExecutor:
         Returns:
             Dictionary with 'status', 'data', and optional 'error'
         """
-        logger.info(f"Executing tool: {tool_name} with args: {arguments}")
+        canonical_name = self.TOOL_ALIASES.get(tool_name, tool_name)
+        logger.info(f"Executing tool: {tool_name} (canonical: {canonical_name}) with args: {arguments}")
 
-        tool_method = getattr(self, f'tool_{tool_name}', None)
+        if not isinstance(arguments, dict):
+            arguments = {}
+        if 'crop_name' in arguments and 'crop' not in arguments:
+            arguments['crop'] = arguments['crop_name']
+        if 'commodity' in arguments and 'crop' not in arguments:
+            arguments['crop'] = arguments['commodity']
+        if 'market' in arguments and 'location' not in arguments:
+            arguments['location'] = arguments['market']
+        if 'mandi' in arguments and 'location' not in arguments:
+            arguments['location'] = arguments['mandi']
+
+        tool_method = getattr(self, f'tool_{canonical_name}', None)
         if not tool_method:
             return {
                 'status': 'error',
@@ -726,7 +750,7 @@ class ToolExecutor:
         from datetime import datetime
         from django.utils import timezone
 
-        crop = (args.get('crop') or '').lower()
+        crop = (args.get('crop') or args.get('crop_name') or args.get('commodity') or args.get('name') or '').lower().strip()
         location = args.get('location') or ''
 
         if not crop:
@@ -829,7 +853,7 @@ class ToolExecutor:
         from django.utils import timezone
         from datetime import timedelta
 
-        crop = (args.get('crop') or '').lower()
+        crop = (args.get('crop') or args.get('crop_name') or args.get('commodity') or args.get('name') or '').lower().strip()
         if not crop:
             return {'error': 'crop parameter is required'}
 
@@ -1031,7 +1055,7 @@ class ToolExecutor:
         from orders.models import BulkRequirement
         from products.models import Product
         
-        crop = (args.get('crop') or '').lower()
+        crop = (args.get('crop') or args.get('crop_name') or args.get('commodity') or args.get('name') or '').lower().strip()
         location = (args.get('location') or '').lower()
         
         query = BulkRequirement.objects.filter(status='pending')
@@ -1367,14 +1391,31 @@ TOOL_DEFINITIONS = [
         'type': 'function',
         'function': {
             'name': 'get_market_prices',
-            'description': 'Get current market prices for a specific crop in a location',
+            'description': 'Get current mandi market prices for a specific crop in a location',
             'parameters': {
                 'type': 'object',
                 'properties': {
-                    'crop': {'type': 'string', 'description': 'Crop name (e.g., "tomato", "onion")'},
+                    'crop': {'type': 'string', 'description': 'Crop name (e.g., "tomato", "onion", "wheat")'},
+                    'crop_name': {'type': 'string', 'description': 'Crop name (alias for crop)'},
                     'location': {'type': ['string', 'null'], 'description': 'Location/market (optional)'},
                 },
                 'required': ['crop'],
+            }
+        }
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'get_mandi_prices',
+            'description': 'Get current mandi market prices for a crop in a location (alias for get_market_prices)',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'crop': {'type': 'string', 'description': 'Crop name'},
+                    'crop_name': {'type': 'string', 'description': 'Crop name'},
+                    'location': {'type': ['string', 'null'], 'description': 'Location/mandi market'},
+                },
+                'required': [],
             }
         }
     },
