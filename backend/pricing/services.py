@@ -7,6 +7,41 @@ from .geocoding import geocode_market
 
 MOCK_AGMARKNET_DATA = {
     "records": [
+        # Karnal Grain Market (Karnal, Haryana)
+        {"state": "Haryana", "district": "Karnal", "market": "Karnal Grain Market", "commodity": "Tomato", "variety": "Hybrid", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "2200", "max_price": "2800", "modal_price": "2500"},
+        {"state": "Haryana", "district": "Karnal", "market": "Karnal Grain Market", "commodity": "Onion", "variety": "Red Nasik", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "2800", "max_price": "3400", "modal_price": "3100"},
+        {"state": "Haryana", "district": "Karnal", "market": "Karnal Grain Market", "commodity": "Wheat", "variety": "Sharbati", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "2400", "max_price": "2750", "modal_price": "2600"},
+        {"state": "Haryana", "district": "Karnal", "market": "Karnal Grain Market", "commodity": "Rice", "variety": "Basmati 1121", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "5800", "max_price": "7200", "modal_price": "6600"},
+        {"state": "Haryana", "district": "Karnal", "market": "Karnal Grain Market", "commodity": "Garlic", "variety": "Desi", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "6500", "max_price": "8000", "modal_price": "7200"},
+        {"state": "Haryana", "district": "Karnal", "market": "Karnal Grain Market", "commodity": "Potato", "variety": "Jyoti", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "1400", "max_price": "1800", "modal_price": "1600"},
+        {"state": "Haryana", "district": "Karnal", "market": "Karnal Grain Market", "commodity": "Mustard", "variety": "Yellow Sarson", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "5100", "max_price": "5700", "modal_price": "5400"},
+
+        # Gharaunda Mandi (Karnal, Haryana - Local Mandi for Gharaunda)
+        {"state": "Haryana", "district": "Karnal", "market": "Gharaunda Mandi", "commodity": "Tomato", "variety": "Local Fresh", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "2150", "max_price": "2750", "modal_price": "2450"},
+        {"state": "Haryana", "district": "Karnal", "market": "Gharaunda Mandi", "commodity": "Onion", "variety": "Red", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "2750", "max_price": "3300", "modal_price": "3050"},
+        {"state": "Haryana", "district": "Karnal", "market": "Gharaunda Mandi", "commodity": "Wheat", "variety": "Sharbati / Dara", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "2380", "max_price": "2700", "modal_price": "2580"},
+        {"state": "Haryana", "district": "Karnal", "market": "Gharaunda Mandi", "commodity": "Rice", "variety": "Basmati 1509", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "5600", "max_price": "7000", "modal_price": "6450"},
+        {"state": "Haryana", "district": "Karnal", "market": "Gharaunda Mandi", "commodity": "Garlic", "variety": "Desi", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "6400", "max_price": "7800", "modal_price": "7100"},
+        {"state": "Haryana", "district": "Karnal", "market": "Gharaunda Mandi", "commodity": "Potato", "variety": "Local", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "1380", "max_price": "1780", "modal_price": "1580"},
+
+        # Taraori Mandi (Karnal, Haryana - Major Basmati Hub)
+        {"state": "Haryana", "district": "Karnal", "market": "Taraori Mandi", "commodity": "Rice", "variety": "Traditional Basmati", "grade": "Premium", "arrival_date": "20/09/2026", "min_price": "6200", "max_price": "7800", "modal_price": "7100"},
+        {"state": "Haryana", "district": "Karnal", "market": "Taraori Mandi", "commodity": "Wheat", "variety": "Sharbati", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "2450", "max_price": "2800", "modal_price": "2650"},
+        {"state": "Haryana", "district": "Karnal", "market": "Taraori Mandi", "commodity": "Mustard", "variety": "Pusa Bold", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "5200", "max_price": "5800", "modal_price": "5500"},
+        {"state": "Haryana", "district": "Karnal", "market": "Taraori Mandi", "commodity": "Garlic", "variety": "Local", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "6600", "max_price": "8100", "modal_price": "7300"},
+
+        # Panipat Mandi (Panipat, Haryana - Adjacent ~30km)
+        {"state": "Haryana", "district": "Panipat", "market": "Panipat Mandi", "commodity": "Tomato", "variety": "Hybrid", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "2250", "max_price": "2850", "modal_price": "2550"},
+        {"state": "Haryana", "district": "Panipat", "market": "Panipat Mandi", "commodity": "Onion", "variety": "Red", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "2850", "max_price": "3450", "modal_price": "3150"},
+        {"state": "Haryana", "district": "Panipat", "market": "Panipat Mandi", "commodity": "Wheat", "variety": "Sharbati", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "2420", "max_price": "2780", "modal_price": "2620"},
+        {"state": "Haryana", "district": "Panipat", "market": "Panipat Mandi", "commodity": "Garlic", "variety": "Local", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "6600", "max_price": "8100", "modal_price": "7300"},
+
+        # Kurukshetra Mandi (Kurukshetra, Haryana - Adjacent ~35km)
+        {"state": "Haryana", "district": "Kurukshetra", "market": "Kurukshetra Mandi", "commodity": "Rice", "variety": "Basmati 1121", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "5900", "max_price": "7300", "modal_price": "6700"},
+        {"state": "Haryana", "district": "Kurukshetra", "market": "Kurukshetra Mandi", "commodity": "Wheat", "variety": "Lokwan", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "2390", "max_price": "2720", "modal_price": "2590"},
+        {"state": "Haryana", "district": "Kurukshetra", "market": "Kurukshetra Mandi", "commodity": "Tomato", "variety": "Local", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "2180", "max_price": "2760", "modal_price": "2480"},
+        {"state": "Haryana", "district": "Kurukshetra", "market": "Kurukshetra Mandi", "commodity": "Potato", "variety": "Local", "grade": "FAQ", "arrival_date": "20/09/2026", "min_price": "1450", "max_price": "1850", "modal_price": "1650"},
+
         # Anand APMC
         {"state": "Gujarat", "district": "Anand", "market": "Anand APMC", "commodity": "Tomato", "variety": "Local", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1200", "max_price": "1800", "modal_price": "1500"},
         {"state": "Gujarat", "district": "Anand", "market": "Anand APMC", "commodity": "Potato", "variety": "Other", "grade": "FAQ", "arrival_date": "22/08/2026", "min_price": "1500", "max_price": "1900", "modal_price": "1700"},

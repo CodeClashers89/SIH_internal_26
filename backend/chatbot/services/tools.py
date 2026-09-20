@@ -751,67 +751,107 @@ class ToolExecutor:
         from django.utils import timezone
 
         crop = (args.get('crop') or args.get('crop_name') or args.get('commodity') or args.get('name') or '').lower().strip()
-        location = args.get('location') or ''
+        location = (args.get('location') or args.get('market') or args.get('mandi') or '').strip()
 
         if not crop:
             return {'error': 'crop parameter is required'}
 
-        api_key = os.environ.get("DATA_GOV_API_KEY")
+        # Auto-detect farmer's registered location if location is unspecified, 'near me', 'nearby', or 'local'
+        farmer_district = 'Karnal'
+        try:
+            from farmer_profile.models import FarmerProfile
+            profile = FarmerProfile.objects.get(user=self.farmer_user)
+            farmer_district = profile.taluka or profile.village or 'Karnal'
+        except Exception:
+            pass
+
+        if not location or location.lower() in ('near me', 'nearby', 'local', 'around me', 'here', 'my location', 'all'):
+            location = farmer_district
+
         records = []
 
-        if api_key:
-            url = "https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070"
-            params = {
-                "api-key": api_key,
-                "format": "json",
-                "limit": 15,
-                "filters[commodity]": crop.capitalize()
-            }
-            if location:
-                # Approximate filtering for location via district or market
-                params["filters[district]"] = location.capitalize()
-            
-            try:
-                response = requests.get(url, params=params, timeout=3)
-                response.raise_for_status()
-                data = response.json()
-                records = data.get("records", [])
-            except Exception as e:
-                logger.error(f"AGMARKNET API call failed: {e}")
+        # 1. First, check local database pricing.models.MarketPrice
+        from pricing.models import MarketPrice, Market
+        from django.db.models import Q
         
+        db_prices = MarketPrice.objects.select_related('market').filter(
+            Q(commodity__icontains=crop) | Q(variety__icontains=crop)
+        )
+        if location:
+            loc_lower = location.lower()
+            if loc_lower in ('karnal', 'gharaunda', 'taraori', 'haryana'):
+                db_loc_prices = db_prices.filter(
+                    Q(market__district__icontains='Karnal') |
+                    Q(market__district__icontains='Panipat') |
+                    Q(market__district__icontains='Kurukshetra') |
+                    Q(market__state__icontains='Haryana')
+                )
+            else:
+                db_loc_prices = db_prices.filter(
+                    Q(market__district__icontains=loc_lower) |
+                    Q(market__name__icontains=loc_lower) |
+                    Q(market__state__icontains=loc_lower)
+                )
+            if db_loc_prices.exists():
+                db_prices = db_loc_prices
+
+        for mp in db_prices[:15]:
+            records.append({
+                "market": mp.market.name,
+                "district": mp.market.district,
+                "state": mp.market.state,
+                "commodity": mp.commodity,
+                "variety": mp.variety or "FAQ",
+                "arrival_date": mp.reported_date.strftime("%d/%m/%Y"),
+                "min_price": str(mp.min_price or mp.modal_price or 0),
+                "max_price": str(mp.max_price or mp.modal_price or 0),
+                "modal_price": str(mp.modal_price or 0),
+            })
+
+        # 2. If needed, supplement with MOCK_AGMARKNET_DATA
         if not records:
-            # Fallback to mock data if API fails or returns no records
             from pricing.services import MOCK_AGMARKNET_DATA
             import re
             
-            mock_records = MOCK_AGMARKNET_DATA["records"]
+            mock_records = MOCK_AGMARKNET_DATA.get("records", [])
             clean_tokens = [
                 w for w in re.findall(r'[a-z]+', crop.lower())
                 if w not in {'aged', 'raw', 'fresh', 'organic', 'traditional', 'grade', 'a', 'b', 'c', '1121', 'stemless'}
                 and len(w) > 2
             ]
 
-            records = [
+            matching_crop = [
                 r for r in mock_records 
                 if (clean_tokens and any(w in r.get("commodity", "").lower() or r.get("commodity", "").lower() in w for w in clean_tokens))
                 or crop.lower() in r.get("commodity", "").lower()
             ]
-            
+
             if location:
-                loc_records = [
-                    r for r in records
-                    if location.lower() in r.get("district", "").lower() or 
-                       location.lower() in r.get("market", "").lower()
-                ]
-                if loc_records:
-                    records = loc_records
-            
-            if not records:
-                return {
-                    'message': f'No market data found for {crop}',
-                    'crop': crop,
-                    'location': location or 'all',
-                }
+                loc_lower = location.lower()
+                # If location is in Haryana / Karnal region
+                if loc_lower in ('karnal', 'gharaunda', 'taraori', 'haryana'):
+                    matching_loc = [
+                        r for r in matching_crop
+                        if r.get("district", "").lower() in ('karnal', 'panipat', 'kurukshetra') or
+                           r.get("state", "").lower() == 'haryana'
+                    ]
+                else:
+                    matching_loc = [
+                        r for r in matching_crop
+                        if loc_lower in r.get("district", "").lower() or
+                           loc_lower in r.get("market", "").lower() or
+                           loc_lower in r.get("state", "").lower()
+                    ]
+                records = matching_loc if matching_loc else matching_crop
+            else:
+                records = matching_crop
+
+        if not records:
+            return {
+                'message': f'No market data found for {crop} in {location}',
+                'crop': crop,
+                'location': location,
+            }
 
         # Format API records
         formatted_prices = []
@@ -840,7 +880,7 @@ class ToolExecutor:
 
         return {
             'crop': crop,
-            'location': location or 'all',
+            'location': location,
             'prices': formatted_prices
         }
 
