@@ -23,7 +23,7 @@ class GroqService:
         """Initialize Groq client with API key from environment."""
         self.api_key = (os.environ.get('GROQ_API_KEY') or '').strip()
         self.offline_mode = False
-        self.model = os.environ.get('GROQ_MODEL', 'openai/gpt-oss-20b')
+        self.model = os.environ.get('GROQ_MODEL', 'qwen/qwen3.8-27b')
 
         if not self.api_key:
             logger.error('GROQ_API_KEY is not configured. Chatbot will return a configuration error instead of a fake offline response.')
@@ -39,7 +39,7 @@ class GroqService:
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: Optional[str] = None,
         temperature: float = 0.7,
-        max_tokens: int = 1024,
+        max_tokens: int = 750,
     ) -> Dict[str, Any]:
         """
         Send a message to Groq and get a response.
@@ -66,8 +66,11 @@ class GroqService:
                 'error_type': 'ConfigurationError',
             }
 
+        # Cap max_tokens to 750 to stay well under Groq free tier limit of 1000 OTPM
+        effective_max_tokens = min(max_tokens, 750) if max_tokens else 750
+
         models_to_try = [self.model]
-        for fallback in ['openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-120b']:
+        for fallback in ['qwen/qwen3.8-27b', 'groq/compound-mini', 'groq/compound']:
             if fallback not in models_to_try:
                 models_to_try.append(fallback)
 
@@ -78,7 +81,7 @@ class GroqService:
                     'model': current_model,
                     'messages': messages,
                     'temperature': temperature,
-                    'max_tokens': max_tokens,
+                    'max_tokens': effective_max_tokens,
                 }
 
                 if tools:
@@ -96,13 +99,8 @@ class GroqService:
 
             except Exception as e:
                 last_error = e
-                err_str = str(e).lower()
-                if '429' in err_str or 'rate_limit' in err_str:
-                    logger.warning(f"Groq model {current_model} hit rate limit, trying fallback model...")
-                    continue
-                else:
-                    logger.error(f"Error calling Groq API with model {current_model}: {str(e)}")
-                    break
+                logger.warning(f"Error calling Groq API with model {current_model}: {str(e)}. Trying fallback model...")
+                continue
 
         return {
             'status': 'error',

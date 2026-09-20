@@ -90,128 +90,194 @@ class ChatManager:
             conversation.state['language'] = 'English'
             conversation.save(update_fields=['state', 'updated_at'])
 
-        # 3. Build context
-        context_builder = ContextBuilder(conversation, self.groq_service)
-        messages = context_builder.build_messages(user_message)
+        try:
+            # 3. Build context
+            context_builder = ContextBuilder(conversation, self.groq_service)
+            messages = context_builder.build_messages(user_message)
 
-        # 4. Call Groq with tools
-        groq_response = self.groq_service.send_message(
-            messages=messages,
-            tools=TOOL_DEFINITIONS,
-            tool_choice='auto',
-            temperature=0.7,
-            max_tokens=1024,
-        )
-
-        if groq_response['status'] == 'error':
-            error_msg = f"Error from LLM: {groq_response['error']}"
-            logger.error(error_msg)
-            return error_msg, str(conversation_id), {'error': groq_response['error']}
-
-        # 5. Process response and handle tool calls
-        assistant_message = groq_response['message']
-        final_response = ""
-        tool_activity = []
-        tool_call_count = 0
-
-        # Tool-call loop: execute tools and feed results back to the LLM
-        # so it can produce a final natural-language answer.
-        current_messages = list(messages)  # copy to extend with tool context
-        max_iterations = self.MAX_TOOL_CALLS_PER_TURN
-
-        while (
-            hasattr(assistant_message, 'tool_calls')
-            and assistant_message.tool_calls
-            and tool_call_count < max_iterations
-        ):
-            logger.info(f"Processing {len(assistant_message.tool_calls)} tool calls")
-            tool_executor = ToolExecutor(self.farmer_user)
-
-            # Add assistant message (with tool_calls) to context
-            assistant_msg_dict = {
-                'role': 'assistant',
-                'content': assistant_message.content or '',
-                'tool_calls': [
-                    {
-                        'id': tc.id,
-                        'type': 'function',
-                        'function': {
-                            'name': tc.function.name,
-                            'arguments': tc.function.arguments,
-                        },
-                    }
-                    for tc in assistant_message.tool_calls
-                ],
-            }
-            current_messages.append(assistant_msg_dict)
-
-            for tool_call in assistant_message.tool_calls:
-                tool_call_count += 1
-                tool_result = self._execute_tool_call(
-                    tool_call,
-                    tool_executor,
-                    conversation,
-                    context_builder
-                )
-                tool_activity.append(tool_result)
-
-                # Add tool result message to context for the LLM
-                result_content = json.dumps(
-                    tool_result.get('result') or {'error': tool_result.get('error', 'unknown')},
-                    default=str,
-                )
-                current_messages.append({
-                    'role': 'tool',
-                    'tool_call_id': tool_call.id,
-                    'content': result_content,
-                })
-
-            # Call LLM again with tool results so it can produce a final answer
-            followup_response = self.groq_service.send_message(
-                messages=current_messages,
+            # 4. Call Groq with tools
+            groq_response = self.groq_service.send_message(
+                messages=messages,
                 tools=TOOL_DEFINITIONS,
                 tool_choice='auto',
                 temperature=0.7,
-                max_tokens=1024,
+                max_tokens=700,
             )
 
-            if followup_response['status'] == 'error':
-                logger.error(f"Error in follow-up LLM call: {followup_response['error']}")
-                final_response = "I found some information but encountered an error summarizing it. Please try again."
-                break
+            if groq_response['status'] == 'error':
+                error_msg = f"I am having trouble connecting to the AI service: {groq_response['error']}. Please try again shortly."
+                logger.error(error_msg)
+                ChatMessage.objects.create(
+                    conversation=conversation,
+                    role='assistant',
+                    content=error_msg,
+                    metadata={'error': groq_response['error']}
+                )
+                return error_msg, str(conversation_id), {'error': groq_response['error']}
 
-            assistant_message = followup_response['message']
+            # 5. Process response and handle tool calls
+            assistant_message = groq_response['message']
+            final_response = ""
+            tool_activity = []
+            tool_call_count = 0
 
-        # 6. Get final response from assistant
-        if assistant_message.content:
-            final_response = assistant_message.content
-        elif not final_response:
-            final_response = "I'm sorry, I couldn't generate a response. Please try again."
+            # Tool-call loop: execute tools and feed results back to the LLM
+            current_messages = list(messages)
+            max_iterations = self.MAX_TOOL_CALLS_PER_TURN
 
-        # 7. Save assistant message
-        assistant_msg_record = ChatMessage.objects.create(
-            conversation=conversation,
-            role='assistant',
-            content=final_response,
-            metadata={'tool_call_count': tool_call_count},
-        )
-        logger.info(f"Saved assistant message {assistant_msg_record.id}")
+            while (
+                hasattr(assistant_message, 'tool_calls')
+                and assistant_message.tool_calls
+                and tool_call_count < max_iterations
+            ):
+                logger.info(f"Processing {len(assistant_message.tool_calls)} tool calls")
+                tool_executor = ToolExecutor(self.farmer_user)
 
-        # 8. Update conversation title if new
-        if not conversation.title or conversation.title.endswith("..."):
-            # Generate a title from the user's intent
-            if len(user_message) <= 50:
-                conversation.title = user_message
-            else:
-                conversation.title = user_message[:50] + "..."
-            conversation.save(update_fields=['title', 'updated_at'])
+                assistant_msg_dict = {
+                    'role': 'assistant',
+                    'content': assistant_message.content or '',
+                    'tool_calls': [
+                        {
+                            'id': tc.id,
+                            'type': 'function',
+                            'function': {
+                                'name': tc.function.name,
+                                'arguments': tc.function.arguments,
+                            },
+                        }
+                        for tc in assistant_message.tool_calls
+                    ],
+                }
+                current_messages.append(assistant_msg_dict)
 
-        logger.info(f"Completed chat for conversation {conversation_id}")
+                for tool_call in assistant_message.tool_calls:
+                    tool_call_count += 1
+                    tool_result = self._execute_tool_call(
+                        tool_call,
+                        tool_executor,
+                        conversation,
+                        context_builder
+                    )
+                    tool_activity.append(tool_result)
 
-        return final_response, str(conversation_id), {
-            'tool_calls': tool_call_count,
-            'tool_activity': tool_activity,
-        }
+                    result_content = json.dumps(
+                        tool_result.get('result') or {'error': tool_result.get('error', 'unknown')},
+                        default=str,
+                    )
+                    current_messages.append({
+                        'role': 'tool',
+                        'tool_call_id': tool_call.id,
+                        'content': result_content,
+                    })
+
+                # Call Groq without re-sending tool schema to save ~2400 tokens per call and prevent 8000 TPM rate limit
+                followup_response = self.groq_service.send_message(
+                    messages=current_messages,
+                    tools=None,
+                    tool_choice=None,
+                    temperature=0.7,
+                    max_tokens=700,
+                )
+
+                if followup_response['status'] == 'error':
+                    logger.error(f"Error in follow-up LLM call: {followup_response['error']}")
+                    final_response = "I found some information but encountered an error summarizing it. Please try again."
+                    break
+
+                assistant_message = followup_response['message']
+                if hasattr(assistant_message, 'content') and assistant_message.content:
+                    final_response = assistant_message.content
+                    break
+
+            # 6. Get final response from assistant
+            if hasattr(assistant_message, 'content') and assistant_message.content:
+                final_response = assistant_message.content
+            elif not final_response and tool_activity:
+                # The LLM exhausted tool calls without producing text content.
+                # Make one final synthesis call WITHOUT tools to force a text response.
+                logger.info("No text content after tool calls; forcing synthesis call without tools")
+
+                # Build the assistant message dict for the last tool-calling turn
+                if hasattr(assistant_message, 'tool_calls') and assistant_message.tool_calls:
+                    last_assistant_dict = {
+                        'role': 'assistant',
+                        'content': assistant_message.content or '',
+                        'tool_calls': [
+                            {
+                                'id': tc.id,
+                                'type': 'function',
+                                'function': {
+                                    'name': tc.function.name,
+                                    'arguments': tc.function.arguments,
+                                },
+                            }
+                            for tc in assistant_message.tool_calls
+                        ],
+                    }
+                    current_messages.append(last_assistant_dict)
+
+                    # Provide stub tool results so the conversation is well-formed
+                    for tc in assistant_message.tool_calls:
+                        current_messages.append({
+                            'role': 'tool',
+                            'tool_call_id': tc.id,
+                            'content': json.dumps({
+                                'message': 'Tool call limit reached. Please synthesize a response from all the data already collected above.',
+                            }),
+                        })
+
+                # Final call with NO tools – forces text output
+                synthesis_response = self.groq_service.send_message(
+                    messages=current_messages,
+                    tools=None,
+                    tool_choice=None,
+                    temperature=0.7,
+                    max_tokens=700,
+                )
+
+                if synthesis_response['status'] == 'success' and synthesis_response['message'].content:
+                    final_response = synthesis_response['message'].content
+                    logger.info("Synthesis call succeeded")
+                else:
+                    logger.error(f"Synthesis call failed: {synthesis_response.get('error', 'no content')}")
+                    final_response = "I'm sorry, I couldn't generate a response. Please try again."
+            elif not final_response:
+                final_response = "I'm sorry, I couldn't generate a response. Please try again."
+
+            # 7. Save assistant message
+            assistant_msg_record = ChatMessage.objects.create(
+                conversation=conversation,
+                role='assistant',
+                content=final_response,
+                metadata={'tool_call_count': tool_call_count},
+            )
+            logger.info(f"Saved assistant message {assistant_msg_record.id}")
+
+            # 8. Update conversation title if new
+            if not conversation.title or conversation.title == 'New Conversation' or conversation.title.endswith("..."):
+                if len(user_message) <= 50:
+                    conversation.title = user_message
+                else:
+                    conversation.title = user_message[:50] + "..."
+                conversation.save(update_fields=['title', 'updated_at'])
+
+            logger.info(f"Completed chat for conversation {conversation_id}")
+
+            return final_response, str(conversation_id), {
+                'tool_calls': tool_call_count,
+                'tool_activity': tool_activity,
+            }
+
+        except Exception as exc:
+            logger.error(f"Unhandled error in process_chat_message: {str(exc)}", exc_info=True)
+            fallback_text = f"I'm sorry, an error occurred while processing your request: {str(exc)}. Please try asking again."
+            ChatMessage.objects.create(
+                conversation=conversation,
+                role='assistant',
+                content=fallback_text,
+                metadata={'error': str(exc)},
+            )
+            return fallback_text, str(conversation_id), {'error': str(exc)}
 
     def _execute_tool_call(
         self,

@@ -14,7 +14,7 @@ const MarketDetailPanel = ({ market, onClose }) => {
       setLoading(true);
       setError(null);
       try {
-        const response = await api.get(`/market-prices/markets/${market.id}/prices/`);
+        const response = await api.get(`/market-prices/${market.id}/prices/`);
         const data = response.data;
         setPrices(data);
       } catch (err) {

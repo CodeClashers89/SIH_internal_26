@@ -478,13 +478,32 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
         else:
             return Response({'error': 'Role unauthorized to accept offers.'}, status=status.HTTP_403_FORBIDDEN)
 
-        # Verify stock
-        if quote.product.quantity < quote.quantity:
-            return Response({'error': f'Not enough stock in inventory. Available: {quote.product.quantity}'}, status=status.HTTP_400_BAD_REQUEST)
+        # Verify stock with a lock to prevent race conditions
+        product = Product.objects.select_for_update().get(pk=quote.product.pk)
+
+        # Account for quantities already committed in other pending/accepted quotes
+        committed_qty = QuoteRequest.objects.filter(
+            product=product,
+            status__in=['accepted'],
+        ).exclude(pk=quote.pk).aggregate(
+            total=Sum('quantity')
+        )['total'] or Decimal('0')
+
+        available_qty = product.quantity - committed_qty
+        if available_qty < quote.quantity:
+            return Response({
+                'error': f'Not enough stock in inventory. '
+                         f'Total stock: {product.quantity} kg, '
+                         f'already committed: {committed_qty} kg, '
+                         f'available: {available_qty} kg. '
+                         f'Requested: {quote.quantity} kg.'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         # Deduct stock
-        quote.product.quantity -= quote.quantity
-        quote.product.save()
+        product.quantity -= quote.quantity
+        product.save(update_fields=['quantity'])
+        # Refresh quote.product reference
+        quote.product = product
 
         # Calculate total amount
         total_amount = quote.quantity * final_price
@@ -592,23 +611,23 @@ class BulkRequirementViewSet(viewsets.ModelViewSet):
         ]
         for requirement in pending_requirements:
             requirement_tokens = self._crop_tokens(requirement.crop_name)
-            if any(requirement_tokens & tokens for tokens in product_tokens):
+            if any(requirement_tokens and requirement_tokens.issubset(tokens) for tokens in product_tokens):
                 matching_ids.append(requirement.id)
 
         return pending_requirements.filter(id__in=matching_ids)
 
     @staticmethod
     def _crop_tokens(value):
-        ignored = {'fresh', 'organic', 'premium', 'natural', 'local', 'standard', 'grade'}
+        ignored = {'fresh', 'organic', 'premium', 'natural', 'local', 'standard', 'grade', 'quality', 'a', 'b', 'c', 'raw'}
         tokens = set()
-        for token in re.findall(r'[a-z]+', (value or '').lower()):
-            if token in ignored or len(token) < 3:
+        for token in re.findall(r'[a-z0-9]+', (value or '').lower()):
+            if token in ignored or len(token) < 2:
                 continue
             if token.endswith('ies') and len(token) > 4:
                 token = f'{token[:-3]}y'
             elif token.endswith('es') and len(token) > 4:
                 token = token[:-2]
-            elif token.endswith('s') and len(token) > 3:
+            elif token.endswith('s') and not token.endswith('ss') and len(token) > 3:
                 token = token[:-1]
             tokens.add(token)
         return tokens
@@ -617,6 +636,7 @@ class BulkRequirementViewSet(viewsets.ModelViewSet):
         serializer.save(buyer=self.request.user)
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, IsFarmer])
+    @transaction.atomic
     def offer(self, request, pk=None):
         requirement = self.get_object()
         quantity = request.data.get('quantity')
@@ -627,10 +647,50 @@ class BulkRequirementViewSet(viewsets.ModelViewSet):
         if not quantity or not price_per_unit or not delivery_date:
             return Response({'error': 'quantity, price_per_unit, and delivery_date are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        quantity = Decimal(str(quantity))
+        farmer = request.user
+
+        # Validate farmer has enough inventory for this crop
+        matching_products = list(Product.objects.select_for_update().filter(
+            farmer=farmer,
+            quantity__gt=0,
+        ).order_by('id'))
+
+        # Use token matching to find relevant products
+        requirement_tokens = self._crop_tokens(requirement.crop_name)
+        relevant_products = [
+            p for p in matching_products
+            if requirement_tokens and requirement_tokens.issubset(self._crop_tokens(p.name))
+        ]
+
+        if not relevant_products:
+            return Response({
+                'error': f"You do not have any inventory matching '{requirement.crop_name}' to offer."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        available_qty = sum((p.quantity for p in relevant_products), Decimal('0'))
+
+        # Also account for quantities already offered (pending/accepted) on the same requirement
+        already_offered = FarmerOffer.objects.filter(
+            farmer=farmer,
+            requirement=requirement,
+            status__in=['pending', 'accepted'],
+        ).aggregate(total=Sum('quantity'))['total'] or Decimal('0')
+
+        effective_available = available_qty - already_offered
+        if quantity > effective_available:
+            return Response({
+                'error': f'Insufficient inventory. '
+                         f'Available stock: {available_qty} {requirement.unit}, '
+                         f'already offered: {already_offered} {requirement.unit}, '
+                         f'effective available: {effective_available} {requirement.unit}. '
+                         f'You tried to offer: {quantity} {requirement.unit}.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         offer = FarmerOffer.objects.create(
             requirement=requirement,
-            farmer=request.user,
-            quantity=Decimal(str(quantity)),
+            farmer=farmer,
+            quantity=quantity,
             price_per_unit=Decimal(str(price_per_unit)),
             delivery_date=delivery_date,
             notes=notes,

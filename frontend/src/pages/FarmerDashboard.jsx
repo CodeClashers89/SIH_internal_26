@@ -236,7 +236,7 @@ const FarmerDashboard = () => {
   const fetchDashboardData = async () => {
     setRefreshing(true);
     try {
-      const [statsRes, listingsRes, ordersRes, quotesRes, bulkRes, myOffersRes, contractRes, marketsRes, profileRes] = await Promise.all([
+      const results = await Promise.allSettled([
         api.get('/farmer/stats/'),
         api.get(`/products/?farmer=${user.id}`),
         api.get('/orders/'),
@@ -247,17 +247,20 @@ const FarmerDashboard = () => {
         api.get('/market-prices/markets/'),
         api.get('/v1/farmer/profile/')
       ]);
-      setStats(statsRes.data);
-      setListings(listingsRes.data);
-      setOrders(ordersRes.data);
-      setQuotes(quotesRes.data);
-      setBulkReqs(bulkRes.data);
-      setMyOffers(myOffersRes.data);
-      setPreHarvestContracts(contractRes.data);
-      setMarkets(marketsRes.data);
-      setFarmerProfile(profileRes.data);
+
+      const [statsRes, listingsRes, ordersRes, quotesRes, bulkRes, myOffersRes, contractRes, marketsRes, profileRes] = results;
+
+      if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
+      if (listingsRes.status === 'fulfilled') setListings(listingsRes.value.data);
+      if (ordersRes.status === 'fulfilled') setOrders(ordersRes.value.data);
+      if (quotesRes.status === 'fulfilled') setQuotes(quotesRes.value.data);
+      if (bulkRes.status === 'fulfilled') setBulkReqs(bulkRes.value.data);
+      if (myOffersRes.status === 'fulfilled') setMyOffers(myOffersRes.value.data);
+      if (contractRes.status === 'fulfilled') setPreHarvestContracts(contractRes.value.data);
+      if (marketsRes.status === 'fulfilled') setMarkets(marketsRes.value.data);
+      if (profileRes.status === 'fulfilled') setFarmerProfile(profileRes.value.data);
     } catch (err) {
-      console.error(err);
+      console.error('Dashboard fetch error:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -469,7 +472,12 @@ const FarmerDashboard = () => {
       alert('Ride offer sent to the selected driver.');
       fetchTransportOptions();
     } catch (err) {
-      alert(err.response?.data?.error || 'Failed to send transport offer.');
+      const errorMsg =
+        err.response?.data?.error ||
+        (typeof err.response?.data === 'string' ? err.response?.data : null) ||
+        (err.response?.data?.non_field_errors ? err.response?.data?.non_field_errors.join(' ') : null) ||
+        'Failed to send transport offer.';
+      alert(errorMsg);
     }
   };
 

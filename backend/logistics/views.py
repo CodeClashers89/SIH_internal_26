@@ -405,21 +405,53 @@ class TransportOfferViewSet(viewsets.ModelViewSet):
             return queryset.filter(partner__user=user)
         return queryset.none()
 
-    def perform_create(self, serializer):
-        user = self.request.user
+    def create(self, request, *args, **kwargs):
+        user = request.user
         if user.role != 'farmer':
-            raise permissions.PermissionDenied('Only farmers can offer a ride to a driver.')
-        shipment = serializer.validated_data['shipment']
-        partner = serializer.validated_data['partner']
+            return Response({'error': 'Only farmers can offer a ride to a driver.'}, status=status.HTTP_403_FORBIDDEN)
+
+        shipment_id = request.data.get('shipment')
+        partner_id = request.data.get('partner')
+        msg = request.data.get('message', 'Please accept this delivery ride offer for my order.')
+
+        if not shipment_id or not partner_id:
+            return Response({'error': 'Both shipment and partner are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            shipment = DeliveryShipment.objects.get(pk=shipment_id)
+        except DeliveryShipment.DoesNotExist:
+            return Response({'error': 'Shipment not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            partner = LogisticsPartner.objects.get(pk=partner_id)
+        except LogisticsPartner.DoesNotExist:
+            return Response({'error': 'Logistics partner not found.'}, status=status.HTTP_404_NOT_FOUND)
+
         if not shipment.order.items.filter(product__farmer=user).exists():
-            raise permissions.PermissionDenied('You can only assign transport for your own shipment.')
+            return Response({'error': 'You can only assign transport for your own shipment.'}, status=status.HTTP_403_FORBIDDEN)
+
         if not partner.active:
-            raise serializers.ValidationError('This transport partner is not active.')
+            return Response({'error': 'This transport partner is not active.'}, status=status.HTTP_400_BAD_REQUEST)
+
         if not partner_operates_both_areas(partner, shipment):
-            raise serializers.ValidationError('This driver does not operate in both the pickup and delivery areas.')
+            return Response({'error': 'This driver does not operate in both the pickup and delivery areas.'}, status=status.HTTP_400_BAD_REQUEST)
+
         if shipment.partner_id:
-            raise serializers.ValidationError('This shipment already has a transport partner.')
-        serializer.save(farmer=user)
+            return Response({'error': 'This shipment already has an assigned transport partner.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        offer, created = TransportOffer.objects.update_or_create(
+            shipment=shipment,
+            partner=partner,
+            defaults={
+                'farmer': user,
+                'status': 'pending',
+                'message': msg,
+            }
+        )
+
+        serializer = self.get_serializer(offer)
+        res_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return Response(serializer.data, status=res_status)
 
     @action(detail=True, methods=['post'])
     @transaction.atomic
