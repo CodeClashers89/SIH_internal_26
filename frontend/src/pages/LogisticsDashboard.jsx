@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
@@ -208,13 +208,33 @@ const LogisticsDashboard = () => {
     try {
       setRouteLoading(true);
       const res = await api.get('/route-planning/driver/active-delivery/');
-      setActiveDeliveryData(res.data.active_delivery);
+      const delivery = res.data.active_delivery;
+      setActiveDeliveryData(delivery);
+      if (delivery?.route?.candidate_routes?.length) {
+        // Automatically default to the candidate route with least time
+        const candidates = delivery.route.candidate_routes;
+        const fastest = [...candidates].sort((a, b) => (Number(a.duration_minutes) || 0) - (Number(b.duration_minutes) || 0))[0];
+        if (fastest?.route_id) {
+          setSelectedCandidateId(fastest.route_id);
+        }
+      }
     } catch (err) {
       console.error('Active delivery route fetch error:', err);
     } finally {
       setRouteLoading(false);
     }
   }, []);
+
+  // Compute the effective route ID defaulting to the least-time candidate route
+  const effectiveRouteId = useMemo(() => {
+    if (selectedCandidateId) return selectedCandidateId;
+    const candidates = activeDeliveryData?.route?.candidate_routes;
+    if (candidates && candidates.length > 0) {
+      const fastest = [...candidates].sort((a, b) => (Number(a.duration_minutes) || 0) - (Number(b.duration_minutes) || 0))[0];
+      return fastest?.route_id || candidates[0]?.route_id || 'R1';
+    }
+    return activeDeliveryData?.route?.route_id || 'R1';
+  }, [selectedCandidateId, activeDeliveryData]);
 
   const handleGetLocation = () => {
     if (navigator.geolocation) {
@@ -931,31 +951,31 @@ const LogisticsDashboard = () => {
                   </div>
                 </div>
 
-                {/* Leaflet Delivery Map */}
+                {/* Google Maps Delivery Map with Live Traffic & Driver Stops */}
                 <DeliveryMap
                   pickupAddress={activeDeliveryData.pickup}
                   deliveryAddress={activeDeliveryData.destination}
                   pickupCoordinates={activeDeliveryData.pickup_coordinates}
                   destinationCoordinates={activeDeliveryData.destination_coordinates}
                   routeGeometry={
-                    activeDeliveryData.route?.candidate_routes?.find(c => c.route_id === selectedCandidateId)?.geometry ||
+                    activeDeliveryData.route?.candidate_routes?.find(c => c.route_id === effectiveRouteId)?.geometry ||
                     activeDeliveryData.route?.route_geometry || []
                   }
                   weatherCheckpoints={
-                    activeDeliveryData.route?.candidate_routes?.find(c => c.route_id === selectedCandidateId)?.weather_checkpoints ||
+                    activeDeliveryData.route?.candidate_routes?.find(c => c.route_id === effectiveRouteId)?.weather_checkpoints ||
                     activeDeliveryData.route?.weather_snapshot || []
                   }
                   candidateRoutes={activeDeliveryData.route?.candidate_routes || []}
-                  selectedRouteId={selectedCandidateId || activeDeliveryData.route?.route_id || 'R1'}
+                  selectedRouteId={effectiveRouteId}
                   onSelectCandidate={(candId) => setSelectedCandidateId(candId)}
                   driverLocation={driverLocation}
-                  height="480px"
+                  height="500px"
                 />
 
-                {/* Route Information & Weather Checkpoints Panel */}
+                {/* Route Information & Alternative Candidate Routes Panel */}
                 <RouteInfoPanel
                   route={activeDeliveryData.route}
-                  selectedCandidateId={selectedCandidateId || activeDeliveryData.route?.route_id || 'R1'}
+                  selectedCandidateId={effectiveRouteId}
                   onSelectCandidate={(candId) => setSelectedCandidateId(candId)}
                   isDriver={true}
                   onRecalculate={() => {

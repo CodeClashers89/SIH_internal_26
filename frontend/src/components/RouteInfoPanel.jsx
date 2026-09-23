@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { ShieldCheck, CloudRain, Clock, Navigation, AlertTriangle, Cpu, CheckCircle2, ChevronDown, ChevronUp, Layers, Check } from 'lucide-react';
 
 const RouteInfoPanel = ({
@@ -20,7 +20,10 @@ const RouteInfoPanel = ({
   }
 
   const candidateRoutes = route.candidate_routes || [];
-  const activeRouteId = selectedCandidateId || route.route_id || candidateRoutes[0]?.route_id || 'R1';
+  const fastestCandidate = candidateRoutes.length > 0
+    ? [...candidateRoutes].sort((a, b) => (Number(a.duration_minutes) || 0) - (Number(b.duration_minutes) || 0))[0]
+    : null;
+  const activeRouteId = selectedCandidateId || fastestCandidate?.route_id || route.route_id || candidateRoutes[0]?.route_id || 'R1';
 
   // Find selected candidate details (or fallback to active route details)
   const activeCandidate = candidateRoutes.find(c => c.route_id === activeRouteId) || {
@@ -91,7 +94,10 @@ const RouteInfoPanel = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
             {candidateRoutes.map((cand, idx) => {
               const isSelected = cand.route_id === activeRouteId;
-              const isRecommended = idx === 0;
+              const isFastest = cand.route_id === fastestCandidate?.route_id;
+              const fastestTime = Number(fastestCandidate?.duration_minutes) || 0;
+              const thisTime = Number(cand.duration_minutes) || 0;
+              const timeDiff = Math.round(thisTime - fastestTime);
 
               return (
                 <button
@@ -108,11 +114,15 @@ const RouteInfoPanel = ({
                       {cand.route_id}: {cand.name || `Route ${cand.route_id}`}
                       {isSelected && <Check className="h-3.5 w-3.5 text-blue-600 stroke-[3]" />}
                     </span>
-                    {isRecommended && (
-                      <span className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded">
-                        RECOMMENDED
+                    {isFastest ? (
+                      <span className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                        ⚡ LEAST TIME
                       </span>
-                    )}
+                    ) : timeDiff > 0 ? (
+                      <span className="bg-slate-100 text-slate-600 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                        +{timeDiff > 60 ? `${(timeDiff / 60).toFixed(1)}h` : `${timeDiff}m`}
+                      </span>
+                    ) : null}
                   </div>
 
                   <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
