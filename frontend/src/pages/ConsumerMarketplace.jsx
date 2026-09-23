@@ -13,7 +13,7 @@ import {
   Search, MapPin, X, Loader2, ArrowRight, ShoppingBag,
   Truck, CheckCircle, CreditCard, Key, RefreshCw, Package,
   AlertCircle, IndianRupee, Calendar, Clock3, LockKeyhole, Mail,
-  ClipboardList, AlertTriangle
+  ClipboardList, AlertTriangle, SlidersHorizontal, RotateCcw
 } from 'lucide-react';
 import PaymentVerificationModal from '../components/PaymentVerificationModal';
 
@@ -434,71 +434,199 @@ const ConsumerMarketplace = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-      {/* Page actions */}
-      {user && (
-        <div className="flex justify-end">
-          <button
-            onClick={() => setCartOpen(true)}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm shadow-emerald-200"
-          >
-            <ShoppingBag className="h-3.5 w-3.5" />
-            Open Cart
-          </button>
-        </div>
-      )}
-
       {/* ── Browse Tab ── */}
       {activeTab === 'browse' && (
         <div className="space-y-6">
-          {/* Filters */}
-          <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-5">
-            <h3 className="font-bold text-base text-slate-800 uppercase tracking-wider">Filters</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div className="relative sm:col-span-2 lg:col-span-1">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+          {/* Marketplace Hero Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Direct Farm-to-Fork
+                </span>
+                <span className="text-xs text-slate-400 font-semibold">• 100% Fresh Harvest</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                Fresh Produce Marketplace
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                Explore premium, chemical-free crops direct from local farmers with verified quality and transparent pricing.
+              </p>
+            </div>
+
+            {/* Results Counter Pill */}
+            <div className="flex items-center gap-3">
+              <div className="bg-white border border-slate-200 rounded-2xl px-4 py-2.5 shadow-xs flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm">
+                  <Package className="h-4 w-4 text-emerald-600" />
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Available Crops</div>
+                  <div className="text-sm font-black text-slate-800">
+                    {loading ? 'Loading...' : `${products.length} Products`}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Unified Filters & Search Card */}
+          <div className="bg-white border border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+            {/* Top Toolbar */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg">
+                  <SlidersHorizontal className="h-4 w-4" />
+                </div>
+                <h3 className="font-extrabold text-sm text-slate-800">
+                  Search & Filter Produce
+                </h3>
+              </div>
+
+              {(searchQuery || category || filterPincode || filterDistrict || sortBy !== 'newest') && (
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setCategory('');
+                    setFilterPincode('');
+                    setFilterDistrict('');
+                    setSortBy('newest');
+                  }}
+                  className="flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-rose-600 transition-colors bg-slate-50 hover:bg-rose-50 px-2.5 py-1 rounded-lg border border-slate-200 hover:border-rose-200"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Clear Filters
+                </button>
+              )}
+            </div>
+
+            {/* Filter Inputs Grid - Pixel-perfect alignment */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5 items-end">
+              {/* 1. Search Produce (takes 4 columns) */}
+              <div className="sm:col-span-2 lg:col-span-4 space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                  Search Produce
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search by name, crop or variety..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full h-11 pl-10 pr-9 border border-slate-200 rounded-xl text-xs bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-slate-800 placeholder:text-slate-400"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 2. Category Select (2 columns) */}
+              <div className="lg:col-span-2 space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                  Category
+                </label>
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full h-11 px-3 border border-slate-200 rounded-xl text-xs bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-semibold text-slate-700"
+                >
+                  <option value="">All Categories</option>
+                  <option value="fruits">Fruits</option>
+                  <option value="vegetables">Vegetables</option>
+                  <option value="grains">Grains</option>
+                  <option value="pulses">Pulses</option>
+                  <option value="spices">Spices</option>
+                  <option value="others">Others</option>
+                </select>
+              </div>
+
+              {/* 3. Pincode (2 columns) */}
+              <div className="lg:col-span-2 space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                  Pincode
+                </label>
+                <div className="relative">
+                  <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    maxLength="6"
+                    placeholder="e.g. 411001"
+                    value={filterPincode}
+                    onChange={(e) => setFilterPincode(e.target.value)}
+                    className="w-full h-11 pl-9 pr-3 border border-slate-200 rounded-xl text-xs bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-slate-800 placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+
+              {/* 4. District (2 columns) */}
+              <div className="lg:col-span-2 space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                  District
+                </label>
                 <input
                   type="text"
-                  placeholder="Search produce..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white"
+                  placeholder="e.g. Pune"
+                  value={filterDistrict}
+                  onChange={(e) => setFilterDistrict(e.target.value)}
+                  className="w-full h-11 px-3 border border-slate-200 rounded-xl text-xs bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-slate-800 placeholder:text-slate-400"
                 />
               </div>
-              <div>
-              <label className="block text-[10px] font-bold text-slate-600 mb-1.5 uppercase">Category</label>
-              <select value={category} onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                <option value="">All Categories</option>
-                <option value="fruits">Fruits</option>
-                <option value="vegetables">Vegetables</option>
-                <option value="grains">Grains</option>
-                <option value="pulses">Pulses</option>
-                <option value="spices">Spices</option>
-                <option value="others">Others</option>
-              </select>
+
+              {/* 5. Sort By (2 columns) */}
+              <div className="lg:col-span-2 space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                  Sort By
+                </label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="w-full h-11 px-3 border border-slate-200 rounded-xl text-xs bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-semibold text-slate-700"
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="price-low">Price: Low → High</option>
+                  <option value="price-high">Price: High → Low</option>
+                  <option value="freshness">Highest Freshness</option>
+                </select>
               </div>
-              <div>
-              <label className="block text-[10px] font-bold text-slate-600 mb-1.5 uppercase">Pincode</label>
-              <input type="text" maxLength="6" placeholder="e.g. 411001" value={filterPincode}
-                onChange={(e) => setFilterPincode(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white" />
-              </div>
-              <div>
-              <label className="block text-[10px] font-bold text-slate-600 mb-1.5 uppercase">District</label>
-              <input type="text" placeholder="e.g. Pune" value={filterDistrict}
-                onChange={(e) => setFilterDistrict(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white" />
-              </div>
-              <div>
-              <label className="block text-[10px] font-bold text-slate-600 mb-1.5 uppercase">Sort By</label>
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                <option value="newest">Newest</option>
-                <option value="price-low">Price: Low → High</option>
-                <option value="price-high">Price: High → Low</option>
-                <option value="freshness">Freshness</option>
-              </select>
-              </div>
+            </div>
+
+            {/* Category Filter Chips (Text Only) */}
+            <div className="flex items-center gap-2 pt-2 overflow-x-auto no-scrollbar border-t border-slate-100">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1 hidden sm:inline">
+                Categories:
+              </span>
+              {[
+                { id: '', label: 'All Produce' },
+                { id: 'fruits', label: 'Fruits' },
+                { id: 'vegetables', label: 'Vegetables' },
+                { id: 'grains', label: 'Grains' },
+                { id: 'pulses', label: 'Pulses' },
+                { id: 'spices', label: 'Spices' },
+                { id: 'others', label: 'Others' },
+              ].map((cat) => {
+                const isActive = category === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setCategory(cat.id)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                      isActive
+                        ? 'bg-emerald-600 text-white shadow-xs shadow-emerald-200'
+                        : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/80 hover:text-slate-900'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
