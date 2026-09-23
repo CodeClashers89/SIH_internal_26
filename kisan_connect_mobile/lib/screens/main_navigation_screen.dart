@@ -28,6 +28,29 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
 
   @override
+  void initState() {
+    super.initState();
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    _currentIndex = _getIndexForRole(auth.userRole);
+  }
+
+  int _getIndexForRole(String role) {
+    switch (role) {
+      case 'consumer':
+        return 1;
+      case 'bulk_buyer':
+        return 2;
+      case 'logistics_driver':
+        return 3;
+      case 'admin':
+        return 6;
+      case 'farmer':
+      default:
+        return 0;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     final lang = Provider.of<LanguageProvider>(context);
@@ -115,6 +138,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             tooltip: "Switch Demo Role",
             onSelected: (role) {
               auth.switchRole(role);
+              setState(() {
+                _currentIndex = _getIndexForRole(role);
+              });
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text("Switched active persona to ${auth.currentUser.name} (${role.toUpperCase()})"),

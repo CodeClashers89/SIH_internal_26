@@ -106,7 +106,7 @@ class _FarmerAIScreenState extends State<FarmerAIScreen> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 6,
                         )
                       ],
@@ -185,7 +185,7 @@ class _FarmerAIScreenState extends State<FarmerAIScreen> {
               color: Theme.of(context).cardTheme.color,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 8,
                   offset: const Offset(0, -2),
                 )
@@ -212,7 +212,10 @@ class _FarmerAIScreenState extends State<FarmerAIScreen> {
                 const SizedBox(width: 8),
                 IconButton.filled(
                   icon: const Icon(Icons.send),
-                  backgroundColor: const Color(0xFF16A34A),
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFF16A34A),
+                    foregroundColor: Colors.white,
+                  ),
                   onPressed: () => _handleSend(),
                 ),
               ],

@@ -36,20 +36,18 @@ class AppTheme {
       secondary: harvestGold,
       tertiary: skyBlue,
       surface: cardLight,
-      background: bgLight,
       error: Color(0xFFDC2626),
     ),
     fontFamily: 'Roboto',
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: cardLight,
       elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.06),
+      shadowColor: Colors.black.withValues(alpha: 0.06),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
     appBarTheme: const AppBarTheme(
       backgroundColor: cardLight,
       elevation: 0,
-      scaffoldColorScheme: ColorScheme.light(),
       iconTheme: IconThemeData(color: textDark),
       titleTextStyle: TextStyle(
         color: textDark,
@@ -71,19 +69,19 @@ class AppTheme {
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      border: RoundedRectangleBorder(
+      border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
       ),
-      enabledBorder: RoundedRectangleBorder(
+      enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
       ),
-      focusedBorder: RoundedRectangleBorder(
+      focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: primaryGreen, width: 2),
       ),
-      errorBorder: RoundedRectangleBorder(
+      errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFFDC2626)),
       ),
@@ -100,14 +98,13 @@ class AppTheme {
       secondary: harvestGold,
       tertiary: skyBlue,
       surface: cardDark,
-      background: bgDark,
       error: Color(0xFFEF4444),
     ),
     fontFamily: 'Roboto',
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: cardDark,
       elevation: 3,
-      shadowColor: Colors.black.withOpacity(0.3),
+      shadowColor: Colors.black.withValues(alpha: 0.3),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
     appBarTheme: const AppBarTheme(
@@ -134,15 +131,15 @@ class AppTheme {
       filled: true,
       fillColor: const Color(0xFF334155),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      border: RoundedRectangleBorder(
+      border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFF475569)),
       ),
-      enabledBorder: RoundedRectangleBorder(
+      enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFF475569)),
       ),
-      focusedBorder: RoundedRectangleBorder(
+      focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: primaryGreen, width: 2),
       ),

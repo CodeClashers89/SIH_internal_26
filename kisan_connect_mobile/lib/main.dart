@@ -7,6 +7,7 @@ import 'providers/b2b_provider.dart';
 import 'providers/logistics_provider.dart';
 import 'providers/language_provider.dart';
 import 'providers/ai_assistant_provider.dart';
+import 'providers/farmer_provider.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_signup_screen.dart';
 import 'screens/main_navigation_screen.dart';
@@ -17,6 +18,7 @@ void main() {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => FarmerProvider()),
         ChangeNotifierProvider(create: (_) => MarketplaceProvider()),
         ChangeNotifierProvider(create: (_) => B2BProvider()),
         ChangeNotifierProvider(create: (_) => LogisticsProvider()),

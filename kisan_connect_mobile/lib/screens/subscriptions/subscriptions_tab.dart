@@ -53,7 +53,7 @@ class _SubscriptionsTabState extends State<SubscriptionsTab> {
               color: Theme.of(context).cardTheme.color,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: plan['active'] ? const Color(0xFF16A34A) : Colors.grey.withOpacity(0.2),
+                color: plan['active'] ? const Color(0xFF16A34A) : Colors.grey.withValues(alpha: 0.2),
                 width: plan['active'] ? 2 : 1,
               ),
             ),
