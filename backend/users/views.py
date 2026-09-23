@@ -49,8 +49,10 @@ class VerifyOTPView(APIView):
 
     def post(self, request):
         phone = request.data.get('phone')
-        otp = request.data.get('otp')
+        otp = str(request.data.get('otp', '')).strip()
         msg91_token = request.data.get('msg91_token') or request.data.get('access_token')
+        req_id = request.data.get('req_id') or request.data.get('reqId')
+        msg91_verified = request.data.get('msg91_verified')
 
         if not phone and not msg91_token:
             return Response({'error': 'Please provide phone and OTP or MSG91 verification token.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -70,7 +72,7 @@ class VerifyOTPView(APIView):
             return Response({'error': 'User with this phone number does not exist'}, status=status.HTTP_404_NOT_FOUND)
 
         # 1. Verify via MSG91 server-side access token
-        if msg91_token:
+        if msg91_token and msg91_token != 'verified':
             try:
                 import requests, os
                 authkey = os.environ.get('MSG91_AUTH_KEY', '564962TA0jersOB6a90124eP1')
@@ -81,7 +83,7 @@ class VerifyOTPView(APIView):
                     headers=headers,
                     timeout=8
                 )
-                if resp.status_code == 200:
+                if resp.status_code == 200 and resp.json().get('type') == 'success':
                     user.is_verified = True
                     user.save()
                     return Response({
@@ -91,21 +93,48 @@ class VerifyOTPView(APIView):
             except Exception as e:
                 print(f"[MSG91 API WARNING] Failed to verify token with MSG91: {e}")
 
-        # 2. Verify via OTP code (or universal demo bypass 123456)
+        # 2. Direct verify with MSG91 widget/verifyOtp API if req_id and otp provided
+        if req_id and otp:
+            try:
+                import requests, os
+                widget_id = os.environ.get('MSG91_WIDGET_ID', '3668416a466e363834343939')
+                token_auth = os.environ.get('SMS_GATEWAY_KEY', '564962TA0jersOB6a90124eP1')
+                resp = requests.post(
+                    'https://control.msg91.com/api/v5/widget/verifyOtp',
+                    json={
+                        'widgetId': widget_id,
+                        'tokenAuth': token_auth,
+                        'otp': otp,
+                        'reqId': str(req_id).strip()
+                    },
+                    headers={'tokenAuth': token_auth, 'Content-Type': 'application/json'},
+                    timeout=8
+                )
+                if resp.status_code == 200 and resp.json().get('type') == 'success':
+                    user.is_verified = True
+                    user.save()
+                    return Response({
+                        'message': 'MSG91 OTP verified successfully. Account activated.',
+                        'user': UserSerializer(user).data
+                    }, status=status.HTTP_200_OK)
+            except Exception as e:
+                print(f"[MSG91 DIRECT VERIFY WARNING] {e}")
+
+        # 3. If MSG91 widget verified on frontend and passed as verified flag
+        if msg91_verified in [True, 'true', 'True', 1] or msg91_token == 'verified':
+            user.is_verified = True
+            user.save()
+            return Response({
+                'message': 'MSG91 OTP verified successfully. Account activated.',
+                'user': UserSerializer(user).data
+            }, status=status.HTTP_200_OK)
+
+        # 4. Verify via OTP code (or universal demo bypass 123456)
         if otp and (user.otp == otp or otp == '123456'):
             user.is_verified = True
             user.save()
             return Response({
                 'message': 'OTP verification successful. Account verified.',
-                'user': UserSerializer(user).data
-            }, status=status.HTTP_200_OK)
-
-        # 3. If MSG91 widget verified on frontend and passed as verified flag
-        if request.data.get('msg91_verified') is True:
-            user.is_verified = True
-            user.save()
-            return Response({
-                'message': 'MSG91 OTP verified successfully. Account activated.',
                 'user': UserSerializer(user).data
             }, status=status.HTTP_200_OK)
 
@@ -143,9 +172,10 @@ class PasswordResetConfirmView(APIView):
 
     def post(self, request):
         phone = request.data.get('phone')
-        otp = request.data.get('otp')
+        otp = str(request.data.get('otp', '')).strip()
         new_password = request.data.get('new_password')
         msg91_token = request.data.get('msg91_token') or request.data.get('access_token')
+        req_id = request.data.get('req_id') or request.data.get('reqId')
         msg91_verified = request.data.get('msg91_verified')
 
         if not phone:
@@ -160,8 +190,9 @@ class PasswordResetConfirmView(APIView):
         if not user:
             return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        # 1. Validate MSG91 token if provided
         verified = False
+
+        # 1. Validate MSG91 token if provided
         if msg91_token and msg91_token != 'verified':
             try:
                 import requests, os
@@ -173,13 +204,40 @@ class PasswordResetConfirmView(APIView):
                     headers=headers,
                     timeout=8
                 )
-                if resp.status_code == 200:
+                if resp.status_code == 200 and resp.json().get('type') == 'success':
                     verified = True
             except Exception as e:
                 print(f"[MSG91 RESET VERIFY WARNING] {e}")
 
-        # 2. Check local OTP or test code 123456 or msg91_verified
-        if verified or msg91_verified is True or (otp and (user.otp == otp or otp == '123456')):
+        # 2. Direct verify with MSG91 widget/verifyOtp API if req_id and otp provided
+        if not verified and req_id and otp:
+            try:
+                import requests, os
+                widget_id = os.environ.get('MSG91_WIDGET_ID', '3668416a466e363834343939')
+                token_auth = os.environ.get('SMS_GATEWAY_KEY', '564962TA0jersOB6a90124eP1')
+                resp = requests.post(
+                    'https://control.msg91.com/api/v5/widget/verifyOtp',
+                    json={
+                        'widgetId': widget_id,
+                        'tokenAuth': token_auth,
+                        'otp': otp,
+                        'reqId': str(req_id).strip()
+                    },
+                    headers={'tokenAuth': token_auth, 'Content-Type': 'application/json'},
+                    timeout=8
+                )
+                if resp.status_code == 200 and resp.json().get('type') == 'success':
+                    verified = True
+            except Exception as e:
+                print(f"[MSG91 RESET DIRECT VERIFY WARNING] {e}")
+
+        # 3. Check frontend verification flag, verified token/API, local OTP, or universal test code 123456
+        if (
+            verified
+            or msg91_verified in [True, 'true', 'True', 1]
+            or msg91_token == 'verified'
+            or (otp and (user.otp == otp or otp == '123456'))
+        ):
             user.set_password(new_password)
             user.otp = ''
             user.save()

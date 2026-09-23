@@ -133,8 +133,17 @@ export const launchMsg91DefaultWidget = async ({ phone, onSuccess, onFailure }) 
  * Initialize MSG91 Headless/Custom UI Mode
  * Exposes window.sendOtp and window.verifyOtp for in-app input forms.
  */
-export const initMsg91CustomUI = async ({ onSuccess, onFailure } = {}) => {
+export const initMsg91CustomUI = async ({ onSuccess, onFailure, force = false } = {}) => {
   try {
+    const container = typeof document !== 'undefined' ? document.getElementById("msg91-captcha-container") : null;
+    const hasMountedCaptcha = container && container.children.length > 0;
+
+    // Avoid redundant initialization only if already exposed and container already populated
+    if (!force && hasMountedCaptcha && typeof window !== 'undefined' && typeof window.sendOtp === 'function' && typeof window.verifyOtp === 'function') {
+      console.log('[MSG91] Custom UI already initialized and ready.');
+      return true;
+    }
+
     const initSendOTP = await loadMsg91Script();
 
     const configuration = {
@@ -156,6 +165,7 @@ export const initMsg91CustomUI = async ({ onSuccess, onFailure } = {}) => {
     return true;
   } catch (err) {
     console.error('[MSG91 Custom UI Init Error]', err);
+    if (onFailure) onFailure(err);
     return false;
   }
 };
@@ -176,9 +186,10 @@ export const sendMsg91Otp = (phone, onSuccess, onFailure) => {
 /**
  * Verify OTP via exposed MSG91 method
  */
-export const verifyMsg91Otp = (otp, onSuccess, onFailure) => {
+export const verifyMsg91Otp = (otp, onSuccess, onFailure, reqId = null) => {
+  const cleanOtp = String(otp || '').replace(/\s+/g, '');
   if (typeof window !== 'undefined' && typeof window.verifyOtp === 'function') {
-    return window.verifyOtp(otp, onSuccess, onFailure);
+    return window.verifyOtp(cleanOtp, onSuccess, onFailure, reqId);
   } else {
     console.warn('[MSG91] window.verifyOtp not available yet.');
     if (onFailure) onFailure(new Error('window.verifyOtp not ready'));

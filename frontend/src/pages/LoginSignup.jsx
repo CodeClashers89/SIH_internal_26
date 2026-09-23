@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Sprout, Phone, Lock, User, Mail, MapPin, Loader2, ArrowRight, ShieldCheck, RefreshCw, Smartphone, ExternalLink } from 'lucide-react';
+import { Sprout, Phone, Lock, User, Loader2, ArrowRight, ShieldCheck, RefreshCw, Smartphone, ExternalLink } from 'lucide-react';
 import {
   launchMsg91DefaultWidget,
   initMsg91CustomUI,
@@ -60,8 +60,61 @@ const LoginSignup = () => {
 
   // MSG91 State
   const [msg91Loaded, setMsg91Loaded] = useState(false);
+  const [msg91ReqId, setMsg91ReqId] = useState('');
   const [resending, setResending] = useState(false);
   const [widgetOpening, setWidgetOpening] = useState(false);
+
+  // Inbuilt MSG91 Captcha State
+  const [inbuiltCaptchaSolved, setInbuiltCaptchaSolved] = useState(false);
+
+  // Helper to check whether the MSG91 inbuilt captcha has been completed/filled
+  const checkInbuiltCaptchaStatus = useCallback(() => {
+    if (inbuiltCaptchaSolved) return true;
+
+    // 1. Check hCaptcha response
+    const hResponses = document.querySelectorAll('[name="h-captcha-response"], [data-hcaptcha-response]');
+    for (const el of hResponses) {
+      if (el.value && el.value.trim().length > 0) return true;
+    }
+
+    // 2. Check Google reCAPTCHA response
+    const gResponses = document.querySelectorAll('[name="g-recaptcha-response"], #g-recaptcha-response');
+    for (const el of gResponses) {
+      if (el.value && el.value.trim().length > 0) return true;
+    }
+
+    // 3. Check Cloudflare Turnstile response
+    const cfResponses = document.querySelectorAll('[name="cf-turnstile-response"]');
+    for (const el of cfResponses) {
+      if (el.value && el.value.trim().length > 0) return true;
+    }
+
+    // 4. Check global provider objects
+    if (typeof window !== 'undefined') {
+      try {
+        if (window.hcaptcha && typeof window.hcaptcha.getResponse === 'function') {
+          const res = window.hcaptcha.getResponse();
+          if (res && res.length > 0) return true;
+        }
+      } catch { /* ignore */ }
+
+      try {
+        if (window.grecaptcha && typeof window.grecaptcha.getResponse === 'function') {
+          const res = window.grecaptcha.getResponse();
+          if (res && res.length > 0) return true;
+        }
+      } catch { /* ignore */ }
+
+      try {
+        if (window.turnstile && typeof window.turnstile.getResponse === 'function') {
+          const res = window.turnstile.getResponse();
+          if (res && res.length > 0) return true;
+        }
+      } catch { /* ignore */ }
+    }
+
+    return false;
+  }, [inbuiltCaptchaSolved]);
 
   useEffect(() => {
     // Helper to relocate any stray captcha rendered on document.body into #msg91-captcha-container
@@ -72,13 +125,19 @@ const LoginSignup = () => {
       const strayElements = Array.from(document.body.children).filter(el => {
         if (el.id === 'root' || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return false;
         const text = el.innerText || '';
-        const isHcaptcha = el.querySelector('iframe[src*="hcaptcha"]') ||
-                           el.classList?.contains('h-captcha') ||
-                           el.querySelector('iframe[data-hcaptcha-widget-id]') ||
-                           text.includes('I am human') ||
-                           text.includes('hCaptcha') ||
-                           text.includes('localhost detected');
-        return Boolean(isHcaptcha);
+        const isCaptcha = el.querySelector('iframe[src*="hcaptcha"]') ||
+                          el.classList?.contains('h-captcha') ||
+                          el.querySelector('iframe[data-hcaptcha-widget-id]') ||
+                          el.querySelector('iframe[src*="recaptcha"]') ||
+                          el.querySelector('iframe[title*="reCAPTCHA"]') ||
+                          el.classList?.contains('g-recaptcha') ||
+                          el.querySelector('iframe[src*="challenges.cloudflare.com"]') ||
+                          text.includes('I am human') ||
+                          text.includes('hCaptcha') ||
+                          text.includes('reCAPTCHA') ||
+                          text.includes('I\'m not a robot') ||
+                          text.includes('localhost detected');
+        return Boolean(isCaptcha);
       });
 
       strayElements.forEach(stray => {
@@ -93,6 +152,7 @@ const LoginSignup = () => {
       initMsg91CustomUI({
         onSuccess: (data) => {
           console.log('[MSG91 Auth Init Success]', data);
+          setInbuiltCaptchaSolved(true);
         },
         failure: (err) => {
           console.warn('[MSG91 Auth Init Note]', err);
@@ -105,9 +165,17 @@ const LoginSignup = () => {
 
       const observer = new MutationObserver(() => {
         relocateCaptcha();
+        if (checkInbuiltCaptchaStatus()) {
+          setInbuiltCaptchaSolved(true);
+        }
       });
-      observer.observe(document.body, { childList: true, subtree: false });
-      const interval = setInterval(relocateCaptcha, 400);
+      observer.observe(document.body, { childList: true, subtree: true });
+      const interval = setInterval(() => {
+        relocateCaptcha();
+        if (checkInbuiltCaptchaStatus()) {
+          setInbuiltCaptchaSolved(true);
+        }
+      }, 400);
 
       return () => {
         observer.disconnect();
@@ -118,13 +186,13 @@ const LoginSignup = () => {
       const strayElements = Array.from(document.body.children).filter(el => {
         if (el.id === 'root' || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return false;
         const text = el.innerText || '';
-        return text.includes('I am human') || text.includes('localhost detected') || el.querySelector('iframe[src*="hcaptcha"]');
+        return text.includes('I am human') || text.includes('localhost detected') || el.querySelector('iframe[src*="hcaptcha"]') || el.querySelector('iframe[src*="recaptcha"]');
       });
       strayElements.forEach(el => {
         el.style.display = 'none';
       });
     }
-  }, [showOtpScreen, isForgotPassword, forgotStep]);
+  }, [showOtpScreen, isForgotPassword, checkInbuiltCaptchaStatus]);
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -186,18 +254,20 @@ const LoginSignup = () => {
         formatted,
         (data) => {
           console.log('[MSG91 OTP Sent Successfully]', data);
+          const rId = data?.message || data?.reqId || (typeof data === 'string' ? data : '');
+          if (rId && typeof rId === 'string') {
+            setMsg91ReqId(rId);
+          }
+          setInbuiltCaptchaSolved(true);
           setInfoMessage(`Verification code sent via MSG91 SMS to ${phone}.`);
         },
         (err) => {
           console.warn('[MSG91 Send Notice]', err);
           const errMsg = typeof err === 'object' ? (err.message || JSON.stringify(err)) : String(err);
           if (errMsg.toLowerCase().includes('captcha')) {
-            setInfoMessage(`MSG91 requires Captcha completion for this widget. Opening verification popup now...`);
-            setTimeout(() => {
-              handleLaunchDefaultWidget();
-            }, 600);
+            setInfoMessage(`MSG91 requires Captcha completion for this widget. Please solve the inbuilt captcha below to receive SMS.`);
           } else {
-            setInfoMessage(`SMS request dispatched to ${phone}. If delayed, click 'Open MSG91 Verification Popup' below.`);
+            setInfoMessage(`SMS request dispatched to ${phone}. Please complete the inbuilt captcha below if prompted.`);
           }
         }
       );
@@ -217,16 +287,38 @@ const LoginSignup = () => {
   const handleOtpSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
+
+    const cleanOtp = String(otp || '').replace(/\s+/g, '');
+
+    // 1. Mandatory OTP validation
+    if (!cleanOtp) {
+      setErrorMessage('Please enter the 6-digit OTP code.');
+      return;
+    }
+    if (cleanOtp.length !== 6) {
+      setErrorMessage('OTP must be exactly 6 digits.');
+      return;
+    }
+
+    // 2. Mandatory Inbuilt Captcha: without filling it, must not proceed to continue
+    const isCaptchaSolved = checkInbuiltCaptchaStatus();
+    if (!isCaptchaSolved) {
+      setErrorMessage('Without filling the inbuilt captcha, you cannot proceed. Please complete the captcha above to receive your SMS code and continue.');
+      document.getElementById('msg91-captcha-container')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
     setAuthLoading(true);
 
     // Try MSG91 exposed verification method first if available
     verifyMsg91Otp(
-      otp,
+      cleanOtp,
       async (msg91Response) => {
         console.log('[MSG91 Custom UI Verified]', msg91Response);
-        const result = await verifyOtp(phone, otp, {
-          msg91_token: msg91Response?.token || msg91Response?.access_token || msg91Response,
-          msg91_verified: true
+        const result = await verifyOtp(phone, cleanOtp, {
+          msg91_token: msg91Response?.token || msg91Response?.access_token || (typeof msg91Response === 'string' ? msg91Response : 'verified'),
+          msg91_verified: true,
+          req_id: msg91ReqId
         });
         setAuthLoading(false);
         if (result.success) {
@@ -234,24 +326,31 @@ const LoginSignup = () => {
           setShowOtpScreen(false);
           setIsLogin(true);
           setInfoMessage('Account verified successfully via MSG91. Please log in.');
+          setMsg91ReqId('');
+          setInbuiltCaptchaSolved(false);
         } else {
           setErrorMessage(result.error);
         }
       },
       async (err) => {
         console.warn('[MSG91 verifyOtp fallback to direct verification]', err);
-        // Fallback to backend verification (which checks MSG91 server token or local OTP)
-        const result = await verifyOtp(phone, otp);
+        // Fallback to backend verification (checks MSG91 direct API with req_id, server token, or local OTP)
+        const result = await verifyOtp(phone, cleanOtp, {
+          req_id: msg91ReqId
+        });
         setAuthLoading(false);
         if (result.success) {
           alert('Verification successful! You can now log into your account.');
           setShowOtpScreen(false);
           setIsLogin(true);
           setInfoMessage('Account verified successfully. Please log in.');
+          setMsg91ReqId('');
+          setInbuiltCaptchaSolved(false);
         } else {
           setErrorMessage(result.error);
         }
-      }
+      },
+      msg91ReqId
     );
   };
 
@@ -331,6 +430,10 @@ const LoginSignup = () => {
         formatted,
         (data) => {
           console.log('[MSG91 Reset OTP Sent]', data);
+          const rId = data?.message || data?.reqId || (typeof data === 'string' ? data : '');
+          if (rId && typeof rId === 'string') {
+            setMsg91ReqId(rId);
+          }
           setInfoMessage(`Verification code sent via MSG91 SMS to ${resetPhone}.`);
         },
         (err) => {
@@ -348,6 +451,16 @@ const LoginSignup = () => {
     setErrorMessage('');
     setInfoMessage('');
 
+    const cleanOtp = String(resetOtp || '').replace(/\s+/g, '');
+    if (!cleanOtp) {
+      setErrorMessage('Please enter the 6-digit OTP code.');
+      return;
+    }
+    if (cleanOtp.length !== 6) {
+      setErrorMessage('OTP must be exactly 6 digits.');
+      return;
+    }
+
     if (newPassword !== confirmNewPassword) {
       setErrorMessage('Passwords do not match.');
       return;
@@ -358,29 +471,61 @@ const LoginSignup = () => {
       return;
     }
 
+    // Mandatory Inbuilt Captcha: without filling it, must not proceed to continue
+    const isCaptchaSolved = checkInbuiltCaptchaStatus();
+    if (!isCaptchaSolved) {
+      setErrorMessage('Without filling the inbuilt captcha, you cannot proceed. Please complete the captcha above to receive your SMS code and continue.');
+      document.getElementById('msg91-captcha-container')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
     setAuthLoading(true);
 
-    const result = await confirmPasswordReset({
-      phone: resetPhone,
-      otp: resetOtp,
-      newPassword
-    });
-    setAuthLoading(false);
+    const proceedWithReset = async (extraParams = {}) => {
+      const result = await confirmPasswordReset({
+        phone: resetPhone,
+        otp: cleanOtp,
+        newPassword,
+        reqId: msg91ReqId,
+        ...extraParams
+      });
+      setAuthLoading(false);
 
-    if (result.success) {
-      alert('Password has been successfully reset! You can now log in.');
-      setIsForgotPassword(false);
-      setIsLogin(true);
-      if (result.username) setUsername(result.username);
-      setPassword(newPassword);
-      setInfoMessage('Password updated successfully! Please log in.');
-      setResetPhone('');
-      setResetOtp('');
-      setNewPassword('');
-      setConfirmNewPassword('');
-    } else {
-      setErrorMessage(result.error || 'Password reset failed. Invalid or expired OTP.');
-    }
+      if (result.success) {
+        alert('Password has been successfully reset! You can now log in.');
+        setIsForgotPassword(false);
+        setIsLogin(true);
+        if (result.username) setUsername(result.username);
+        setPassword(newPassword);
+        setInfoMessage('Password updated successfully! Please log in.');
+        setResetPhone('');
+        setResetOtp('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setMsg91ReqId('');
+        setInbuiltCaptchaSolved(false);
+      } else {
+        setErrorMessage(result.error || 'Password reset failed. Invalid or expired OTP.');
+      }
+    };
+
+    // Attempt verification with MSG91 custom UI first
+    verifyMsg91Otp(
+      cleanOtp,
+      async (msg91Response) => {
+        console.log('[MSG91 Reset Custom UI Verified]', msg91Response);
+        await proceedWithReset({
+          msg91Token: msg91Response?.token || msg91Response?.access_token || (typeof msg91Response === 'string' ? msg91Response : 'verified'),
+          msg91Verified: true
+        });
+      },
+      async (err) => {
+        console.warn('[MSG91 Reset verifyOtp fallback to direct verification]', err);
+        // Fallback to backend verification (which checks MSG91 direct API with req_id, server token, local OTP, or test code 123456)
+        await proceedWithReset();
+      },
+      msg91ReqId
+    );
   };
 
   const handleLaunchResetWidget = () => {
@@ -426,8 +571,12 @@ const LoginSignup = () => {
     const formatted = formatPhoneForMsg91(resetPhone);
     sendMsg91Otp(
       formatted,
-      () => {
+      (data) => {
         setResending(false);
+        const rId = data?.message || data?.reqId || (typeof data === 'string' ? data : '');
+        if (rId && typeof rId === 'string') {
+          setMsg91ReqId(rId);
+        }
         setInfoMessage(`New OTP sent to ${resetPhone}`);
       },
       () => {
@@ -485,8 +634,35 @@ const LoginSignup = () => {
               </span>
             </div>
 
-            {/* Centered container for MSG91 reCAPTCHA / hCaptcha mount */}
-            <div id="msg91-captcha-container" className="flex justify-center my-3 min-h-0 overflow-hidden rounded-xl empty:hidden"></div>
+            {/* Centered container for MSG91 Inbuilt reCAPTCHA / hCaptcha mount */}
+            <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                  Inbuilt Security Captcha
+                </span>
+                {inbuiltCaptchaSolved ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    ✓ Captcha Verified
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                    Compulsory for SMS
+                  </span>
+                )}
+              </div>
+
+              <div
+                id="msg91-captcha-container"
+                className="flex justify-center items-center my-2 min-h-[78px] rounded-xl"
+              ></div>
+
+              {!inbuiltCaptchaSolved && (
+                <p className="text-[11px] text-slate-500 text-center">
+                  Please complete the captcha above to receive your SMS code and proceed.
+                </p>
+              )}
+            </div>
 
             {/* Custom In-App OTP Form */}
             <form onSubmit={handleOtpSubmit} className="space-y-4">
@@ -694,6 +870,36 @@ const LoginSignup = () => {
                     className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
                 </div>
+              </div>
+
+              {/* Centered container for MSG91 Inbuilt reCAPTCHA / hCaptcha mount */}
+              <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                    Inbuilt Security Captcha
+                  </span>
+                  {inbuiltCaptchaSolved ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      ✓ Captcha Verified
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                      Compulsory for SMS
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  id="msg91-captcha-container"
+                  className="flex justify-center items-center my-2 min-h-[78px] rounded-xl"
+                ></div>
+
+                {!inbuiltCaptchaSolved && (
+                  <p className="text-[11px] text-slate-500 text-center">
+                    Please complete the captcha above to receive your SMS code and proceed.
+                  </p>
+                )}
               </div>
 
               <button

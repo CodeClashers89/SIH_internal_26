@@ -100,14 +100,15 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const confirmPasswordReset = async ({ phone, otp, newPassword, msg91Token, msg91Verified }) => {
+  const confirmPasswordReset = async ({ phone, otp, newPassword, msg91Token, msg91Verified, reqId }) => {
     try {
       const response = await api.post('/auth/password-reset/confirm/', {
         phone,
         otp,
         new_password: newPassword,
         msg91_token: msg91Token,
-        msg91_verified: msg91Verified
+        msg91_verified: msg91Verified,
+        req_id: reqId
       });
       return { success: true, message: response.data.message, username: response.data.username };
     } catch (error) {
