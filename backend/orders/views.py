@@ -25,6 +25,9 @@ import razorpay
 import random
 import hmac
 import hashlib
+from notifications.events import notify
+import notifications.events as ev
+
 
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
@@ -145,8 +148,19 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.status = new_status
         order.save()
 
-        # Simple notification logging
-        print(f"\n[STUB NOTIFICATION SERVICE] Order #{order.id} status updated to {new_status}. Sent alert to {order.buyer.phone or order.buyer.email}\n")
+        # Email notification — route by buyer role so consumer and bulk-buyer
+        # each receive the correct template via the centralized email service.
+        buyer = order.buyer
+        if new_status == 'cancelled':
+            if buyer.role == 'bulk_buyer':
+                notify(ev.BULK_ORDER_CANCELLED, order=order)
+            else:
+                notify(ev.ORDER_CANCELLED, order=order)
+        else:
+            if buyer.role == 'bulk_buyer':
+                notify(ev.BULK_ORDER_STATUS_CHANGED, order=order, new_status=new_status)
+            else:
+                notify(ev.ORDER_STATUS_CHANGED, order=order, new_status=new_status)
 
         # Create open broadcast shipment when farmer confirms.
         # No auto-assignment — all drivers see it and race to accept (Rapido-style).
@@ -155,6 +169,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             print(f"[LOGISTICS] Open shipment broadcast for order #{order.id} on farmer confirmation.")
 
         return Response(OrderSerializer(order).data)
+
 
     @action(detail=True, methods=['post'], url_path='retry-payment')
     def retry_payment(self, request, pk=None):
@@ -431,6 +446,8 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
             quote.offered_price = offered_price
             quote.status = 'offered'
             quote.save()
+            # Notify Bulk Buyer that the farmer made a counter-offer
+            notify(ev.QUOTE_OFFER_MADE, quote=quote)
             return Response(QuoteRequestSerializer(quote).data)
 
         # 2. Bulk Buyer submits counter-offer
@@ -464,6 +481,7 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
             
             final_price = quote.target_price
             buyer_user = quote.buyer
+            accepted_by = 'farmer'
 
         # 2. Bulk Buyer accepts farmer's counter offer
         elif user.role == 'bulk_buyer':
@@ -474,6 +492,7 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
             
             final_price = quote.offered_price
             buyer_user = user
+            accepted_by = 'bulk_buyer'
         
         else:
             return Response({'error': 'Role unauthorized to accept offers.'}, status=status.HTTP_403_FORBIDDEN)
@@ -560,6 +579,17 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
             status='created'
         )
 
+        # Email notifications — different depending on who accepted
+        if accepted_by == 'farmer':
+            # Farmer accepted buyer's requested price → notify the buyer
+            notify(ev.CUSTOM_REQUEST_ACCEPTED, quote=quote)
+            # Also notify farmer as confirmation of WHOLESALE_BID_CONFIRMED equivalent
+            notify(ev.WHOLESALE_BID_CONFIRMED, offer=_quote_as_offer_compat(quote, order))
+        else:
+            # Bulk buyer accepted farmer's counter-offer → notify buyer + farmer
+            notify(ev.QUOTE_BID_ACCEPTED_BUYER, quote=quote, order=order)
+            notify(ev.WHOLESALE_BID_CONFIRMED, offer=_quote_as_offer_compat(quote, order))
+
         return Response({
             'message': 'Offer accepted. Order created for payment.',
             'quote': QuoteRequestSerializer(quote).data,
@@ -581,11 +611,61 @@ class QuoteRequestViewSet(viewsets.ModelViewSet):
             
         quote.status = 'rejected'
         quote.save()
+
+        # Notify the other party of the rejection
+        if user == quote.buyer:
+            # Buyer is rejecting the farmer's counter-offer → notify farmer
+            notify(ev.QUOTE_BID_REJECTED, quote=quote, rejected_by='farmer')
+        else:
+            # Farmer is rejecting the buyer's request → notify buyer
+            notify(ev.QUOTE_BID_REJECTED, quote=quote, rejected_by='buyer')
+
         return Response(QuoteRequestSerializer(quote).data)
+
+
 
 from decimal import Decimal
 
+
+def _quote_as_offer_compat(quote, order):
+    """
+    Adapts a QuoteRequest into a duck-typed object compatible with the
+    WHOLESALE_BID_CONFIRMED event handler, which expects a FarmerOffer-like
+    object with .farmer, .requirement, .quantity, .price_per_unit, .delivery_date,
+    and .id attributes.
+
+    QuoteRequest and FarmerOffer cover overlapping but different wholesale workflows.
+    This adapter avoids duplicating the Farmer confirmation email template.
+    """
+    from types import SimpleNamespace
+    from django.utils import timezone as tz
+
+    product = quote.product
+    farmer = product.farmer if product else None
+    final_price = quote.offered_price or quote.target_price
+
+    # Build a minimal requirement-like object so the template can access crop_name / unit
+    requirement_compat = SimpleNamespace(
+        id=quote.id,
+        crop_name=product.name if product else 'Product',
+        unit=product.unit if product else 'kg',
+        buyer=quote.buyer,
+    )
+
+    return SimpleNamespace(
+        id=quote.id,
+        farmer=farmer,
+        requirement=requirement_compat,
+        quantity=quote.quantity,
+        price_per_unit=final_price,
+        delivery_date=tz.now().date(),  # QuoteRequest has no delivery_date; use today as fallback
+        notes='',
+        order=order,
+    )
+
+
 class BulkRequirementViewSet(viewsets.ModelViewSet):
+
     queryset = BulkRequirement.objects.select_related('buyer').prefetch_related('offers__farmer').all().order_by('-created_at')
     serializer_class = BulkRequirementSerializer
 
@@ -697,7 +777,11 @@ class BulkRequirementViewSet(viewsets.ModelViewSet):
             status='pending'
         )
 
+        # Notify the Bulk Buyer that a farmer submitted an offer on their requirement
+        notify(ev.WHOLESALE_FARMER_OFFER_MADE, offer=offer)
+
         return Response(FarmerOfferSerializer(offer).data, status=status.HTTP_201_CREATED)
+
 
 class FarmerOfferViewSet(viewsets.ModelViewSet):
     queryset = FarmerOffer.objects.select_related('farmer', 'requirement__buyer').all().order_by('-created_at')
@@ -832,6 +916,10 @@ class FarmerOfferViewSet(viewsets.ModelViewSet):
             status='created'
         )
 
+        # Email notifications — Bulk Buyer gets confirmation; Farmer gets wholesale bid confirmed
+        notify(ev.WHOLESALE_BID_ACCEPTED_BUYER, offer=offer, order=order)
+        notify(ev.WHOLESALE_BID_CONFIRMED, offer=offer)
+
         return Response({
             'message': 'Offer accepted. Order created for payment.',
             'offer': FarmerOfferSerializer(offer).data,
@@ -849,7 +937,10 @@ class FarmerOfferViewSet(viewsets.ModelViewSet):
         offer = self.get_object()
         offer.status = 'rejected'
         offer.save()
+        # Notify the Farmer that the Bulk Buyer rejected their offer
+        notify(ev.WHOLESALE_BID_REJECTED_BUYER, offer=offer)
         return Response(FarmerOfferSerializer(offer).data)
+
 
 class PreHarvestContractViewSet(viewsets.ModelViewSet):
     queryset = PreHarvestContract.objects.select_related('farmer', 'buyer').all().order_by('-created_at')

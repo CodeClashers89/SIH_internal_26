@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'route_planning',
     'farmer_profile',
     'chatbot',
+    'notifications',
 ]
 
 # Route Planning Settings
@@ -192,19 +193,39 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Brevo (Sendinblue) Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# Brevo SMTP Email Notification System
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Legacy Brevo API key (kept for backward compatibility)
 BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '')
-BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', 'yugsayja312@gmail.com')
-BREVO_SENDER_NAME = os.environ.get('BREVO_SENDER_NAME', 'KisanConnect Platform')
+BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', os.environ.get('BREVO_FROM_EMAIL', 'yugsayja312@gmail.com'))
+BREVO_SENDER_NAME = os.environ.get('BREVO_SENDER_NAME', os.environ.get('BREVO_FROM_NAME', 'KisanConnect Platform'))
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', BREVO_SENDER_EMAIL)
 
-# Django SMTP Configuration
+# Brevo SMTP credentials (used by notifications.email_service)
+BREVO_SMTP_HOST = os.environ.get('BREVO_SMTP_HOST', 'smtp-relay.brevo.com')
+BREVO_SMTP_PORT = int(os.environ.get('BREVO_SMTP_PORT', 587))
+BREVO_SMTP_USERNAME = os.environ.get('BREVO_SMTP_USERNAME', '')
+BREVO_SMTP_PASSWORD = os.environ.get('BREVO_SMTP_PASSWORD', '')
+BREVO_FROM_EMAIL = os.environ.get('BREVO_FROM_EMAIL', BREVO_SENDER_EMAIL)
+BREVO_FROM_NAME = os.environ.get('BREVO_FROM_NAME', BREVO_SENDER_NAME)
+
+# Django SMTP backend (mirrors Brevo SMTP settings)
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp-relay.brevo.com')
-EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_HOST = BREVO_SMTP_HOST
+EMAIL_PORT = BREVO_SMTP_PORT
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_HOST_USER = BREVO_SMTP_USERNAME
+EMAIL_HOST_PASSWORD = BREVO_SMTP_PASSWORD
+
+# Email system feature flags
+EMAIL_ENABLED = os.environ.get('EMAIL_ENABLED', 'true')   # Set 'false' to disable all emails
+EMAIL_PROVIDER = os.environ.get('EMAIL_PROVIDER', 'brevo') # 'brevo' | 'console'
+EMAIL_DEBUG = os.environ.get('EMAIL_DEBUG', 'false')       # Set 'true' for SMTP debug output
+
+# Frontend URL — used in password reset links
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
 
 # Razorpay Configuration (Test or Live Gateway)
 RAZORPAY_KEY_ID = (os.environ.get('RAZORPAY_KEY_ID') or '').strip()
