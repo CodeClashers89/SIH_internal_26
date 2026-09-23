@@ -32,8 +32,8 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
   String? _infoMessage;
 
   // Login Controllers
-  final _loginUsernameController = TextEditingController(text: 'farmer1');
-  final _loginPasswordController = TextEditingController(text: '123456');
+  final _loginUsernameController = TextEditingController();
+  final _loginPasswordController = TextEditingController();
 
   // Signup Controllers
   final _signupUsernameController = TextEditingController();
@@ -634,7 +634,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
         TextFormField(
           controller: _loginUsernameController,
           decoration: InputDecoration(
-            hintText: 'farmer1 or consumer1',
+            hintText: 'Enter your username or phone',
             prefixIcon: const Icon(LucideIcons.user, size: 18, color: Color(0xFF94A3B8)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             border: OutlineInputBorder(
@@ -699,39 +699,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
           isLoading: _authLoading,
           onPressed: _handleLogin,
         ),
-        const SizedBox(height: 16),
-
-        // Demo Shortcut Selector
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'QUICK DEMO ROLES (TAP TO AUTOFILL):',
-                style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF64748B), letterSpacing: 0.5),
-              ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: [
-                  _buildDemoChip('🌾 Farmer', 'farmer1'),
-                  _buildDemoChip('🛒 Consumer', 'consumer1'),
-                  _buildDemoChip('🏢 Bulk Buyer', 'buyer1'),
-                  _buildDemoChip('🚚 Driver', 'driver1'),
-                  _buildDemoChip('⚙️ Admin', 'admin1'),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
 
         // Toggle to Sign Up
         Row(
@@ -760,30 +728,6 @@ class _LoginSignupScreenState extends State<LoginSignupScreen> {
           ],
         ),
       ],
-    );
-  }
-
-  Widget _buildDemoChip(String label, String username) {
-    return InkWell(
-      onTap: () {
-        setState(() {
-          _loginUsernameController.text = username;
-          _loginPasswordController.text = '123456';
-        });
-      },
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFCBD5E1)),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
-        ),
-      ),
     );
   }
 

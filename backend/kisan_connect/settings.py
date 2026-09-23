@@ -7,13 +7,18 @@ import dj_database_url
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env file
-load_dotenv(BASE_DIR / '.env')
+load_dotenv(BASE_DIR / '.env', override=True)
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure--j%_dvds9lnk!cu!zx*9ro96twl#98p5nv4-_e!77ds-*5cww$')
 
 DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+raw_allowed_hosts = os.environ.get('ALLOWED_HOSTS', '*')
+ALLOWED_HOSTS = [h.strip() for h in raw_allowed_hosts.split(',') if h.strip()]
+if '10.206.1.244' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('10.206.1.244')
+if '*' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('*')
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)

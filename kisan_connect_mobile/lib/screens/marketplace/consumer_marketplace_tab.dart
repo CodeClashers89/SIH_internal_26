@@ -365,7 +365,10 @@ class _ConsumerMarketplaceTabState extends State<ConsumerMarketplaceTab> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('🌾 Farm-to-Fork Transparency Index', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                  const Expanded(
+                    child: Text('🌾 Farm-to-Fork Transparency Index', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
@@ -398,12 +401,16 @@ class _ConsumerMarketplaceTabState extends State<ConsumerMarketplaceTab> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Row(
-              children: [
-                Text('🌱', style: TextStyle(fontSize: 18)),
-                SizedBox(width: 6),
-                Text('Fresh Harvest Near You', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
-              ],
+            const Expanded(
+              child: Row(
+                children: [
+                  Text('🌱', style: TextStyle(fontSize: 18)),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text('Fresh Harvest Near You', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)), overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ),
             ),
             TextButton(
               onPressed: () => setState(() => _activeSection = 'browse'),
@@ -522,45 +529,54 @@ class _ConsumerMarketplaceTabState extends State<ConsumerMarketplaceTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF5),
-                      borderRadius: BorderRadius.circular(12),
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(LucideIcons.truck, color: Color(0xFF059669), size: 18),
                     ),
-                    child: const Icon(LucideIcons.truck, color: Color(0xFF059669), size: 18),
-                  ),
-                  const SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            order.status == 'in_transit' ? '🚚 OUT FOR DELIVERY TODAY' : '📦 ORDER STATUS',
-                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF059669), letterSpacing: 0.5),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  order.status == 'in_transit' ? '🚚 OUT FOR DELIVERY TODAY' : '📦 ORDER STATUS',
+                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF059669), letterSpacing: 0.5),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (order.isSubscription) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(4)),
+                                  child: const Text('AUTO-DELIVERY', style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Color(0xFF2563EB))),
+                                ),
+                              ],
+                            ],
                           ),
-                          if (order.isSubscription) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                              decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(4)),
-                              child: const Text('AUTO-DELIVERY', style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Color(0xFF2563EB))),
-                            ),
-                          ],
+                          Text(
+                            'Order #${order.id} • ${order.items.length} Items',
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ],
                       ),
-                      Text(
-                        'Order #${order.id} • ${order.items.length} Items',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [

@@ -682,13 +682,18 @@ class _BulkBuyerTabState extends State<BulkBuyerTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Icon(icon, size: 18, color: iconColor),
-                  const SizedBox(width: 8),
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                ],
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(icon, size: 18, color: iconColor),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               TextButton(
                 onPressed: onViewAll,
                 style: TextButton.styleFrom(

@@ -10,9 +10,9 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  Widget createAuthWidget({VoidCallback? onSuccess}) {
+  Widget createAuthWidget({VoidCallback? onSuccess, bool mockFallback = true}) {
     return ChangeNotifierProvider<AuthProvider>(
-      create: (_) => AuthProvider(),
+      create: (_) => AuthProvider()..mockFallbackForTests = mockFallback,
       child: MaterialApp(
         home: LoginSignupScreen(
           onLoginSuccess: onSuccess ?? () {},
@@ -21,7 +21,7 @@ void main() {
     );
   }
 
-  testWidgets('1. Login screen renders properly with quick demo roles', (WidgetTester tester) async {
+  testWidgets('1. Clean Login screen renders properly without quick demo roles', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 2.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -36,8 +36,9 @@ void main() {
     expect(find.text('Log In'), findsOneWidget);
     expect(find.text('Sign Up'), findsOneWidget);
     expect(find.text('Forgot password?'), findsOneWidget);
-    expect(find.text('🌾 Farmer'), findsOneWidget);
-    expect(find.text('🛒 Consumer'), findsOneWidget);
+    // Verify quick demo shortcuts have been completely removed
+    expect(find.text('🌾 Farmer'), findsNothing);
+    expect(find.text('🛒 Consumer'), findsNothing);
   });
 
   testWidgets('2. Switch to Sign Up screen and dynamic role fields render', (WidgetTester tester) async {
@@ -109,7 +110,11 @@ void main() {
     }));
     await tester.pumpAndSettle();
 
-    // Default username is farmer1, password 123456
+    // Enter credentials into empty fields
+    final textFields = find.byType(TextFormField);
+    await tester.enterText(textFields.at(0), 'farmer1');
+    await tester.enterText(textFields.at(1), '123456');
+
     await tester.ensureVisible(find.text('Log In'));
     await tester.tap(find.text('Log In'));
     await tester.pumpAndSettle();

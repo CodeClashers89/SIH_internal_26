@@ -163,9 +163,13 @@ class _LogisticsTabState extends State<LogisticsTab> {
                   children: [
                     Row(
                       children: [
-                        const Text(
-                          "Driver Hub Console",
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                        const Flexible(
+                          child: Text(
+                            "Driver Hub Console",
+                            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         Container(

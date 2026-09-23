@@ -399,14 +399,18 @@ class _FarmerDashboardTabState extends State<FarmerDashboardTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    '📈 4-Week Crop Demand Forecast',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                  const Expanded(
+                    child: Text(
+                      '📈 4-Week Crop Demand Forecast',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  Text(
+                  const SizedBox(width: 8),
+                  const Text(
                     'AI Predictive',
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF059669)),
                   ),
@@ -499,15 +503,17 @@ class _FarmerDashboardTabState extends State<FarmerDashboardTab> {
               const SizedBox(height: 10),
 
               // Legend
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _ChartLegend(color: Color(0xFF059669), label: 'Tomato (Rising +42%)'),
-                  SizedBox(width: 14),
-                  _ChartLegend(color: Color(0xFF0284C7), label: 'Onion (Steady)'),
-                  SizedBox(width: 14),
-                  _ChartLegend(color: Color(0xFFD97706), label: 'Wheat (High)'),
-                ],
+              const Center(
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 12,
+                  runSpacing: 4,
+                  children: [
+                    _ChartLegend(color: Color(0xFF059669), label: 'Tomato (+42%)'),
+                    _ChartLegend(color: Color(0xFF0284C7), label: 'Onion (Steady)'),
+                    _ChartLegend(color: Color(0xFFD97706), label: 'Wheat (High)'),
+                  ],
+                ),
               ),
             ],
           ),

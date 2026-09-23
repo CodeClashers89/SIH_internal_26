@@ -1,21 +1,24 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // Configurable base URL. Defaults to 10.0.2.2 for Android emulator, 127.0.0.1 for web/desktop
+  // Configurable base URL. Default configured for 10.206.1.244 (local network)
   static String baseUrl = _getDefaultBaseUrl();
 
   static String _getDefaultBaseUrl() {
-    if (!kIsWeb) {
-      try {
-        if (Platform.isAndroid) {
-          return "http://10.0.2.2:8000/api";
-        }
-      } catch (_) {}
+    return "http://10.206.1.244:8000/api";
+  }
+
+  static void setBaseUrl(String url) {
+    String cleanUrl = url.trim();
+    if (!cleanUrl.endsWith('/api') && !cleanUrl.endsWith('/api/')) {
+      if (cleanUrl.endsWith('/')) {
+        cleanUrl = '${cleanUrl}api';
+      } else {
+        cleanUrl = '$cleanUrl/api';
+      }
     }
-    return "http://127.0.0.1:8000/api";
+    baseUrl = cleanUrl;
   }
 
   static Map<String, String> getHeaders(String? token) {

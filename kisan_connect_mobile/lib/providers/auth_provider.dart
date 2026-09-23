@@ -129,6 +129,9 @@ class AuthProvider with ChangeNotifier {
   String? _token;
   UserProfile _currentUser = demoAccounts[0];
 
+  // Set to true only during unit tests when mock backend is desired
+  bool mockFallbackForTests = false;
+
   bool get isAuthenticated => _isAuthenticated;
   String? get token => _token;
   UserProfile get currentUser => _currentUser;
@@ -270,26 +273,27 @@ class AuthProvider with ChangeNotifier {
       return {'success': true, 'user': _currentUser};
     }
 
-    // 2. Demo Sandbox fallback for seamless offline testing
-    // Check if username matches demo account, or password == '123456'
-    final matchedDemo = demoAccounts.firstWhere(
-      (acc) => acc.username.toLowerCase() == cleanUsername.toLowerCase() ||
-               acc.phone == cleanUsername,
-      orElse: () => demoAccounts[0],
-    );
+    // 2. Unit test sandbox fallback (only when mockFallbackForTests is explicitly enabled)
+    if (mockFallbackForTests) {
+      final matchedDemo = demoAccounts.firstWhere(
+        (acc) => acc.username.toLowerCase() == cleanUsername.toLowerCase() ||
+                 acc.phone == cleanUsername,
+        orElse: () => demoAccounts[0],
+      );
 
-    if (cleanPassword == '123456' || cleanUsername.isNotEmpty) {
-      _token = "demo_jwt_token_${DateTime.now().millisecondsSinceEpoch}";
-      _currentUser = matchedDemo;
+      if (cleanPassword == '123456' || cleanUsername.isNotEmpty) {
+        _token = "demo_jwt_token_${DateTime.now().millisecondsSinceEpoch}";
+        _currentUser = matchedDemo;
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('auth_token', _token!);
-      await prefs.setString('user_data', jsonEncode(_currentUser.toJson()));
-      await prefs.setString('user_role', _currentUser.role);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('auth_token', _token!);
+        await prefs.setString('user_data', jsonEncode(_currentUser.toJson()));
+        await prefs.setString('user_role', _currentUser.role);
 
-      _isAuthenticated = true;
-      notifyListeners();
-      return {'success': true, 'user': _currentUser};
+        _isAuthenticated = true;
+        notifyListeners();
+        return {'success': true, 'user': _currentUser};
+      }
     }
 
     return {
@@ -304,8 +308,8 @@ class AuthProvider with ChangeNotifier {
       return apiResult;
     }
 
-    // If offline / demo fallback
-    if (payload['username'] != null && payload['phone'] != null) {
+    // Only if unit testing with mock fallback enabled
+    if (mockFallbackForTests && payload['username'] != null && payload['phone'] != null) {
       return {
         'success': true,
         'user': payload,
@@ -335,11 +339,11 @@ class AuthProvider with ChangeNotifier {
       return apiResult;
     }
 
-    // Demo bypass: code '123456' or msg91 verified
-    if (otp == '123456' || msg91Verified) {
+    // Only if unit testing with mock fallback enabled
+    if (mockFallbackForTests && (otp == '123456' || msg91Verified)) {
       return {
         'success': true,
-        'message': 'Account verified successfully via Demo/MSG91.',
+        'message': 'Account verified successfully.',
       };
     }
 
@@ -352,8 +356,8 @@ class AuthProvider with ChangeNotifier {
       return apiResult;
     }
 
-    // Demo fallback for valid 10-digit number
-    if (phone.replaceAll(RegExp(r'\D'), '').length >= 10) {
+    // Only if unit testing with mock fallback enabled
+    if (mockFallbackForTests && phone.replaceAll(RegExp(r'\D'), '').length >= 10) {
       return {
         'success': true,
         'message': 'Password reset OTP sent to $phone.',
@@ -386,11 +390,11 @@ class AuthProvider with ChangeNotifier {
       return apiResult;
     }
 
-    // Demo fallback
-    if (otp == '123456' || msg91Verified) {
+    // Only if unit testing with mock fallback enabled
+    if (mockFallbackForTests && (otp == '123456' || msg91Verified)) {
       return {
         'success': true,
-        'message': 'Password reset successfully (Demo mode).',
+        'message': 'Password reset successfully.',
         'username': 'user_$phone',
       };
     }
