@@ -182,3 +182,51 @@ def send_delivery_otp_email(shipment):
         print(f"[EMAIL ERROR] Failed to dispatch OTP email: {str(e)}")
         logger.error(f"Failed to send OTP email: {str(e)}", exc_info=True)
         return False, str(e)
+
+
+def send_transactional_email(recipient_email, subject, html_body):
+    """
+    Sends a transactional email via Brevo HTTP API.
+    Zero-dependencies method ensuring reliability without SMTP credentials.
+    """
+    api_key = getattr(settings, 'BREVO_API_KEY', '')
+    sender_email = getattr(settings, 'BREVO_SENDER_EMAIL', 'yugsayja312@gmail.com')
+    sender_name = getattr(settings, 'BREVO_SENDER_NAME', 'KisanConnect Platform')
+
+    if not api_key:
+        return False, "BREVO_API_KEY is not configured."
+
+    payload = {
+        "sender": {
+            "name": sender_name,
+            "email": sender_email
+        },
+        "to": [
+            {
+                "email": recipient_email,
+            }
+        ],
+        "subject": subject,
+        "htmlContent": html_body
+    }
+
+    req = urllib.request.Request(
+        url="https://api.brevo.com/v3/smtp/email",
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            "api-key": api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_data = json.loads(response.read().decode('utf-8'))
+            msg_id = res_data.get('messageId', 'ok')
+            return True, msg_id
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8')
+        return False, f"Brevo API error: {e.code} - {error_body}"
+    except Exception as e:
+        return False, str(e)

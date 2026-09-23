@@ -199,30 +199,30 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Brevo SMTP Email Notification System
+# Brevo (Sendinblue) Transactional Email & SMTP Configuration
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Legacy Brevo API key (kept for backward compatibility)
+# Brevo v3 REST API Configuration
 BREVO_API_KEY = os.environ.get('BREVO_API_KEY', '')
 BREVO_SENDER_EMAIL = os.environ.get('BREVO_SENDER_EMAIL', os.environ.get('BREVO_FROM_EMAIL', 'yugsayja312@gmail.com'))
 BREVO_SENDER_NAME = os.environ.get('BREVO_SENDER_NAME', os.environ.get('BREVO_FROM_NAME', 'KisanConnect Platform'))
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', BREVO_SENDER_EMAIL)
 
-# Brevo SMTP credentials (used by notifications.email_service)
-BREVO_SMTP_HOST = os.environ.get('BREVO_SMTP_HOST', 'smtp-relay.brevo.com')
-BREVO_SMTP_PORT = int(os.environ.get('BREVO_SMTP_PORT', 587))
-BREVO_SMTP_USERNAME = os.environ.get('BREVO_SMTP_USERNAME', '')
-BREVO_SMTP_PASSWORD = os.environ.get('BREVO_SMTP_PASSWORD', '')
-BREVO_FROM_EMAIL = os.environ.get('BREVO_FROM_EMAIL', BREVO_SENDER_EMAIL)
-BREVO_FROM_NAME = os.environ.get('BREVO_FROM_NAME', BREVO_SENDER_NAME)
-
-# Django SMTP backend (mirrors Brevo SMTP settings)
+# Django SMTP Backend & Brevo Relay Settings
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = BREVO_SMTP_HOST
-EMAIL_PORT = BREVO_SMTP_PORT
+EMAIL_HOST = os.environ.get('EMAIL_HOST', os.environ.get('BREVO_SMTP_HOST', 'smtp-relay.brevo.com'))
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', os.environ.get('BREVO_SMTP_PORT', 587)))
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = BREVO_SMTP_USERNAME
-EMAIL_HOST_PASSWORD = BREVO_SMTP_PASSWORD
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', os.environ.get('BREVO_SMTP_USERNAME', ''))
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', os.environ.get('BREVO_SMTP_PASSWORD', ''))
+
+# Brevo alias variables for internal compatibility
+BREVO_SMTP_HOST = EMAIL_HOST
+BREVO_SMTP_PORT = EMAIL_PORT
+BREVO_SMTP_USERNAME = EMAIL_HOST_USER
+BREVO_SMTP_PASSWORD = EMAIL_HOST_PASSWORD
+BREVO_FROM_EMAIL = BREVO_SENDER_EMAIL
+BREVO_FROM_NAME = BREVO_SENDER_NAME
 
 # Email system feature flags
 EMAIL_ENABLED = os.environ.get('EMAIL_ENABLED', 'true')   # Set 'false' to disable all emails
