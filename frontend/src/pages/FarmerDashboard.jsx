@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
@@ -132,6 +132,51 @@ const FarmerDashboard = () => {
   const [preHarvestContracts, setPreHarvestContracts] = useState([]);
   const [markets, setMarkets] = useState([]);
   const [selectedMarket, setSelectedMarket] = useState(null);
+  const [farmerMapLocation, setFarmerMapLocation] = useState(null);
+  const mapSectionRef = useRef(null);
+
+  const defaultFarmerLocation = useMemo(() => {
+    if (user?.farm_coordinates) {
+      const parts = user.farm_coordinates.split(',').map(s => parseFloat(s.trim()));
+      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        return {
+          latitude: parts[0],
+          longitude: parts[1],
+          label: `${user.username || 'Farmer'}'s Farm (${user.district || 'Registered Land'})`,
+          address: user.address || `${user.district || ''}, India`
+        };
+      }
+    }
+    const distKey = (user?.district || '').toLowerCase().trim();
+    const DISTRICT_COORDS = {
+      'ahmedabad': { latitude: 22.986745, longitude: 72.381290, label: 'Ahmedabad / Sanand, Gujarat' },
+      'karnal': { latitude: 29.6857, longitude: 76.9905, label: 'Karnal, Haryana' },
+      'vadodara': { latitude: 22.3072, longitude: 73.1812, label: 'Vadodara, Gujarat' },
+      'surat': { latitude: 21.1702, longitude: 72.8311, label: 'Surat, Gujarat' },
+      'rajkot': { latitude: 22.3039, longitude: 70.8022, label: 'Rajkot, Gujarat' },
+      'pune': { latitude: 18.5204, longitude: 73.8567, label: 'Pune, Maharashtra' },
+      'nashik': { latitude: 19.9975, longitude: 73.7898, label: 'Nashik, Maharashtra' },
+      'panipat': { latitude: 29.3909, longitude: 76.9635, label: 'Panipat, Haryana' },
+      'kurukshetra': { latitude: 29.9695, longitude: 76.8783, label: 'Kurukshetra, Haryana' },
+      'anand': { latitude: 22.5645, longitude: 72.9289, label: 'Anand, Gujarat' },
+      'kheda': { latitude: 22.6916, longitude: 72.8634, label: 'Kheda / Nadiad, Gujarat' },
+    };
+    if (DISTRICT_COORDS[distKey]) {
+      const d = DISTRICT_COORDS[distKey];
+      return {
+        latitude: d.latitude,
+        longitude: d.longitude,
+        label: `${user?.username || 'Farmer'}'s Farm (${d.label})`,
+        address: user?.address || d.label
+      };
+    }
+    return {
+      latitude: 22.986745,
+      longitude: 72.381290,
+      label: "Neeraj Patel's Farm (Sanand, Ahmedabad)",
+      address: user?.address || 'Patel Organic Agro Farms, Sanand Highway, Ahmedabad'
+    };
+  }, [user]);
   const [farmerProfile, setFarmerProfile] = useState(null);
   const [orderChannelFilter, setOrderChannelFilter] = useState('all'); // 'all' | 'retail' | 'wholesale'
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
@@ -1746,15 +1791,31 @@ const FarmerDashboard = () => {
 
       {activeSection === 'markets' && (
         <div className="space-y-6">
-          <NearestMandiExplorer markets={markets} onSelectMarketOnMap={setSelectedMarket} />
+          <NearestMandiExplorer
+            markets={markets}
+            user={user}
+            farmerProfile={farmerProfile}
+            onSelectMarketOnMap={(mkt, loc) => {
+              setSelectedMarket(mkt);
+              if (loc) setFarmerMapLocation(loc);
+              if (mapSectionRef.current) {
+                mapSectionRef.current.scrollIntoView({ behavior: 'smooth' });
+              }
+            }}
+          />
           
-          <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs relative flex flex-col md:flex-row gap-6">
+          <div ref={mapSectionRef} className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs relative flex flex-col md:flex-row gap-6">
             <div className="flex-1">
               <div>
                 <h3 className="font-bold text-lg text-slate-800">AGMARKNET Live Market Prices Map</h3>
                 <p className="text-sm text-slate-600 leading-relaxed mb-4">Discover markets and government-reported commodity prices around India.</p>
               </div>
-              <MarketMap markets={markets} onMarketSelect={setSelectedMarket} />
+              <MarketMap
+                markets={markets}
+                selectedMarket={selectedMarket}
+                farmerLocation={farmerMapLocation || defaultFarmerLocation}
+                onMarketSelect={setSelectedMarket}
+              />
             </div>
             {selectedMarket && (
               <div className="w-full md:w-1/3">

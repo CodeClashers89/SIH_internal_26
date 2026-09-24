@@ -63,6 +63,33 @@ class MarketViewSet(viewsets.ReadOnlyModelViewSet):
             
         return Response(live_prices)
 
+    @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
+    def status(self, request):
+        """Returns live AGMARKNET (data.gov.in) API health and connectivity status."""
+        from .services import check_agmarknet_api_health
+        health = check_agmarknet_api_health()
+        return Response(health)
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
+    def update_api_key(self, request):
+        """Allows updating the DATA_GOV_API_KEY when expired or requested."""
+        new_key = request.data.get('api_key', '').strip()
+        if not new_key:
+            return Response({'error': 'Please provide a non-empty API key.'}, status=400)
+        
+        from .services import update_data_gov_api_key, check_agmarknet_api_health
+        success, msg = update_data_gov_api_key(new_key)
+        if not success:
+            return Response({'error': msg}, status=400)
+        
+        # Verify immediately
+        health = check_agmarknet_api_health()
+        return Response({
+            'success': True,
+            'message': msg,
+            'health': health
+        })
+
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAdminUser])
     def sync(self, request):
         from .services import sync_agmarknet_data
