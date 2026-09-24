@@ -23,11 +23,11 @@ def test_full_order_email_flow():
     print("=" * 60)
 
     farmer = User.objects.filter(email='jett60545@gmail.com').first()
-    consumer = User.objects.filter(email='daruwalapeter8@gmail.com').first()
+    consumer = User.objects.filter(email='legend04433@gmail.com').first()
     bulk_buyer = User.objects.filter(email='bmwq22835@gmail.com').first()
 
     assert farmer, "Farmer user jett60545@gmail.com must exist."
-    assert consumer, "Consumer user daruwalapeter8@gmail.com must exist."
+    assert consumer, "Consumer user legend04433@gmail.com must exist."
     assert bulk_buyer, "Bulk Buyer user bmwq22835@gmail.com must exist."
 
     # Fetch a product listed by Neeraj Patel

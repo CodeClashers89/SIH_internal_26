@@ -32,7 +32,7 @@ def run():
     
     # 1. Consumer
     get_or_create_user(
-        email='daruwalapeter8@gmail.com',
+        email='legend04433@gmail.com',
         username='peter_consumer',
         role='consumer',
         password='Password123!'

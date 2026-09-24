@@ -151,7 +151,7 @@ def populate():
     print(f"  [OK] Logistics Partner ys_logistics updated (Fleet: {logistics_user.vehicle_number})")
 
     # D) Consumer: Peter Daruwala
-    consumer, _ = User.objects.get_or_create(email='daruwalapeter8@gmail.com', defaults={'username': 'peter_consumer'})
+    consumer, _ = User.objects.get_or_create(email='legend04433@gmail.com', defaults={'username': 'peter_consumer'})
     consumer.username = 'peter_consumer'
     consumer.first_name = 'Peter'
     consumer.last_name = 'Daruwala'

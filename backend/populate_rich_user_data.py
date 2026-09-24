@@ -135,8 +135,8 @@ def setup_all():
     log_partner.save()
     print(f"[OK] Logistics Partner updated: {logistics_user.username} ({logistics_user.email})")
 
-    # Consumer: peter_consumer (daruwalapeter8@gmail.com)
-    consumer, _ = User.objects.get_or_create(email='daruwalapeter8@gmail.com', defaults={'username': 'peter_consumer'})
+    # Consumer: peter_consumer (legend04433@gmail.com)
+    consumer, _ = User.objects.get_or_create(email='legend04433@gmail.com', defaults={'username': 'peter_consumer'})
     consumer.username = 'peter_consumer'
     consumer.first_name = 'Peter'
     consumer.last_name = 'Daruwala'
