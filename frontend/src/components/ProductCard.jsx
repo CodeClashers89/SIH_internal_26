@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Calendar, MapPin, User, ShoppingCart, Info, Plus, Minus, Trash2, Repeat } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Calendar, MapPin, User, ShoppingCart, Info, Plus, Minus, Trash2, Repeat, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import OrderTypeModal from './OrderTypeModal';
 
 const ProductCard = ({ product, onAddToCart }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { cartItems, addToCart, updateQuantity, removeFromCart } = useCart();
   const [showOrderModal, setShowOrderModal] = useState(false);
 
@@ -22,15 +24,33 @@ const ProductCard = ({ product, onAddToCart }) => {
   const outOfStock = maxStock <= 0;
 
   // Check if item is already in cart
-  const cartItem = cartItems.find((item) => item.product.id === product.id);
+  const cartItem = user ? cartItems.find((item) => item.product.id === product.id) : null;
   const cartQty = cartItem ? cartItem.quantity : 0;
 
   const handleInitialAdd = (e) => {
     e.stopPropagation();
+    if (!user) {
+      navigate('/login', { 
+        state: { 
+          from: window.location.pathname + window.location.search, 
+          message: 'Please log in to add fresh products to your cart and place orders.' 
+        } 
+      });
+      return;
+    }
     setShowOrderModal(true);
   };
 
   const handleOrderConfirm = (type, config) => {
+    if (!user) {
+      navigate('/login', { 
+        state: { 
+          from: window.location.pathname + window.location.search, 
+          message: 'Please log in to add fresh products to your cart and place orders.' 
+        } 
+      });
+      return;
+    }
     if (onAddToCart) {
       onAddToCart(product, 1, config);
     } else {
@@ -40,6 +60,15 @@ const ProductCard = ({ product, onAddToCart }) => {
 
   const handleIncrement = (e) => {
     e.stopPropagation();
+    if (!user) {
+      navigate('/login', { 
+        state: { 
+          from: window.location.pathname + window.location.search, 
+          message: 'Please log in to add fresh products to your cart and place orders.' 
+        } 
+      });
+      return;
+    }
     if (cartQty < maxStock) {
       updateQuantity(product.id, cartQty + 1);
     }
@@ -47,6 +76,7 @@ const ProductCard = ({ product, onAddToCart }) => {
 
   const handleDecrement = (e) => {
     e.stopPropagation();
+    if (!user) return;
     if (cartQty <= 1) {
       removeFromCart(product.id);
     } else {

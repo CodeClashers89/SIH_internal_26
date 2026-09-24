@@ -139,13 +139,22 @@ def _do_send(
     html_body: str,
     text_body: str,
 ) -> tuple[bool, str]:
-    """Blocking SMTP send. Called directly or from a daemon thread."""
+    """Send email via Brevo HTTP API or SMTP. Called directly or from a daemon thread."""
     provider = _email_provider()
 
     if provider == 'console':
         _console_send(to_email, to_name, subject, html_body)
         return True, 'console'
 
+    # 1. First try Brevo HTTP API if API key is provided (most reliable, zero port blocking)
+    api_key = _get('BREVO_API_KEY', 'BREVO_API_KEY', '')
+    if api_key:
+        success, info = _brevo_http_send(to_email, to_name, subject, html_body)
+        if success:
+            return True, info
+        logger.warning('[EMAIL] Brevo HTTP API attempt failed (%s), falling back to SMTP...', info)
+
+    # 2. SMTP fallback / primary
     cfg = _smtp_config()
     from_addr = f"{cfg['from_name']} <{cfg['from_email']}>"
     to_addr = f"{to_name} <{to_email}>" if to_name else to_email
@@ -162,7 +171,7 @@ def _do_send(
             '[EMAIL] BREVO_SMTP_USERNAME or BREVO_SMTP_PASSWORD not configured. '
             'Email to %s was NOT sent.', to_email
         )
-        return False, 'BREVO SMTP credentials not configured'
+        return False, 'BREVO credentials not configured'
 
     try:
         with smtplib.SMTP(cfg['host'], cfg['port'], timeout=20) as server:
@@ -174,7 +183,7 @@ def _do_send(
             server.login(cfg['username'], cfg['password'])
             server.sendmail(cfg['from_email'], [to_email], msg.as_bytes())
 
-        logger.info('[EMAIL SENT] %s → %s (subject: %s)', cfg['from_email'], to_email, subject)
+        logger.info('[EMAIL SENT via SMTP] %s → %s (subject: %s)', cfg['from_email'], to_email, subject)
         return True, to_email
 
     except smtplib.SMTPAuthenticationError:
@@ -195,44 +204,31 @@ def _do_send(
         return False, str(exc)
 
 
-def _console_send(to_email: str, to_name: str, subject: str, html_body: str) -> None:
+def _brevo_http_send(to_email: str, to_name: str, subject: str, html_body: str) -> tuple[bool, str]:
     """
-    Development mode: print email to console instead of sending via SMTP.
-    """
-    sep = '─' * 70
-    print(f'\n{sep}')
-    print(f'[EMAIL CONSOLE] To: {to_name} <{to_email}>')
-    print(f'[EMAIL CONSOLE] Subject: {subject}')
-    print(f'[EMAIL CONSOLE] Body: (HTML — {len(html_body)} chars)')
-    print(sep)
-
-
-def send_transactional_email(recipient_email: str, subject: str, html_body: str) -> tuple[bool, str]:
-    """
-    Sends a transactional email via Brevo HTTP API.
-    Zero-dependencies method ensuring reliability without SMTP credentials.
+    Sends an email via Brevo v3 HTTP API.
     """
     import urllib.request
     import urllib.error
     import json
 
     api_key = _get('BREVO_API_KEY', 'BREVO_API_KEY', '')
-    sender_email = _get('BREVO_SENDER_EMAIL', 'BREVO_SENDER_EMAIL', _get('DEFAULT_FROM_EMAIL', 'DEFAULT_FROM_EMAIL', 'yugsayja312@gmail.com'))
-    sender_name = _get('BREVO_SENDER_NAME', 'BREVO_SENDER_NAME', 'KisanConnect Platform')
+    sender_email = _get('BREVO_SENDER_EMAIL', 'BREVO_FROM_EMAIL', _get('DEFAULT_FROM_EMAIL', 'DEFAULT_FROM_EMAIL', 'kamanipoojan@gmail.com'))
+    sender_name = _get('BREVO_SENDER_NAME', 'BREVO_FROM_NAME', 'KisanConnect Platform')
 
     if not api_key:
         return False, "BREVO_API_KEY is not configured."
+
+    recipient = {"email": to_email}
+    if to_name:
+        recipient["name"] = to_name
 
     payload = {
         "sender": {
             "name": sender_name,
             "email": sender_email
         },
-        "to": [
-            {
-                "email": recipient_email,
-            }
-        ],
+        "to": [recipient],
         "subject": subject,
         "htmlContent": html_body
     }
@@ -248,12 +244,34 @@ def send_transactional_email(recipient_email: str, subject: str, html_body: str)
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=15) as response:
             res_data = json.loads(response.read().decode('utf-8'))
             msg_id = res_data.get('messageId', 'ok')
+            logger.info('[EMAIL SENT via Brevo API] %s → %s (subject: %s, messageId: %s)', sender_email, to_email, subject, msg_id)
             return True, msg_id
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8')
-        return False, f"Brevo API error: {e.code} - {error_body}"
+        logger.error('[EMAIL HTTP ERROR] Failed sending to %s: %s - %s', to_email, e.code, error_body)
+        return False, f"Brevo API error {e.code}: {error_body}"
     except Exception as e:
+        logger.error('[EMAIL HTTP ERROR] Failed sending to %s: %s', to_email, e)
         return False, str(e)
+
+
+def _console_send(to_email: str, to_name: str, subject: str, html_body: str) -> None:
+    """
+    Development mode: print email to console instead of sending via SMTP.
+    """
+    sep = '─' * 70
+    print(f'\n{sep}')
+    print(f'[EMAIL CONSOLE] To: {to_name} <{to_email}>')
+    print(f'[EMAIL CONSOLE] Subject: {subject}')
+    print(f'[EMAIL CONSOLE] Body: (HTML — {len(html_body)} chars)')
+    print(sep)
+
+
+def send_transactional_email(recipient_email: str, subject: str, html_body: str) -> tuple[bool, str]:
+    """
+    Public convenience function for Brevo HTTP API email sending.
+    """
+    return _brevo_http_send(recipient_email, '', subject, html_body)

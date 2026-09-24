@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Sprout, Phone, Lock, User, Loader2, ArrowRight, ShieldCheck, RefreshCw, Smartphone, ExternalLink } from 'lucide-react';
 import {
@@ -14,6 +14,7 @@ import {
 const LoginSignup = () => {
   const { login, register, verifyOtp, requestPasswordResetOtp, confirmPasswordReset } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const initialRole = searchParams.get('role') || 'consumer';
 
@@ -24,7 +25,7 @@ const LoginSignup = () => {
   const [forgotStep, setForgotStep] = useState(1); // 1: enter phone, 2: enter otp & new password
   const [authLoading, setAuthLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [infoMessage, setInfoMessage] = useState('');
+  const [infoMessage, setInfoMessage] = useState(() => location.state?.message || '');
 
   // Password Reset Fields
   const [resetPhone, setResetPhone] = useState('');
@@ -203,13 +204,23 @@ const LoginSignup = () => {
     setAuthLoading(false);
 
     if (result.success) {
-      // Redirect based on role
+      // Redirect based on role or original intended location
       const userRole = result.user.role;
-      if (userRole === 'farmer') navigate('/farmer-dashboard');
-      else if (userRole === 'bulk_buyer') navigate('/bulk-portal');
-      else if (userRole === 'logistics_partner') navigate('/logistics-dashboard');
-      else if (userRole === 'admin') navigate('/admin-panel');
-      else navigate('/marketplace');
+      const redirectPath = location.state?.from;
+
+      if (redirectPath && userRole === 'consumer') {
+        navigate(redirectPath);
+      } else if (userRole === 'farmer') {
+        navigate('/farmer-dashboard');
+      } else if (userRole === 'bulk_buyer') {
+        navigate('/bulk-portal');
+      } else if (userRole === 'logistics_partner') {
+        navigate('/logistics-dashboard');
+      } else if (userRole === 'admin') {
+        navigate('/admin-panel');
+      } else {
+        navigate('/marketplace');
+      }
     } else {
       setErrorMessage(result.error);
     }

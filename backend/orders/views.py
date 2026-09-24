@@ -390,10 +390,29 @@ class PaymentCallbackView(APIView):
                 payment_record.razorpay_signature = razorpay_signature
                 payment_record.save()
 
+            # If this order belongs to a recurring subscription, ensure subscription is active
+            if order.subscription and order.subscription.status != 'active':
+                order.subscription.status = 'active'
+                order.subscription.save()
+
             # Broadcast open delivery shipment immediately so drivers can see and accept the job
             if not hasattr(order, 'shipment'):
                 create_open_shipment(order)
                 print(f"[LOGISTICS] Open delivery shipment created and broadcast for paid order #{order.id}.")
+
+            # ── EMAIL NOTIFICATIONS DISPATCH ──
+            try:
+                # 1. Notify Consumer / Buyer of Order Confirmation & OTP
+                notify(ev.ORDER_CREATED, order=order)
+
+                # 2. CRITICAL: Notify ALL Farmers whose produce was ordered!
+                notify(ev.FARMER_NEW_ORDER, order=order)
+
+                # 3. If Wholesale/Bulk order, notify Bulk Buyer
+                if order.buyer and order.buyer.role == 'bulk_buyer':
+                    notify(ev.BULK_ORDER_STATUS_CHANGED, order=order, new_status='placed')
+            except Exception as notify_err:
+                print(f"[NOTIFY ERROR in PaymentCallbackView] {notify_err}")
 
             print(f"\n[PAYMENT] Order #{order.id} payment verified. Status: PAID.\n")
 

@@ -36,6 +36,13 @@ export const CartProvider = ({ children }) => {
   };
 
   const addToCart = (product, qty = 1, subConfig = null) => {
+    const token = localStorage.getItem('token');
+    const user = localStorage.getItem('user');
+    if (!token || !user) {
+      // Reject adding to cart without active user session
+      return false;
+    }
+
     const existingIndex = cartItems.findIndex(item => item.product.id === product.id);
     const quantity = parseFloat(qty);
 
@@ -63,6 +70,7 @@ export const CartProvider = ({ children }) => {
         subConfig: subConfig || null 
       }]);
     }
+    return true;
   };
 
   const removeFromCart = (productId) => {

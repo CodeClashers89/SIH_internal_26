@@ -12,6 +12,8 @@ from .serializers import LogisticsPartnerSerializer, DeliveryShipmentSerializer,
 from .email_service import send_delivery_otp_email
 from control_tower.models import OperationalEvent
 from users.permissions import IsAdmin
+from notifications.events import notify
+import notifications.events as ev
 
 # Earnings rate per km (in INR)
 EARNINGS_PER_KM = Decimal('12.00')
@@ -243,12 +245,17 @@ class DeliveryShipmentViewSet(viewsets.ModelViewSet):
         shipment.handover_confirmed_by = user
         shipment.save()
         
-        order = shipment.order
         order.status = 'in_transit'
         order.cancellation_locked = True
         order.cancellation_locked_at = timezone.now()
         order.save()
         
+        # Email notification to buyer that package is in transit
+        try:
+            notify(ev.DELIVERY_PROGRESS_CONSUMER, shipment=shipment, new_status='picked_up')
+        except Exception as err:
+            print(f"[LOGISTICS NOTIFY ERROR] {err}")
+
         # Emit event to Control Tower
         OperationalEvent.objects.create(
             event_type='TRANSPORT_HANDOVER_COMPLETED',
@@ -381,6 +388,16 @@ class DeliveryShipmentViewSet(viewsets.ModelViewSet):
         order = shipment.order
         order.status = 'delivered'
         order.save()
+
+        # Send delivery confirmation email notifications to buyer and farmer
+        try:
+            notify(ev.DELIVERY_PROGRESS_CONSUMER, shipment=shipment, new_status='delivered')
+            if order.buyer and order.buyer.role == 'bulk_buyer':
+                notify(ev.BULK_ORDER_STATUS_CHANGED, order=order, new_status='delivered')
+            else:
+                notify(ev.ORDER_STATUS_CHANGED, order=order, new_status='delivered')
+        except Exception as err:
+            print(f"[LOGISTICS NOTIFY ERROR on delivered] {err}")
 
         print(f"[LOGISTICS] OTP verified for order #{order.id} by driver '{user.username}'. DELIVERED.")
         return Response({

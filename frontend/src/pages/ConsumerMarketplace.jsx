@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 import ReviewWidget from '../components/ReviewWidget';
 import Stepper from '../components/Stepper';
@@ -49,6 +49,7 @@ const STATUS_ICONS = {
 const ConsumerMarketplace = () => {
   const { addToCart } = useCart();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Marketplace
@@ -1169,7 +1170,18 @@ const ConsumerMarketplace = () => {
                     <p><strong>Harvest:</strong> {new Date(selectedProduct.harvest_date).toLocaleDateString('en-IN')}</p>
                   </div>
                   <button
-                    onClick={() => { setOrderModalProduct(selectedProduct); }}
+                    onClick={() => { 
+                      if (!user) {
+                        navigate('/login', { 
+                          state: { 
+                            from: window.location.pathname + window.location.search, 
+                            message: 'Please log in to add fresh products to your cart and place orders.' 
+                          } 
+                        });
+                        return;
+                      }
+                      setOrderModalProduct(selectedProduct); 
+                    }}
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-2xl text-sm flex items-center justify-center gap-2 transition-all shadow-sm shadow-emerald-200 active:scale-[0.98]"
                   >
                     <ShoppingBag className="h-4 w-4" /> Add to Basket
@@ -1188,6 +1200,15 @@ const ConsumerMarketplace = () => {
         onClose={() => setOrderModalProduct(null)}
         product={orderModalProduct}
         onConfirm={(type, config) => {
+          if (!user) {
+            navigate('/login', { 
+              state: { 
+                from: window.location.pathname + window.location.search, 
+                message: 'Please log in to add fresh products to your cart and place orders.' 
+              } 
+            });
+            return;
+          }
           addToCart(orderModalProduct, 1, config);
           setSelectedProduct(null);
           setCartOpen(true);
