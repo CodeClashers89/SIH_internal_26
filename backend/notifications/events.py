@@ -73,6 +73,8 @@ FARMER_NEW_ORDER            = 'FARMER_NEW_ORDER'
 WHOLESALE_BID_CONFIRMED     = 'WHOLESALE_BID_CONFIRMED'
 DELIVERY_PROGRESS_CONSUMER  = 'DELIVERY_PROGRESS_CONSUMER'
 DELIVERY_PROGRESS_DRIVER    = 'DELIVERY_PROGRESS_DRIVER'
+FARMER_ORDER_PICKED_UP      = 'FARMER_ORDER_PICKED_UP'
+FARMER_ORDER_DELIVERED      = 'FARMER_ORDER_DELIVERED'
 
 # Bulk Buyer events
 WHOLESALE_FARMER_OFFER_MADE  = 'WHOLESALE_FARMER_OFFER_MADE'
@@ -431,6 +433,48 @@ def _on_driver_task_rejected(*, transport_offer, **_):
     )
 
 
+def _on_farmer_order_picked_up(*, order, shipment, **_):
+    """FARMER_ORDER_PICKED_UP: notify every farmer whose products are in this order that the package was picked up."""
+    farmers_notified = set()
+    for item in order.items.select_related('product__farmer').all():
+        if not (item.product and item.product.farmer):
+            continue
+        farmer = item.product.farmer
+        if farmer.id in farmers_notified or not farmer.email:
+            continue
+        farmers_notified.add(farmer.id)
+        email_dict = tmpl.farmer_order_picked_up_email(farmer=farmer, order=order, shipment=shipment)
+        _dispatch(
+            event_type=FARMER_ORDER_PICKED_UP,
+            entity_type='Order',
+            entity_id=f"{order.id}_{farmer.id}",
+            recipient_email=farmer.email,
+            recipient_name=farmer.first_name or farmer.username,
+            email_dict=email_dict,
+        )
+
+
+def _on_farmer_order_delivered(*, order, shipment, **_):
+    """FARMER_ORDER_DELIVERED: notify every farmer whose products are in this order that delivery succeeded."""
+    farmers_notified = set()
+    for item in order.items.select_related('product__farmer').all():
+        if not (item.product and item.product.farmer):
+            continue
+        farmer = item.product.farmer
+        if farmer.id in farmers_notified or not farmer.email:
+            continue
+        farmers_notified.add(farmer.id)
+        email_dict = tmpl.farmer_order_delivered_email(farmer=farmer, order=order, shipment=shipment)
+        _dispatch(
+            event_type=FARMER_ORDER_DELIVERED,
+            entity_type='Order',
+            entity_id=f"{order.id}_{farmer.id}",
+            recipient_email=farmer.email,
+            recipient_name=farmer.first_name or farmer.username,
+            email_dict=email_dict,
+        )
+
+
 def _on_farmer_new_order(*, order, **_):
     """FARMER_NEW_ORDER: notify all farmers whose products are in this order."""
     farmers_notified = set()
@@ -707,6 +751,8 @@ _HANDLERS = {
     WHOLESALE_BID_CONFIRMED:     _on_wholesale_bid_confirmed,
     DELIVERY_PROGRESS_CONSUMER:  _on_delivery_progress_consumer,
     DELIVERY_PROGRESS_DRIVER:    _on_delivery_progress_driver,
+    FARMER_ORDER_PICKED_UP:      _on_farmer_order_picked_up,
+    FARMER_ORDER_DELIVERED:      _on_farmer_order_delivered,
     # Bulk Buyer events
     WHOLESALE_FARMER_OFFER_MADE:  _on_wholesale_farmer_offer_made,
     WHOLESALE_BID_ACCEPTED_BUYER: _on_wholesale_bid_accepted_buyer,

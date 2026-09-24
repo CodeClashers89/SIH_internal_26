@@ -1274,3 +1274,120 @@ def quote_bid_rejected_email(*, recipient, quote, rejected_by: str) -> dict:
         ),
     }
 
+
+# ---------------------------------------------------------------------------
+# Farmer — Order Picked Up notification
+# ---------------------------------------------------------------------------
+
+def farmer_order_picked_up_email(*, farmer, order, shipment) -> dict:
+    """Sent to the farmer when the driver picks up the package (order -> in_transit)."""
+    buyer = order.buyer
+    buyer_name = buyer.first_name or buyer.username
+    driver_name = (shipment.partner.name if shipment.partner else 'Delivery Partner')
+    driver_phone = (shipment.partner.phone if shipment.partner else 'N/A')
+
+    content = f"""
+    {_greeting(farmer.first_name or farmer.username)}
+    <p style="font-size:14px;color:{BRAND_MUTED};margin:0 0 20px;line-height:1.6;">
+      Great news! Your produce for Order <strong>#{order.id}</strong> has been
+      picked up and is now on its way to the customer.
+    </p>
+
+    <!-- Picked Up Banner -->
+    <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border-left:4px solid #0ea5e9;
+                border-radius:0 12px 12px 0;padding:16px 20px;margin:16px 0;">
+      <div style="font-size:22px;margin-bottom:6px;">🚚</div>
+      <div style="font-size:17px;font-weight:800;color:#0369a1;">Package Picked Up — In Transit!</div>
+      <div style="font-size:13px;color:{BRAND_MUTED};margin-top:6px;">
+        The driver has collected your produce and is heading to the delivery address.
+      </div>
+    </div>
+
+    {_info_card(
+        _info_row('Order ID', f'#{order.id}') +
+        _info_row('Customer', buyer_name) +
+        _info_row('Delivery Address', order.shipping_address or 'N/A') +
+        _info_row('Driver', driver_name) +
+        _info_row('Driver Contact', driver_phone) +
+        _info_row('Order Amount', f'₹{float(order.total_amount):.2f}') +
+        _info_row('Payment', order.payment_status.upper()),
+        '📦', 'Shipment Details'
+    )}
+
+    <p style="font-size:13px;color:{BRAND_MUTED};margin-top:16px;line-height:1.6;">
+      You will receive another email once the order is successfully delivered to the customer.
+    </p>
+    """
+    subject = f"🚚 Your Produce Is On The Way — Order #{order.id} Picked Up"
+    return {
+        'subject': subject,
+        'html': _base(f"Order #{order.id} Picked Up", content),
+        'text': (
+            f"Order #{order.id} for customer {buyer_name} has been picked up by {driver_name} "
+            f"and is now in transit.\nAmount: Rs.{float(order.total_amount):.2f}"
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Farmer — Order Delivered notification
+# ---------------------------------------------------------------------------
+
+def farmer_order_delivered_email(*, farmer, order, shipment) -> dict:
+    """Sent to the farmer when the order is successfully delivered (OTP verified)."""
+    buyer = order.buyer
+    buyer_name = buyer.first_name or buyer.username
+    driver_name = (shipment.partner.name if shipment.partner else 'Delivery Partner')
+
+    items_rows = ''
+    for item in order.items.all():
+        if item.product and item.product.farmer_id == farmer.id:
+            name = item.product.name
+            unit = item.product.unit
+            items_rows += _info_row(
+                f"{name} x {float(item.quantity)} {unit}",
+                f"Rs.{float(item.quantity * item.price):.2f}"
+            )
+
+    content = f"""
+    {_greeting(farmer.first_name or farmer.username)}
+    <p style="font-size:14px;color:{BRAND_MUTED};margin:0 0 20px;line-height:1.6;">
+      Your produce for Order <strong>#{order.id}</strong> has been
+      <strong>successfully delivered</strong> to {buyer_name}!
+    </p>
+
+    <!-- Delivered Banner -->
+    <div style="background:linear-gradient(135deg,{BRAND_GREEN_LIGHT},{BRAND_GREEN_LIGHT});border-left:4px solid {BRAND_GREEN};
+                border-radius:0 12px 12px 0;padding:16px 20px;margin:16px 0;">
+      <div style="font-size:22px;margin-bottom:6px;">✅</div>
+      <div style="font-size:17px;font-weight:800;color:{BRAND_GREEN};">Order Successfully Delivered!</div>
+      <div style="font-size:13px;color:{BRAND_MUTED};margin-top:6px;">
+        The customer confirmed receipt. Payment is secured.
+      </div>
+    </div>
+
+    {_info_card(
+        _info_row('Order ID', f'#{order.id}') +
+        _info_row('Customer', buyer_name) +
+        _info_row('Delivered By', driver_name) +
+        _info_row('Total Earned', f'Rs.{float(order.total_amount):.2f}') +
+        _info_row('Payment Status', order.payment_status.upper()),
+        '🎉', 'Delivery Summary'
+    )}
+
+    {_info_card(items_rows, '🌾', 'Your Products Delivered') if items_rows else ''}
+
+    <p style="font-size:13px;color:{BRAND_MUTED};margin-top:16px;line-height:1.6;">
+      Thank you for supplying fresh, quality produce through KisanConnect.
+      Keep up the great work! 🌱
+    </p>
+    """
+    subject = f"✅ Order #{order.id} Delivered — Payment Secured!"
+    return {
+        'subject': subject,
+        'html': _base(f"Order #{order.id} Delivered", content),
+        'text': (
+            f"Order #{order.id} for customer {buyer_name} has been successfully delivered by {driver_name}.\n"
+            f"Total: Rs.{float(order.total_amount):.2f} | Payment: {order.payment_status.upper()}"
+        ),
+    }

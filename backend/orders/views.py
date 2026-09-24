@@ -148,25 +148,47 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.status = new_status
         order.save()
 
-        # Email notification — route by buyer role so consumer and bulk-buyer
-        # each receive the correct template via the centralized email service.
+        # Email notification — dispatched via on_commit so the email is only
+        # sent AFTER the transaction successfully commits.  This prevents:
+        #   1. Emails being lost when the transaction later rolls back.
+        #   2. EmailNotificationLog records being in an inconsistent state.
         buyer = order.buyer
-        if new_status == 'cancelled':
-            if buyer.role == 'bulk_buyer':
-                notify(ev.BULK_ORDER_CANCELLED, order=order)
+        _new_status = new_status  # capture for closure
+        _order_id   = order.id
+
+        def _send_status_email():
+            # Re-fetch order with all relations to avoid stale/detached objects
+            # in the on_commit callback (runs outside the original request scope).
+            from orders.models import Order as _Order
+            try:
+                fresh_order = _Order.objects.select_related('buyer').prefetch_related(
+                    'items__product__farmer'
+                ).get(pk=_order_id)
+            except _Order.DoesNotExist:
+                return
+            _buyer = fresh_order.buyer
+            if _new_status == 'cancelled':
+                if _buyer.role == 'bulk_buyer':
+                    notify(ev.BULK_ORDER_CANCELLED, order=fresh_order)
+                else:
+                    notify(ev.ORDER_CANCELLED, order=fresh_order)
             else:
-                notify(ev.ORDER_CANCELLED, order=order)
-        else:
-            if buyer.role == 'bulk_buyer':
-                notify(ev.BULK_ORDER_STATUS_CHANGED, order=order, new_status=new_status)
-            else:
-                notify(ev.ORDER_STATUS_CHANGED, order=order, new_status=new_status)
+                if _buyer.role == 'bulk_buyer':
+                    notify(ev.BULK_ORDER_STATUS_CHANGED, order=fresh_order, new_status=_new_status)
+                else:
+                    notify(ev.ORDER_STATUS_CHANGED, order=fresh_order, new_status=_new_status)
+
+        transaction.on_commit(_send_status_email)
 
         # Create open broadcast shipment when farmer confirms.
         # No auto-assignment — all drivers see it and race to accept (Rapido-style).
+        # Wrapped in try/except so logistics errors never roll back the order confirmation.
         if new_status == 'confirmed' and not hasattr(order, 'shipment'):
-            create_open_shipment(order)
-            print(f"[LOGISTICS] Open shipment broadcast for order #{order.id} on farmer confirmation.")
+            try:
+                create_open_shipment(order)
+                print(f"[LOGISTICS] Open shipment broadcast for order #{order.id} on farmer confirmation.")
+            except Exception as logistics_err:
+                print(f"[LOGISTICS WARNING] Could not create shipment for order #{order.id}: {logistics_err}")
 
         return Response(OrderSerializer(order).data)
 

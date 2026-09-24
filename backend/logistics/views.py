@@ -20,35 +20,44 @@ EARNINGS_PER_KM = Decimal('12.00')
 
 
 def partner_operates_both_areas(partner, shipment):
-    origin_terms = {
+    """
+    Returns True if a logistics partner can serve a given shipment.
+
+    Strategy:
+    - If the partner has a service_area defined, they explicitly advertise
+      their coverage corridor — treat them as eligible for any shipment.
+      (This is the Rapido-style open-broadcast intent: any driver can see and
+      accept jobs regardless of precise address matching.)
+    - Without a service_area, fall back to loose district/pincode string
+      matching against both the pickup and delivery addresses.
+    """
+    user = partner.user
+
+    # If the partner explicitly declares a service corridor, always show them.
+    service_area = (user.service_area if user else '') or ''
+    if service_area.strip():
+        return True
+
+    # Fallback: collect all known area identifiers for this partner
+    area_terms = {
         str(value).strip().lower()
         for value in [
             partner.district,
             partner.pincode,
-            partner.user.district if partner.user else None,
-            partner.user.pincode if partner.user else None,
+            user.district if user else None,
+            user.pincode if user else None,
         ]
         if value
     }
-    destination_terms = {
-        term.strip().lower()
-        for value in [
-            partner.district,
-            partner.pincode,
-            partner.user.district if partner.user else None,
-            partner.user.pincode if partner.user else None,
-            partner.user.service_area if partner.user else None,
-        ]
-        if value
-        for term in str(value).replace(';', ',').split(',')
-        if term.strip()
-    }
+
     pickup = (shipment.pickup_address or '').lower()
     drop = (shipment.delivery_address or '').lower()
-    pickup_matches = any(term in pickup for term in origin_terms)
-    drop_matches = any(term in drop for term in destination_terms)
-    has_service_corridor = bool((partner.user.service_area if partner.user else '').strip())
-    return pickup_matches and (drop_matches or has_service_corridor)
+
+    pickup_matches = any(term in pickup for term in area_terms)
+    drop_matches = any(term in drop for term in area_terms)
+
+    # Accept if they cover at least ONE of the two endpoints
+    return pickup_matches or drop_matches
 
 
 class LogisticsPartnerViewSet(viewsets.ModelViewSet):
@@ -229,27 +238,26 @@ class DeliveryShipmentViewSet(viewsets.ModelViewSet):
     def confirm_handover(self, request, pk=None):
         shipment = self.get_object()
         user = request.user
-        
-        # Verify permissions: For example, an FPO operator or the assigned driver
-        # Simplified: any authenticated user involved in operations can confirm for now
-        # You can tighten this based on actual roles
-        
+
+        # Verify permissions: the assigned driver or any authenticated operations user.
         if shipment.status not in ['assigned']:
             return Response(
                 {'error': 'Handover can only be confirmed for shipments currently assigned and not yet picked up or delivered.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-            
+
         shipment.status = 'handover_completed'
         shipment.handover_completed_at = timezone.now()
         shipment.handover_confirmed_by = user
         shipment.save()
-        
+
+        # Fetch the related order (was missing — caused NameError crash)
+        order = shipment.order
         order.status = 'in_transit'
         order.cancellation_locked = True
         order.cancellation_locked_at = timezone.now()
         order.save()
-        
+
         # Email notification to buyer that package is in transit
         try:
             notify(ev.DELIVERY_PROGRESS_CONSUMER, shipment=shipment, new_status='picked_up')
@@ -268,11 +276,12 @@ class DeliveryShipmentViewSet(viewsets.ModelViewSet):
             },
             description=f"Physical handover confirmed by {user.username}. Cancellation locked."
         )
-        
+
         return Response({
             'message': 'Transport handover confirmed. Order cancellation is now locked.',
             'shipment': DeliveryShipmentSerializer(shipment).data
         })
+
 
     @action(detail=True, methods=['post'], url_path='update-status')
     def update_delivery_status(self, request, pk=None):
@@ -318,8 +327,14 @@ class DeliveryShipmentViewSet(viewsets.ModelViewSet):
         # Automatically email the delivery OTP to the consumer
         email_sent, email_info = send_delivery_otp_email(shipment)
 
-        print(f"[LOGISTICS] Driver '{user.username}' picked up shipment #{shipment.id} → Order #{order.id} is now IN_TRANSIT. OTP Email: {email_info}")
-        
+        # Notify all farmers in this order that their produce has been picked up
+        try:
+            notify(ev.FARMER_ORDER_PICKED_UP, order=order, shipment=shipment)
+        except Exception as err:
+            print(f"[LOGISTICS NOTIFY ERROR] FARMER_ORDER_PICKED_UP: {err}")
+
+        print(f"[LOGISTICS] Driver '{user.username}' picked up shipment #{shipment.id} -> Order #{order.id} is now IN_TRANSIT. OTP Email: {email_info}")
+
         response_data = DeliveryShipmentSerializer(shipment).data
         return Response({
             **response_data,
@@ -396,6 +411,8 @@ class DeliveryShipmentViewSet(viewsets.ModelViewSet):
                 notify(ev.BULK_ORDER_STATUS_CHANGED, order=order, new_status='delivered')
             else:
                 notify(ev.ORDER_STATUS_CHANGED, order=order, new_status='delivered')
+            # Notify all farmers that their produce has been delivered
+            notify(ev.FARMER_ORDER_DELIVERED, order=order, shipment=shipment)
         except Exception as err:
             print(f"[LOGISTICS NOTIFY ERROR on delivered] {err}")
 
@@ -466,6 +483,16 @@ class TransportOfferViewSet(viewsets.ModelViewSet):
             }
         )
 
+        # Notify the driver that they have been offered a ride task.
+        # Re-fetch with relations so the template has full context.
+        try:
+            fresh_offer = TransportOffer.objects.select_related(
+                'shipment__order__buyer', 'partner__user', 'farmer'
+            ).get(pk=offer.pk)
+            notify(ev.DRIVER_TASK_ASSIGNED, transport_offer=fresh_offer)
+        except Exception as email_err:
+            print(f"[NOTIFY WARNING] DRIVER_TASK_ASSIGNED email failed for offer #{offer.pk}: {email_err}")
+
         serializer = self.get_serializer(offer)
         res_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return Response(serializer.data, status=res_status)
@@ -492,6 +519,28 @@ class TransportOfferViewSet(viewsets.ModelViewSet):
             shipment.status = 'assigned'
             shipment.save(update_fields=['partner', 'status'])
             TransportOffer.objects.filter(shipment=shipment, status='pending').exclude(pk=offer.pk).update(status='rejected')
+
+        # Send email notifications after the transaction commits successfully.
+        _offer_pk = offer.pk
+        _accepted = accept
+
+        def _send_respond_emails():
+            try:
+                fresh_offer = TransportOffer.objects.select_related(
+                    'shipment__order__buyer', 'partner__user', 'farmer'
+                ).get(pk=_offer_pk)
+                if _accepted:
+                    # Driver gets a confirmation; farmer gets notified driver accepted.
+                    notify(ev.DRIVER_TASK_ACCEPTED_DRIVER, transport_offer=fresh_offer)
+                    notify(ev.DRIVER_TASK_ACCEPTED_FARMER, transport_offer=fresh_offer)
+                else:
+                    # Farmer is told the driver rejected so they can pick another.
+                    notify(ev.DRIVER_TASK_REJECTED, transport_offer=fresh_offer)
+            except Exception as email_err:
+                print(f"[NOTIFY WARNING] TransportOffer respond email failed for offer #{_offer_pk}: {email_err}")
+
+        transaction.on_commit(_send_respond_emails)
+
         return Response(TransportOfferSerializer(offer).data)
 
 
